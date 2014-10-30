@@ -1,0 +1,6 @@
+*.class
+lib/*
+*.classpath
+*.project
+twitter4j.properties
+.settings/org.eclipse.jdt.core.prefs
