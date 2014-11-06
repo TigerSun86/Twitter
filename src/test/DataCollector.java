@@ -5,6 +5,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 
@@ -21,20 +23,29 @@ public class DataCollector {
         AUTHOR_IDS.add(2353075322L);
         AUTHOR_IDS.add(166496708L);
     }
-    private static final long SINCE_ID = 522147892644294656L;
+    private static final Date sinceDate;
+    static {
+        final Calendar c = Calendar.getInstance();
+        c.setTime(new Date());
+        final int day = c.get(Calendar.DATE);
+        c.set(Calendar.DATE, day - 7);
+        sinceDate = c.getTime();
+    }
+
     private static final String PATH = "D:/Twitter/userdata/";
 
     private static int fileCount = 1;
 
-    public static void main(String[] args) {
+    public static void main (String[] args) {
+        System.out.println("Crawl tweets since:"+ sinceDate.toString());
         final Twitter twitter = new TwitterFactory().getInstance();
 
         final HashSet<Long> userIds = new HashSet<Long>();
         userIds.addAll(AUTHOR_IDS);
         for (Long authorId : AUTHOR_IDS) {
             // Get all followers of the authors.
-            final HashSet<Long> followers = UserData.getFollowers(twitter,
-                    authorId);
+            final HashSet<Long> followers =
+                    UserData.getFollowers(twitter, authorId);
             userIds.addAll(followers);
         }
         final HashMap<Long, String> idToFile = new HashMap<Long, String>();
@@ -42,12 +53,13 @@ public class DataCollector {
         long finishedCount = 0;
         for (Long userId : userIds) {
             final boolean isAuthor = AUTHOR_IDS.contains(userId);
-            final UserData userData = UserData.newUserData(twitter, userId, SINCE_ID,isAuthor);
+            final UserData userData =
+                    UserData.newUserData(twitter, userId, sinceDate, isAuthor);
             finishedCount++;
             System.out.printf("Finished # of users %d/%d.%n", finishedCount,
                     userIds.size());
 
-            if(userData!=null){
+            if (userData != null) {
                 idToUser.put(userId, userData);
                 if (idToUser.size() >= 100) {
                     // Save data to file.
@@ -65,12 +77,22 @@ public class DataCollector {
             }
         }
 
-        final String fileName = "idToUser.ser";
-        final String fullPath = PATH + fileName;
+        // Save last data to file.
+        String fileName = "ud" + fileCount + ".ser";
+        String fullPath = PATH + fileName;
         storeTweets(idToUser, fullPath);
+        fileCount++;
+        for (Long id : idToUser.keySet()) {
+            // Map user ids to the file storing them.
+            idToFile.put(id, fileName);
+        }
+        // Save file indexes to file
+        fileName = "idToFile.ser";
+        fullPath = PATH + fileName;
+        storeTweets(idToFile, fullPath);
     }
 
-    private static void storeTweets(Object o, final String fullPath) {
+    private static void storeTweets (Object o, final String fullPath) {
         ObjectOutputStream out = null;
         try {
             System.out

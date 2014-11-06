@@ -1,6 +1,7 @@
 package test;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 
@@ -21,7 +22,7 @@ public class UserData implements java.io.Serializable {
     public boolean isAuthor;
 
     public static UserData newUserData (final Twitter twitter,
-            final long userId, final long sinceId, final boolean isAuthor) {
+            final long userId, final Date sinceDate, final boolean isAuthor) {
         final UserData ud = new UserData();
         ud.isAuthor = isAuthor;
 
@@ -32,7 +33,7 @@ public class UserData implements java.io.Serializable {
         };
         Thread tTweets = new Thread() {
             public void run () {
-                ud.tweets = getTweets(twitter, userId, sinceId);
+                ud.tweets = getTweets(twitter, userId, sinceDate);
             }
         };
         Thread tFollowers = new Thread() {
@@ -205,27 +206,34 @@ public class UserData implements java.io.Serializable {
     }
 
     public static ArrayList<Status> getTweets (Twitter twitter, long userId,
-            long sinceId) {
+            Date sinceDate) {
         ArrayList<Status> tweets = new ArrayList<Status>();
         final Paging paging = new Paging();
         paging.setCount(200);
-        paging.setSinceId(sinceId);
 
         boolean isRunning = true;
         while (isRunning) {
             try {
-                List<Status> statuses;
-                do {
-                    statuses = twitter.getUserTimeline(userId, paging);
-                    tweets.addAll(statuses);
-                    if (!statuses.isEmpty()) {
-                        final long maxId =
-                                statuses.get(statuses.size() - 1).getId();
-                        // Search tweets older than last one.
-                        paging.setMaxId(maxId - 1);
+                boolean needMoreTweets = true;
+                while (needMoreTweets) {
+                    final List<Status> statuses =
+                            twitter.getUserTimeline(userId, paging);
+                    for (Status t : statuses) {
+                        if (sinceDate.before(t.getCreatedAt())) {
+                            tweets.add(t);
+                            final long maxId =
+                                    statuses.get(statuses.size() - 1).getId();
+                            // Search tweets older than last one.
+                            paging.setMaxId(maxId - 1);
+                        } else { // Tweet too old.
+                            needMoreTweets = false;
+                        }
                     }
 
-                } while (statuses.size() >= 200); // Has more tweets.
+                    if (statuses.size() < 200) { // No more tweets.
+                        needMoreTweets = false;
+                    }
+                } // while (needMoreTweets) {
 
                 isRunning = false;
             } catch (TwitterException te) {
