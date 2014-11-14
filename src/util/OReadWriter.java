@@ -18,6 +18,8 @@ import java.io.ObjectOutputStream;
  */
 public class OReadWriter {
     public static final String PATH = "D:/Twitter/userdata/";
+    // For update data.
+    public static final String PATH2 = "D:/Twitter/userdata2/";
     public static final String FILE_NAME = "ud";
     public static final String EXT = ".ser";
     public static final String ID2FILE_FILENAME = "idToFile.ser";

@@ -4,17 +4,23 @@ import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map.Entry;
 
+import twitter4j.Status;
 import twitter4j.Twitter;
 import twitter4j.TwitterFactory;
+import util.OReadWriter;
 
 public class DataCollector {
-    private static final ArrayList<Long> AUTHOR_IDS = new ArrayList<Long>();
+    public static final ArrayList<Long> AUTHOR_IDS = new ArrayList<Long>();
     static {
         AUTHOR_IDS.add(497178013L);
         AUTHOR_IDS.add(2551981338L);
@@ -23,6 +29,7 @@ public class DataCollector {
         AUTHOR_IDS.add(2353075322L);
         AUTHOR_IDS.add(166496708L);
     }
+    /* initializeData begin */
     private static final Date sinceDate;
     static {
         final Calendar c = Calendar.getInstance();
@@ -32,12 +39,36 @@ public class DataCollector {
         sinceDate = c.getTime();
     }
 
+    private static void storeTweets (Object o, final String fullPath) {
+        ObjectOutputStream out = null;
+        try {
+            System.out
+                    .println("Serialized data is saving in " + fullPath + ".");
+            FileOutputStream fileOut = new FileOutputStream(fullPath);
+            BufferedOutputStream bOut = new BufferedOutputStream(fileOut);
+            out = new ObjectOutputStream(bOut);
+            out.writeObject(o);
+            System.out.println("Saving finished.");
+        } catch (IOException i) {
+            i.printStackTrace();
+        } finally {
+            if (out != null) {
+                try {
+                    out.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
     private static final String PATH = "D:/Twitter/userdata/";
 
     private static int fileCount = 1;
 
-    public static void main (String[] args) {
-        System.out.println("Crawl tweets since:"+ sinceDate.toString());
+    @SuppressWarnings("unused")
+    private static void initializeData () {
+        System.out.println("Crawl tweets since:" + sinceDate.toString());
         final Twitter twitter = new TwitterFactory().getInstance();
 
         final HashSet<Long> userIds = new HashSet<Long>();
@@ -92,26 +123,96 @@ public class DataCollector {
         storeTweets(idToFile, fullPath);
     }
 
-    private static void storeTweets (Object o, final String fullPath) {
-        ObjectOutputStream out = null;
+    /* initializeData end */
+
+    /* Update data begin */
+    private static final int MAX_FILE_COUNT = 63;
+    private static Date UP_SINCE_DATE = null;
+    static {
         try {
-            System.out
-                    .println("Serialized data is saving in " + fullPath + ".");
-            FileOutputStream fileOut = new FileOutputStream(fullPath);
-            BufferedOutputStream bOut = new BufferedOutputStream(fileOut);
-            out = new ObjectOutputStream(bOut);
-            out.writeObject(o);
-            System.out.println("Saving finished.");
-        } catch (IOException i) {
-            i.printStackTrace();
-        } finally {
-            if (out != null) {
-                try {
-                    out.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
+            UP_SINCE_DATE =
+                    new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
+                            .parse("Mon Oct 27 22:22:22 EDT 2014");
+        } catch (ParseException e) {
+            e.printStackTrace();
         }
+    }
+
+    private static void updateData () {
+        System.out.println("Crawl tweets since:" + UP_SINCE_DATE.toString());
+
+        @SuppressWarnings("unchecked")
+        final HashMap<Long, String> idToFile =
+                (HashMap<Long, String>) OReadWriter.read(OReadWriter.PATH
+                        + OReadWriter.ID2FILE_FILENAME);
+        System.out.println("Old # of users: " + idToFile.size());
+
+        final Twitter twitter = new TwitterFactory().getInstance();
+        int sum = 0;
+        Status latest = null;
+        Status oldest = null;
+        for (int count = 1; count <= MAX_FILE_COUNT; count++) {
+            // Open each file.
+            final String fileName =
+                    OReadWriter.FILE_NAME + count + OReadWriter.EXT;
+            final String fullPath = OReadWriter.PATH + fileName;
+            @SuppressWarnings("unchecked")
+            final HashMap<Long, UserData> idToUser =
+                    (HashMap<Long, UserData>) OReadWriter.read(fullPath);
+            final Iterator<Entry<Long, UserData>> iter =
+                    idToUser.entrySet().iterator();
+            while (iter.hasNext()) {
+                final UserData ud = iter.next().getValue();
+                final ArrayList<Status> newTweets =
+                        ud.update(twitter, UP_SINCE_DATE);
+                if (newTweets == null) {
+                    // The user has been deleted/privated/no such user.
+                    // Should remove the user from the data base.
+                    idToFile.remove(ud.userProfile.getId());
+                    iter.remove();
+                } else if (!newTweets.isEmpty()) {
+                    // Statistic info.
+                    sum += newTweets.size();
+                    final Status lat = newTweets.get(0);
+                    final Status old = newTweets.get(newTweets.size() - 1);
+                    if (latest == null
+                            || latest.getCreatedAt().before(lat.getCreatedAt())) {
+                        latest = lat;
+                    }
+                    if (oldest == null
+                            || oldest.getCreatedAt().after(old.getCreatedAt())) {
+                        oldest = old;
+                    }
+                } // } else if (!newTweets.isEmpty()) {
+            } // while (iter.hasNext()) {
+
+            // Save updated data to file in new folder.
+            final String fullPath2 = OReadWriter.PATH2 + fileName;
+            OReadWriter.write(idToUser, fullPath2);
+        } // for (int count = 1; count <= MAX_FILE_COUNT; count++) {
+
+        System.out.println("In total appended # of tweets: " + sum);
+        if (latest != null) {
+            System.out.println("Latest tweet id: " + latest.getId()
+                    + ", date: " + latest.getCreatedAt().toString()
+                    + ", userId: " + latest.getUser().getId() + ", userName:"
+                    + latest.getUser().getScreenName());
+        }
+        if (oldest != null) {
+            System.out.println("Oldest tweet id: " + oldest.getId()
+                    + ", date: " + oldest.getCreatedAt().toString()
+                    + ", userId: " + oldest.getUser().getId() + ", userName:"
+                    + oldest.getUser().getScreenName());
+        }
+        System.out.println("Current total # of users: " + idToFile.size());
+        // Save file indexes to file. Some user could be deleted.
+        OReadWriter.write(idToFile, OReadWriter.PATH2
+                + OReadWriter.ID2FILE_FILENAME);
+    }
+
+    /* Update data end */
+
+    public static void main (String[] args) {
+        updateData();
     }
 }

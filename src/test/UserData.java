@@ -258,4 +258,174 @@ public class UserData implements java.io.Serializable {
         }
         return tweets;
     }
+
+    /* Update data begin */
+
+    private static class Buffer<T> {
+        T b = null;
+    }
+
+    /**
+     * @return New tweets after oldTweets; null if the user has been
+     *         deleted/privated/no such user.
+     */
+    public ArrayList<Status>
+            update (final Twitter twitter, final Date sinceDate) {
+        final UserData ud = this;
+        // User buffer to pass out the data from thread.
+        final Buffer<ArrayList<Status>> buffer =
+                new Buffer<ArrayList<Status>>();
+        final Thread tTweets = new Thread() {
+            public void run () {
+                buffer.b =
+                        getNewTweets(twitter, ud.userProfile.getId(),
+                                sinceDate, ud.tweets);
+
+            }
+        };
+
+        tTweets.start();
+
+        try {
+            tTweets.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        final ArrayList<Status> newTweets = buffer.b;
+
+        System.out.println("****");
+        if (ud.userProfile != null) {
+            System.out
+                    .printf("Finished user %s, id %d, # of follower %d, # of friends %d, # of tweets %d.%n",
+                            ud.userProfile.getScreenName(),
+                            ud.userProfile.getId(),
+                            ud.userProfile.getFollowersCount(),
+                            ud.userProfile.getFriendsCount(),
+                            ud.userProfile.getStatusesCount());
+        }
+
+        if (ud.tweets != null) {
+            System.out.println("Old # of tweets: " + ud.tweets.size());
+            if (!ud.tweets.isEmpty()) {
+                System.out.println("Latest tweet: "
+                        + ud.tweets.get(0).getCreatedAt());
+                System.out.println("Oldest tweet: "
+                        + ud.tweets.get(ud.tweets.size() - 1).getCreatedAt());
+            }
+
+        }
+
+        if (newTweets != null) {
+            System.out.println("Got # of new tweets: " + newTweets.size());
+            if (!newTweets.isEmpty()) {
+                System.out.println("Latest tweet: "
+                        + newTweets.get(0).getCreatedAt());
+                System.out.println("Oldest tweet: "
+                        + newTweets.get(newTweets.size() - 1).getCreatedAt());
+            }
+        } else {
+            System.out
+                    .println("The user has been deleted/privated/no such user");
+        }
+        System.out.println("Is author: " + ud.isAuthor);
+        System.out.println("****");
+
+        if (newTweets == null) {
+            // The user has been deleted/privated/no such user.
+            return null;
+        } else {
+            // Tweets are stored from latest to oldest, so new tweets should
+            // be inserted to the beginning, before old ones.
+            ud.tweets.addAll(0, newTweets);
+            return newTweets;
+        }
+    }
+
+    /**
+     * @return new tweets after oldTweets; null if the user has been
+     *         deleted/privated/no such user.
+     */
+    private static ArrayList<Status> getNewTweets (Twitter twitter,
+            long userId, Date sinceDate, ArrayList<Status> oldTweets) {
+        ArrayList<Status> tweets = new ArrayList<Status>();
+        final Paging paging = new Paging();
+        paging.setCount(200);
+
+        final Status old;
+        if (oldTweets == null || oldTweets.isEmpty()) {
+            // oldTweets == null for collecting data for new user;
+            // oldTweets is empty for some user didn't have tweet before.
+            // (Should not happen)
+            old = null;
+        } else {
+            old = oldTweets.get(0);
+        }
+
+        boolean getUserFailed = false;
+        boolean isRunning = true;
+        while (isRunning) {
+            try {
+                boolean needMoreTweets = true;
+                while (needMoreTweets) {
+                    final List<Status> statuses =
+                            twitter.getUserTimeline(userId, paging);
+                    for (Status t : statuses) {
+                        if (isNewTweet(t, old, sinceDate)) {
+                            tweets.add(t);
+                            final long maxId =
+                                    statuses.get(statuses.size() - 1).getId();
+                            // Search tweets older than last one.
+                            paging.setMaxId(maxId - 1);
+                        } else { // Tweet too old.
+                            needMoreTweets = false;
+                        }
+                    }
+
+                    if (statuses.size() < 200) { // No more tweets.
+                        needMoreTweets = false;
+                    }
+                } // while (needMoreTweets) {
+
+                isRunning = false;
+            } catch (TwitterException te) {
+                if (te.exceededRateLimitation()) { // Got limitation.
+                    final int seconds =
+                            te.getRateLimitStatus().getSecondsUntilReset();
+                    System.out.println("Got limitation in getTweets, retry in "
+                            + seconds + " seconds.");
+                    if (seconds > 0) {
+                        try {
+                            Thread.sleep((seconds + 1) * 1000);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                } else {// The user has been deleted/privated/no such user.
+                    System.out.println("Failed in getTweets: "
+                            + te.getMessage());
+                    isRunning = false;
+                    getUserFailed = true;
+                }
+            }
+        }
+        if (getUserFailed) {
+            return null;
+        } else {
+            return tweets;
+        }
+    }
+
+    private static boolean isNewTweet (Status n, Status old, Date sinceDate) {
+        if (old == null) { // No previous tweet or new user.
+            return sinceDate.before(n.getCreatedAt());
+        } else {
+            // Has previous tweets, new tweet should be after the latest one
+            // among old ones. old.getCreatedAt() should assert to be after
+            // sinceDate.
+            return (old.getId() != n.getId())
+                    && (old.getCreatedAt().before(n.getCreatedAt()));
+        }
+    }
+    /* Update data end */
 }
