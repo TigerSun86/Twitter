@@ -17,6 +17,9 @@ import java.io.ObjectOutputStream;
  * @date Oct 30, 2014 5:11:27 PM
  */
 public class OReadWriter {
+    public static final String MODULE = "ORW";
+    public static final boolean DBG = false;
+    
     public static final String PATH = "D:/Twitter/userdata/";
     // For update data.
     public static final String PATH2 = "D:/Twitter/userdata2/";
@@ -27,13 +30,12 @@ public class OReadWriter {
     public static void write (Object o, final String fullPath) {
         ObjectOutputStream out = null;
         try {
-            System.out
-                    .println("Serialized data is saving in " + fullPath + ".");
+            Dbg.print(DBG, MODULE, "Serialized data is saving in " + fullPath + ".");
             FileOutputStream fileOut = new FileOutputStream(fullPath);
             BufferedOutputStream bOut = new BufferedOutputStream(fileOut);
             out = new ObjectOutputStream(bOut);
             out.writeObject(o);
-            System.out.println("Saving finished.");
+            Dbg.print(DBG, MODULE, "Saving finished.");
         } catch (IOException i) {
             i.printStackTrace();
         } finally {
@@ -51,12 +53,12 @@ public class OReadWriter {
         Object o = null;
         ObjectInputStream in = null;
         try {
-            System.out.println("Reading object from " + fullPath);
+            Dbg.print(DBG, MODULE, "Reading object from " + fullPath);
             FileInputStream fileIn = new FileInputStream(fullPath);
             BufferedInputStream bIn = new BufferedInputStream(fileIn);
             in = new ObjectInputStream(bIn);
             o = in.readObject();
-            System.out.println("Reading finished");
+            Dbg.print(DBG, MODULE, "Reading finished");
         } catch (IOException | ClassNotFoundException i) {
             i.printStackTrace();
         } finally {
