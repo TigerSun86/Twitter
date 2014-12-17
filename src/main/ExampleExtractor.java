@@ -4,11 +4,11 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 
 import test.DataCollector;
 import test.UserData;
 import twitter4j.Status;
-import util.Cache;
 import util.OReadWriter;
 
 /**
@@ -21,23 +21,15 @@ import util.OReadWriter;
  */
 public class ExampleExtractor {
 
-    @SuppressWarnings("unchecked")
     public static void main (String[] args) {
-        final HashMap<Long, String> idToFile =
-                (HashMap<Long, String>) OReadWriter.read(OReadWriter.PATH
-                        + OReadWriter.ID2FILE_FILENAME);
-        final Cache<HashMap<Long, UserData>> cache =
-                new Cache<HashMap<Long, UserData>>(10);
         for (long authorId : DataCollector.AUTHOR_IDS) {
-            final UserData author = getUserDate(authorId, idToFile, cache);
-            checkAuthor(author, idToFile, cache);
+            final UserData author = getUserDate(authorId);
+            checkAuthor(author);
         }
 
     }
 
-    private static void
-            checkAuthor (UserData author, HashMap<Long, String> idToFile,
-                    Cache<HashMap<Long, UserData>> cache) {
+    private static void checkAuthor (UserData author) {
         if (author == null) {
             System.out.println("No such author");
             return;
@@ -52,21 +44,21 @@ public class ExampleExtractor {
                 System.out.println(i + "/" + fols.length);
             }
             final Long folId = fols[i];
-            final UserData user = getUserDate(folId, idToFile, cache);
+            final UserData user = getUserDate(folId);
             if (user == null) {
                 // System.out.println("Cannot find user id " + folId);
                 continue; // No such user.
             }
 
             // Get positive examples.
-            final HashMap<Long, Status> pos =
+            final  List<Status> pos =
                     getPosExample(user.tweets, author.userProfile.getId());
 
             if (pos.isEmpty()) {
                 continue; // No positive example.
             }
             // Get negative examples.
-            final HashMap<Long, Status> neg =
+            final  List<Status> neg =
                     getNegExample(author.tweets, user.tweets, pos);
 
             if (pos.size() != 0 && neg.size() != 0) {
@@ -107,39 +99,61 @@ public class ExampleExtractor {
         }
     }
 
-    private static HashMap<Long, Status> getPosExample (
+    private static void getExample (final Long folId, UserData author) {
+        final UserData user = getUserDate(folId);
+        if (user == null) {
+            // System.out.println("Cannot find user id " + folId);
+            return; // No such user.
+        }
+
+        // Get positive examples.
+        final List<Status> pos =
+                getPosExample(user.tweets, author.userProfile.getId());
+
+        if (pos.isEmpty()) {
+            return; // No positive example.
+        }
+        // Get negative examples.
+        final List<Status> neg =
+                getNegExample(author.tweets, user.tweets, pos);
+
+        if (pos.size() != 0 && neg.size() != 0) {
+            final Example e =
+                    new Example(user.userProfile.getScreenName(),
+                            user.userProfile.getId(), pos.size(), neg.size());
+
+        }
+    }
+
+    private static List<Status> getPosExample (
             ArrayList<Status> tweets, long authorId) {
         // Get positive examples.
-        final HashMap<Long, Status> pos = new HashMap<Long, Status>();
+        final List<Status> pos = new ArrayList<Status>();
         for (Status t : tweets) {
             if (t.isRetweet()) {
                 Status t2 = t;
                 while (t2.isRetweet()) { // find the original tweet of t.
                     t2 = t2.getRetweetedStatus();
                 }
-                if (t2.getUser().getId() == authorId) {
-                    // The author of t is AUTHOR_ID.
-                    // Add positive example t2.
-                    pos.put(t2.getId(), t2);
-                }
+                pos.add(t2);
             }
         } // for (Status t : user.tweets) {
         return pos;
     }
 
-    private static HashMap<Long, Status> getNegExample (
+    private static  List<Status> getNegExample (
             ArrayList<Status> atweets, ArrayList<Status> ftweets,
-            HashMap<Long, Status> pos) {
+            List<Status> pos) {
         // Get negative examples.
         // Negative example is the tweet t from author wasn't retweeted by
         // follower, and in the time interval [1 hour before t, 3 hour after t]
         // the follower has some activity.
-        final HashMap<Long, Status> neg = new HashMap<Long, Status>();
+        final  List<Status> neg = new ArrayList<Status>();
         int i = 0;
         int j = 0;
         while (i < atweets.size() && j < ftweets.size()) {
             final Status tA = atweets.get(i);
-            if (pos.containsKey(tA.getId()) || tA.isRetweet()) {
+            if (pos.contains(tA.getId()) || tA.isRetweet()) {
                 i++; // It's a positive example or it's not a original tweet.
                 continue;
             }
@@ -152,7 +166,7 @@ public class ExampleExtractor {
             } else if (f.after(ah)) { // The tweet of follower is too late.
                 i++; // Next author t.
             } else { // The tweet of follower is just in the interval.
-                neg.put(tA.getId(), tA);
+                neg.add(tA);
                 i++; // Next author t.
             }
         } // while (i < author.tweets.size() && j < user.tweets.size()) {
@@ -167,28 +181,11 @@ public class ExampleExtractor {
         return c.getTime();
     }
 
-    @SuppressWarnings("unchecked")
-    private static UserData
-            getUserDate (Long id, HashMap<Long, String> idToFile,
-                    Cache<HashMap<Long, UserData>> cache) {
-        final String fileName = idToFile.get(id);
-        if (fileName == null) {
-            return null;  // No such id.
-        }
-        HashMap<Long, UserData> idToUser = cache.get(fileName);
-        if (idToUser == null) { // Not in the cache.
-            final String fullPath = OReadWriter.PATH + fileName;
-            idToUser = (HashMap<Long, UserData>) OReadWriter.read(fullPath);
-            if (idToUser == null) {
-                return null; // No such file.
-            } else {
-                cache.put(fileName, idToUser); // Put into cache for future use.
-            }
-        }
-
-        final UserData user = idToUser.get(id);
-        assert user != null;
-        return user;
+    private static UserData getUserDate (Long id) {
+        final String fullPath =
+                OReadWriter.PATH + id.toString() + OReadWriter.EXT;
+        final UserData ud = (UserData) OReadWriter.read(fullPath);
+        return ud;
     }
 
     @SuppressWarnings({ "unchecked", "unused" })

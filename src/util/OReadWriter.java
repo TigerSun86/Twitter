@@ -19,7 +19,7 @@ import java.io.ObjectOutputStream;
 public class OReadWriter {
     public static final String MODULE = "ORW";
     public static final boolean DBG = false;
-    
+
     public static final String PATH = "D:/Twitter/userdata/";
     // For update data.
     public static final String PATH2 = "D:/Twitter/userdata2/";
@@ -30,7 +30,8 @@ public class OReadWriter {
     public static void write (Object o, final String fullPath) {
         ObjectOutputStream out = null;
         try {
-            Dbg.print(DBG, MODULE, "Serialized data is saving in " + fullPath + ".");
+            Dbg.print(DBG, MODULE, "Serialized data is saving in " + fullPath
+                    + ".");
             FileOutputStream fileOut = new FileOutputStream(fullPath);
             BufferedOutputStream bOut = new BufferedOutputStream(fileOut);
             out = new ObjectOutputStream(bOut);
@@ -60,7 +61,7 @@ public class OReadWriter {
             o = in.readObject();
             Dbg.print(DBG, MODULE, "Reading finished");
         } catch (IOException | ClassNotFoundException i) {
-            i.printStackTrace();
+            Dbg.print(DBG, MODULE, "No such file: " + fullPath);
         } finally {
             if (in != null) {
                 try {

@@ -1,6 +1,7 @@
 package test;
 
 import java.io.BufferedOutputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
@@ -139,6 +140,68 @@ public class DataCollector {
     }
 
     private static void updateData () {
+        System.out.println("Crawl tweets since:" + UP_SINCE_DATE.toString());
+        final File folder = new File(OReadWriter.PATH);
+        final File[] fileList = folder.listFiles();
+        System.out.println("Old # of users: " + fileList.length);
+
+        final Twitter twitter = new TwitterFactory().getInstance();
+
+        int sum = 0;
+        Status latest = null;
+        Status oldest = null;
+        for (final File fileEntry : fileList) {
+            // Open each file.
+            final String fullPath = fileEntry.getAbsolutePath();
+            final UserData ud = (UserData) OReadWriter.read(fullPath);
+
+            final ArrayList<Status> newTweets =
+                    ud.update(twitter, UP_SINCE_DATE);
+
+            if (newTweets != null) {
+                // Save updated data to file in new folder.
+                // Won't keep the user anymore if it's been
+                // deleted/privated/no such user.
+                final String fileName =
+                        ud.userProfile.getId() + OReadWriter.EXT;
+                final String fullPath2 = OReadWriter.PATH2 + fileName;
+                OReadWriter.write(ud, fullPath2);
+
+                if (!newTweets.isEmpty()) {
+                    // Statistic info.
+                    sum += newTweets.size();
+                    final Status lat = newTweets.get(0);
+                    final Status old = newTweets.get(newTweets.size() - 1);
+                    if (latest == null
+                            || latest.getCreatedAt().before(lat.getCreatedAt())) {
+                        latest = lat;
+                    }
+                    if (oldest == null
+                            || oldest.getCreatedAt().after(old.getCreatedAt())) {
+                        oldest = old;
+                    }
+                } // if(!newTweets.isEmpty()) {
+            } // if (newTweets != null){
+        } // for (final File fileEntry : fileList) {
+
+        System.out.println("In total appended # of tweets: " + sum);
+        if (latest != null) {
+            System.out.println("Latest tweet id: " + latest.getId()
+                    + ", date: " + latest.getCreatedAt().toString()
+                    + ", userId: " + latest.getUser().getId() + ", userName:"
+                    + latest.getUser().getScreenName());
+        }
+        if (oldest != null) {
+            System.out.println("Oldest tweet id: " + oldest.getId()
+                    + ", date: " + oldest.getCreatedAt().toString()
+                    + ", userId: " + oldest.getUser().getId() + ", userName:"
+                    + oldest.getUser().getScreenName());
+        }
+        System.out.println("Current total # of users: "
+                + (new File(OReadWriter.PATH2)).listFiles().length);
+    }
+
+    private static void updateData2 () {
         System.out.println("Crawl tweets since:" + UP_SINCE_DATE.toString());
 
         @SuppressWarnings("unchecked")
