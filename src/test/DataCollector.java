@@ -18,6 +18,7 @@ import java.util.Map.Entry;
 import twitter4j.Status;
 import twitter4j.Twitter;
 import twitter4j.TwitterFactory;
+import util.MyMath;
 import util.OReadWriter;
 
 public class DataCollector {
@@ -139,18 +140,39 @@ public class DataCollector {
         }
     }
 
+    private static boolean exists (final File file, final File[] existingFiles) {
+        for (File f : existingFiles) {
+            if (f.getName().equals(file.getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static void updateData () {
         System.out.println("Crawl tweets since:" + UP_SINCE_DATE.toString());
         final File folder = new File(OReadWriter.PATH);
         final File[] fileList = folder.listFiles();
-        System.out.println("Old # of users: " + fileList.length);
+        // 1 log file.
+        System.out.println("Old # of users: " +( fileList.length - 1));
 
         final Twitter twitter = new TwitterFactory().getInstance();
+
+        final File[] existingFiles = new File(OReadWriter.PATH2).listFiles();
 
         int sum = 0;
         Status latest = null;
         Status oldest = null;
         for (final File fileEntry : fileList) {
+            if (exists(fileEntry, existingFiles)) {
+                continue;
+            }
+            
+            if (!MyMath.getExtentionOfFileName(fileEntry.getName()).equals(
+                    OReadWriter.EXT2)) { // Ignore log file.
+                continue;
+            }
+            
             // Open each file.
             final String fullPath = fileEntry.getAbsolutePath();
             final UserData ud = (UserData) OReadWriter.read(fullPath);
@@ -197,8 +219,9 @@ public class DataCollector {
                     + ", userId: " + oldest.getUser().getId() + ", userName:"
                     + oldest.getUser().getScreenName());
         }
+        // 1 log file
         System.out.println("Current total # of users: "
-                + (new File(OReadWriter.PATH2)).listFiles().length);
+                + ((new File(OReadWriter.PATH2)).listFiles().length - 1));
     }
 
     private static void updateData2 () {
