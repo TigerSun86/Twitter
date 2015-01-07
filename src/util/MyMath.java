@@ -98,4 +98,18 @@ public class MyMath {
         }
         return extension;
     }
+
+    public static String getFileNameWithoutExt (final String fileName) {
+        String name = "";
+        final int i = fileName.lastIndexOf('.');
+        final int p =
+                Math.max(
+                        0,
+                        Math.max(fileName.lastIndexOf('/'),
+                                fileName.lastIndexOf('\\')));
+        if (i > p) {
+            name = fileName.substring(p, i);
+        }
+        return name;
+    }
 }

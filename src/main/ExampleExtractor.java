@@ -432,7 +432,7 @@ public class ExampleExtractor {
         return c.getTime();
     }
 
-    private static UserData getUserDate (Long id) {
+    public static UserData getUserDate (Long id) {
         final String fullPath =
                 OReadWriter.PATH + id.toString() + OReadWriter.EXT;
         final UserData ud = (UserData) OReadWriter.read(fullPath);

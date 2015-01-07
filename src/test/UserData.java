@@ -14,6 +14,7 @@ import twitter4j.User;
 
 public class UserData implements java.io.Serializable {
     private static final long serialVersionUID = 1L;
+    private static final String HIGH_NUM_STR = " high";
 
     public User userProfile = null;
     public HashSet<Long> followersIds = null;
@@ -75,7 +76,9 @@ public class UserData implements java.io.Serializable {
         }
 
         if (ud.tweets != null) {
-            System.out.println("Got # of tweets: " + ud.tweets.size());
+            final String highNum = ud.tweets.size() >= 3000 ? HIGH_NUM_STR : "";
+            System.out
+                    .println("Got # of tweets: " + ud.tweets.size() + highNum);
             if (!ud.tweets.isEmpty()) {
                 System.out.println("Latest tweet: "
                         + ud.tweets.get(0).getCreatedAt());
@@ -317,7 +320,9 @@ public class UserData implements java.io.Serializable {
         }
 
         if (newTweets != null) {
-            System.out.println("Got # of new tweets: " + newTweets.size());
+            final String highNum = ud.tweets.size() >= 3000 ? HIGH_NUM_STR : "";
+            System.out.println("Got # of new tweets: " + newTweets.size()
+                    + highNum);
             if (!newTweets.isEmpty()) {
                 System.out.println("Latest tweet: "
                         + newTweets.get(0).getCreatedAt());
