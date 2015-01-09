@@ -14,7 +14,9 @@ import java.util.List;
 import test.DataCollector;
 import test.UserData;
 import twitter4j.Status;
+import util.MyMath;
 import util.OReadWriter;
+import util.OutputRedirection;
 import util.SysUtil;
 import common.RawAttrList;
 import common.RawExample;
@@ -31,16 +33,62 @@ import common.RawExampleList;
 public class ExampleExtractor {
 
     public static void main (String[] args) {
-        // onePairExample();
+        final OutputRedirection or = new OutputRedirection();
+       // onePairExample();
 
         for (long authorId : DataCollector.AUTHOR_IDS) {
             //if (authorId == 497178013L) {
                 final UserData author = getUserDate(authorId);
+                //howManyPosLess(author);
                 checkAuthor(author);
             //}
         }
+        
+        or.close();
     }
+    private static void howManyPosLess(UserData author){
+        if (author == null) {
+            System.out.println("No such author");
+            return;
+        }
+        System.out.println("****************");
+        System.out.println("AuthorName AuthorId FolName FolId PosSize NegSize "
+                + "PruneTrainAcc PruneTestAcc FeatureTime TrainTime");
+        // System.out.println("Author is " + author.userProfile.getScreenName()
+        // + " id:" + author.userProfile.getId());
+        assert author.followersIds != null;
 
+        int userCount = 0;
+        int poscount = 0;
+        int pos2count = 0;
+        double rate = 0;
+        final Long[] fols = author.followersIds.toArray(new Long[0]);
+        for (int i = 0; i < fols.length; i++) {
+            if (i % (fols.length / 10) == 0) {
+                // System.out.println(i + "/" + fols.length);
+            }
+            final Long folId = fols[i];
+            final UserData user = getUserDate(folId);
+            if (user == null) {
+                // System.out.println("Cannot find user id " + folId);
+                continue;
+            }
+            final PosAndNeg pan = getExamples(user, author);
+            if (pan != null && pan.pos.size() > 100) {
+                 System.out.println("User:" + user.userProfile.getScreenName()
+                 + " id:" + folId + " pos:" + pan.pos.size() + " pos2:" + pan.pos2.size() + " neg:"
+                 + pan.neg.size());
+                // testOne(pan.pos, pan.neg, author, user);
+                // testOne2(pan.pos, pan.neg, author, user, userCount, authorTest);
+                userCount++;
+                poscount += pan.pos.size();
+                pos2count += pan.pos2.size();
+                rate += ((double)pan.pos2.size())/pan.pos.size();
+            }
+        } // for (Long folId : author.followersIds) {
+        System.out.printf("Pos %d, Pos2 %d, PRate %.4f, indiRate %.4f %n",poscount,pos2count, 
+                ((double)pos2count)/poscount, rate/userCount);
+    }
     private static void checkAuthor (UserData author) {
         if (author == null) {
             System.out.println("No such author");
@@ -349,10 +397,16 @@ public class ExampleExtractor {
 
     private static class PosAndNeg {
         public final List<Status> pos;
+        public List<Status> pos2 = null;
         public final List<Status> neg;
 
         public PosAndNeg(List<Status> pos, List<Status> neg) {
             this.pos = pos;
+            this.neg = neg;
+        }
+        public PosAndNeg(List<Status> pos, List<Status> pos2, List<Status> neg) {
+            this.pos = pos;
+            this.pos2 = pos2;
             this.neg = neg;
         }
     }
@@ -365,6 +419,8 @@ public class ExampleExtractor {
         if (pos.isEmpty()) {
             return null; // No positive example.
         }
+        //final List<Status> pos2 =
+        //        getPosExample2(user.tweets, author.userProfile.getId());
         // Get negative examples.
         final List<Status> neg = getNegExample(author.tweets, user.tweets, pos);
 
@@ -389,7 +445,24 @@ public class ExampleExtractor {
         } // for (Status t : user.tweets) {
         return pos;
     }
-
+    
+    private static final int POS_DAY = 1;
+    private static List<Status> getPosExample2 (ArrayList<Status> tweets,
+            long authorId) {
+        // Get positive examples.
+        final List<Status> pos = new ArrayList<Status>();
+        for (Status t : tweets) {
+            if (t.isRetweet()) {
+                Status ot = t.getRetweetedStatus();
+                assert !ot.isRetweet(); // The original tweet of t.
+                final Date lastRetweetTime = MyMath.getNewTime(ot.getCreatedAt(), POS_DAY, Calendar.DAY_OF_YEAR);
+                if(t.getCreatedAt().before(lastRetweetTime)){
+                    pos.add(ot);
+                }
+            }
+        } // for (Status t : user.tweets) {
+        return pos;
+    }
     private static List<Status> getNegExample (ArrayList<Status> atweets,
             ArrayList<Status> ftweets, List<Status> pos) {
         // Get negative examples.

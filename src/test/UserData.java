@@ -91,7 +91,15 @@ public class UserData implements java.io.Serializable {
             System.out.println("Got # of followers: " + ud.followersIds.size());
             System.out.println("Got # of friends: " + ud.friendsIds.size());
         }
-        System.out.println("Is author: " + isAuthor);
+        final String userType;
+        if(isAuthor){
+            userType = "Author";
+        } else if (ud.friendsIds != null){
+            userType = "Follower";
+        } else {
+            userType = "OtherAuthor";
+        }
+        System.out.println("User type: " + userType);
         System.out.println("****");
         if (ud.userProfile != null && ud.tweets != null && !ud.tweets.isEmpty()) {
             return ud;

@@ -2,6 +2,8 @@ package util;
 
 import java.awt.geom.Point2D;
 import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Random;
 
@@ -111,5 +113,13 @@ public class MyMath {
             name = fileName.substring(p, i);
         }
         return name;
+    }
+    
+    public static Date getNewTime (Date time, int dif, int field) {
+        final Calendar c = Calendar.getInstance();
+        c.setTime(time);
+        final int h = c.get(field);
+        c.set(field, h + dif);
+        return c.getTime();
     }
 }

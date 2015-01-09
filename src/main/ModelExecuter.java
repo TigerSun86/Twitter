@@ -1,12 +1,13 @@
 package main;
 
+import ripperk.RIPPERk;
+import util.SysUtil;
 import common.Evaluator;
 import common.Hypothesis;
 import common.Learner;
 import common.MappedAttrList;
 import common.RawAttrList;
 import common.RawExampleList;
-
 import decisiontreelearning.DecisionTree.DecisionTreeTest;
 
 /**
@@ -21,13 +22,20 @@ public class ModelExecuter {
     public static void main (String[] args) {
         final RawAttrList rawAttr = new RawAttrList(ATTR);
         final RawExampleList originalExs = new RawExampleList(DATA);
+        final long time1 = SysUtil.getCpuTime();
         System.out.println(run(originalExs, rawAttr));
+        final long time2 = SysUtil.getCpuTime();
+        System.out.println(time2-time1);
     }
 
     public static final String ATTR =
             "file://localhost/C:/WorkSpace/Twitter/data/attr.txt";
     public static final String DATA =
             "file://localhost/C:/WorkSpace/Twitter/data/2551981338L-407374096.txt";
+
+    public static final Learner[] LEARNERS = {
+            new DecisionTreeTest(DecisionTreeTest.NO_PRUNE),
+            new RIPPERk(true, 1) };
 
     public static String run (final RawExampleList originalExs,
             final RawAttrList rawAttr) {
@@ -49,18 +57,14 @@ public class ModelExecuter {
         train = mAttr.mapExs(train, rawAttr);
         test = mAttr.mapExs(test, rawAttr);
 
-        Learner learner = new DecisionTreeTest(DecisionTreeTest.NO_PRUNE);
+        Learner learner = LEARNERS[1];
         Hypothesis h = learner.learn(train, rawAttr);
+        //System.out.println(h.toString());
         double atrain = Evaluator.evaluate(h, train);
         double atest = Evaluator.evaluate(h, test);
         final StringBuilder sb = new StringBuilder();
         sb.append(String.format("%.4f %.4f", atrain, atest));
-
-        learner = new DecisionTreeTest(DecisionTreeTest.RP_PRUNE);
-        h = learner.learn(train, rawAttr);
-        atrain = Evaluator.evaluate(h, train);
-        atest = Evaluator.evaluate(h, test);
-        sb.append(String.format(" %.4f %.4f", atrain, atest));
+        
         return sb.toString();
     }
 
@@ -75,7 +79,7 @@ public class ModelExecuter {
         final RawExampleList testM1 = mAttr.mapExs(testM1In, rawAttr);
         final RawExampleList testM2 = mAttr.mapExs(testM2In, rawAttr);
 
-        Learner learner = new DecisionTreeTest(DecisionTreeTest.RP_PRUNE);
+        Learner learner = LEARNERS[1];
         Hypothesis h = learner.learn(train, rawAttr);
         double atrain = Evaluator.evaluate(h, train);
         double atest = Evaluator.evaluate(h, testM1);
