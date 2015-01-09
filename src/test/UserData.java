@@ -341,7 +341,15 @@ public class UserData implements java.io.Serializable {
             System.out
                     .println("The user has been deleted/privated/no such user");
         }
-        System.out.println("Is author: " + ud.isAuthor);
+        final String userType;
+        if(isAuthor){
+            userType = "Author";
+        } else if (ud.friendsIds != null){
+            userType = "Follower";
+        } else {
+            userType = "OtherAuthor";
+        }
+        System.out.println("User type: " + userType);
         System.out.println("****");
 
         if (newTweets == null) {

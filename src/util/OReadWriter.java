@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 
+import test.UserData;
+
 /**
  * FileName: OReadWriter.java
  * @Description:
@@ -25,7 +27,7 @@ public class OReadWriter {
     public static final String PATH2 = "D:/Twitter/userdata2/";
     public static final String FILE_NAME = "ud";
     public static final String EXT = ".ser";
-    public static final Object EXT2 = "ser";
+    public static final String EXT2 = "ser";
     public static final String ID2FILE_FILENAME = "idToFile.ser";
 
     public static void write (Object o, final String fullPath) {
@@ -73,5 +75,12 @@ public class OReadWriter {
             }
         }
         return o;
+    }
+    
+    public static UserData getUserDate (long id) {
+        final String fullPath =
+                OReadWriter.PATH + Long.toString(id) + OReadWriter.EXT;
+        final UserData ud = (UserData) OReadWriter.read(fullPath);
+        return ud;
     }
 }

@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.net.URL;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -15,7 +14,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
 
-import main.ExampleExtractor;
 import twitter4j.Status;
 import twitter4j.Twitter;
 import twitter4j.TwitterFactory;
@@ -192,7 +190,7 @@ public class AddAdditionalAuthors {
     private static List<UserData> getOriginalAuthors () {
         final ArrayList<UserData> oas = new ArrayList<UserData>();
         for (Long id : DataCollector.AUTHOR_IDS) {
-            final UserData ud = ExampleExtractor.getUserDate(id);
+            final UserData ud = OReadWriter.getUserDate(id);
             oas.add(ud);
         }
         return oas;

@@ -20,6 +20,7 @@ import twitter4j.Twitter;
 import twitter4j.TwitterFactory;
 import util.MyMath;
 import util.OReadWriter;
+import util.OutputRedirection;
 
 public class DataCollector {
     public static final ArrayList<Long> AUTHOR_IDS = new ArrayList<Long>();
@@ -132,9 +133,12 @@ public class DataCollector {
     private static Date UP_SINCE_DATE = null;
     static {
         try {
+           // UP_SINCE_DATE =
+            //        new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
+            //                .parse("Mon Oct 27 22:22:22 EDT 2014");
             UP_SINCE_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-                            .parse("Mon Oct 27 22:22:22 EDT 2014");
+                            .parse("Thu Dec 25 15:45:28 EST 2014");
         } catch (ParseException e) {
             e.printStackTrace();
         }
@@ -299,6 +303,13 @@ public class DataCollector {
     /* Update data end */
 
     public static void main (String[] args) {
+        final String curTime =
+                new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(Calendar
+                        .getInstance().getTime());
+        final String dbgFileName =
+                OReadWriter.PATH2 + "log_" + curTime + ".txt";
+        final OutputRedirection or = new OutputRedirection(dbgFileName);
         updateData();
+        or.close();
     }
 }

@@ -23,7 +23,7 @@ public class ModelExecuter {
         final RawAttrList rawAttr = new RawAttrList(ATTR);
         final RawExampleList originalExs = new RawExampleList(DATA);
         final long time1 = SysUtil.getCpuTime();
-        System.out.println(run(originalExs, rawAttr));
+        System.out.println(runPairTest(originalExs, rawAttr));
         final long time2 = SysUtil.getCpuTime();
         System.out.println(time2-time1);
     }
@@ -37,7 +37,7 @@ public class ModelExecuter {
             new DecisionTreeTest(DecisionTreeTest.NO_PRUNE),
             new RIPPERk(true, 1) };
 
-    public static String run (final RawExampleList originalExs,
+    public static String runPairTest (final RawExampleList originalExs,
             final RawAttrList rawAttr) {
         // Map all attributes in range 0 to 1.
         final MappedAttrList mAttr = new MappedAttrList(originalExs, rawAttr);
@@ -68,7 +68,7 @@ public class ModelExecuter {
         return sb.toString();
     }
 
-    public static String run2 (final RawExampleList trainIn,
+    public static String runGlobalTest (final RawExampleList trainIn,
             final RawExampleList testM1In, final RawExampleList testM2In,
             final RawAttrList rawAttr) {
         // Map all attributes in range 0 to 1.
