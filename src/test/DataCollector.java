@@ -133,9 +133,9 @@ public class DataCollector {
     private static Date UP_SINCE_DATE = null;
     static {
         try {
-           // UP_SINCE_DATE =
-            //        new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-            //                .parse("Mon Oct 27 22:22:22 EDT 2014");
+            // UP_SINCE_DATE =
+            // new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
+            // .parse("Mon Oct 27 22:22:22 EDT 2014");
             UP_SINCE_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
                             .parse("Thu Dec 25 15:45:28 EST 2014");
@@ -158,7 +158,7 @@ public class DataCollector {
         final File folder = new File(OReadWriter.PATH);
         final File[] fileList = folder.listFiles();
         // 1 log file.
-        System.out.println("Old # of users: " +( fileList.length - 1));
+        System.out.println("Old # of users: " + (fileList.length - 1));
 
         final Twitter twitter = new TwitterFactory().getInstance();
 
@@ -167,16 +167,18 @@ public class DataCollector {
         int sum = 0;
         Status latest = null;
         Status oldest = null;
+        int finishedCount = 0;
         for (final File fileEntry : fileList) {
             if (exists(fileEntry, existingFiles)) {
+                finishedCount++;
                 continue;
             }
-            
+
             if (!MyMath.getExtentionOfFileName(fileEntry.getName()).equals(
                     OReadWriter.EXT2)) { // Ignore log file.
                 continue;
             }
-            
+
             // Open each file.
             final String fullPath = fileEntry.getAbsolutePath();
             final UserData ud = (UserData) OReadWriter.read(fullPath);
@@ -208,6 +210,10 @@ public class DataCollector {
                     }
                 } // if(!newTweets.isEmpty()) {
             } // if (newTweets != null){
+
+            finishedCount++;
+            System.out.printf("Finished # of users %d/%d.%n", finishedCount,
+                    fileList.length - 1);
         } // for (final File fileEntry : fileList) {
 
         System.out.println("In total appended # of tweets: " + sum);
