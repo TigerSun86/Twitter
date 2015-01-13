@@ -7,6 +7,7 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 
 import test.DataCollector;
@@ -31,20 +32,26 @@ public class ExampleExtractor {
     public static final String Y = "Y";
     public static final String N = "N";
 
+    private static Date TRAIN_START_DATE = null;
     private static Date TEST_START_DATE = null;
     private static Date TEST_END_DATE = null;
     static {
         try {
+            TRAIN_START_DATE =
+                    new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
+                            .parse("Thu Dec 25 15:45:28 EST 2014");
             TEST_START_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-                            .parse("Thu Nov 27 22:22:22 EDT 2014");
+                            .parse("Thu Jan 01 18:33:54 EST 2015");
             TEST_END_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-                            .parse("Wed Dec 10 11:14:47 EST 2014");
+                            .parse("Thu Jan 08 18:33:54 EST 2015");
         } catch (ParseException e) {
             e.printStackTrace();
         }
     }
+
+    private static final int POS_DAY = 1;
 
     private final UserData authorData;
     // For global test, will be initialized at first time usage.
@@ -117,50 +124,76 @@ public class ExampleExtractor {
 
     private static final TweetSorter TWEET_SORTER = new TweetSorter();
 
-    private static void howManyPosLess (UserData author) {
+    private static List<Status> pos2;
+    private static int aposcount;
+    private static int anegcount;
+    private static long aid;
+
+    private static void howManyPosRemain (UserData author) {
         if (author == null) {
             System.out.println("No such author");
             return;
         }
+        aid = author.userProfile.getId();
         System.out.println("****************");
-        System.out.println("AuthorName AuthorId FolName FolId PosSize NegSize "
-                + "PruneTrainAcc PruneTestAcc FeatureTime TrainTime");
-        // System.out.println("Author is " + author.userProfile.getScreenName()
-        // + " id:" + author.userProfile.getId());
+        System.out.printf("Author: %s, Id: %d%n",
+                author.userProfile.getScreenName(), author.userProfile.getId());
+        System.out.println("UserName UserId #Pos #AllPos #Neg "
+                + "PosRemainRate PosNegRate #AuthorPos #AuthorNeg");
         assert author.followersIds != null;
 
         int userCount = 0;
         int poscount = 0;
         int pos2count = 0;
-        double rate = 0;
+        int negcount = 0;
+        double ppRate = 0;
+        double pnRate = 0;
+        int apc = 0;
+        int anc = 0;
         final Long[] fols = author.followersIds.toArray(new Long[0]);
         for (int i = 0; i < fols.length; i++) {
             if (i % (fols.length / 10) == 0) {
                 // System.out.println(i + "/" + fols.length);
             }
             final Long folId = fols[i];
-            final UserData user = OReadWriter.getUserDate(folId);
-            if (user == null) {
-                // System.out.println("Cannot find user id " + folId);
+            final UserData follower = OReadWriter.getUserDate(folId);
+            if (follower == null || follower.friendsIds == null) {
                 continue;
             }
-            final PosAndNeg pan = getExamples(user, author);
-            if (pan != null && pan.pos.size() > 100) {
-                System.out.println("User:" + user.userProfile.getScreenName()
-                        + " id:" + folId + " pos:" + pan.pos.size() + " pos2:"
-                        + pan.pos2.size() + " neg:" + pan.neg.size());
-                // testOne(pan.pos, pan.neg, author, user);
-                // testOne2(pan.pos, pan.neg, author, user, userCount,
-                // authorTestTweets);
+            final PosAndNeg pan = getExamples(follower, author);
+            if (pan != null && pan.pos.size() > 10) {
                 userCount++;
                 poscount += pan.pos.size();
-                pos2count += pan.pos2.size();
-                rate += ((double) pan.pos2.size()) / pan.pos.size();
+                pos2count += pos2.size();
+                negcount += pan.neg.size();
+                final double posRemainRate =
+                        ((double) pan.pos.size()) / pos2.size();
+                ppRate += posRemainRate;
+                final double posNegRate =
+                        ((double) pan.pos.size()) / pan.neg.size();
+                pnRate += posNegRate;
+                apc += aposcount;
+                anc += anegcount;
+                System.out.printf(
+                        "User %s, Id %d, #Pos %d, #AllPos %d, #Neg %d, "
+                                + "PosRemainRate %.4f, PosNegRate %.4f, "
+                                + "#AuthorPos %d, #AuthorNeg %d %n",
+                        follower.userProfile.getScreenName(), folId,
+                        pan.pos.size(), pos2.size(), pan.neg.size(),
+                        posRemainRate, posNegRate, aposcount, anegcount);
             }
         } // for (Long folId : author.followersIds) {
-        System.out.printf("Pos %d, Pos2 %d, PRate %.4f, indiRate %.4f %n",
-                poscount, pos2count, ((double) pos2count) / poscount, rate
+        System.out.println("****************");
+        System.out
+                .println("Author Id #Pos #AllPos #Neg PosRemainRate "
+                        + "AvgPosRemainRate PosNegRate AvgPosNegRate Avg#AuthorPos Avg#AuthorNeg");
+        System.out.printf("%s %d %d %d %d %.4f %.4f %.4f %.4f %.4f %.4f%n",
+                author.userProfile.getScreenName(), author.userProfile.getId(),
+                poscount, pos2count, negcount, ((double) poscount) / pos2count,
+                ppRate / userCount, ((double) poscount) / negcount, pnRate
+                        / userCount, ((double) apc) / userCount, ((double) anc)
                         / userCount);
+        System.out.println("****************");
     }
 
     private static List<List<Status>> splitByDate (List<Status> exs) {
@@ -234,9 +267,6 @@ public class ExampleExtractor {
         System.out.println("User:" + user.userProfile.getScreenName() + " id:"
                 + user.userProfile.getId() + " pos:" + pan.pos.size() + " neg:"
                 + pan.neg.size());
-        // Make the order from oldest to latest.
-        Collections.sort(pan.pos, TWEET_SORTER);
-        Collections.sort(pan.neg, TWEET_SORTER);
         final RawExampleList exs = getFeatures(pan.pos, pan.neg, user);
         System.out.println(exs);
     }
@@ -294,38 +324,29 @@ public class ExampleExtractor {
 
     private static class PosAndNeg {
         public final List<Status> pos;
-        public List<Status> pos2 = null;
         public final List<Status> neg;
 
         public PosAndNeg(List<Status> pos, List<Status> neg) {
             this.pos = pos;
             this.neg = neg;
         }
-
-        public PosAndNeg(List<Status> pos, List<Status> pos2, List<Status> neg) {
-            this.pos = pos;
-            this.pos2 = pos2;
-            this.neg = neg;
-        }
     }
 
     private static PosAndNeg getExamples (final UserData user, UserData author) {
         // Get positive examples.
-        final List<Status> pos =
-                getPosExample(user.tweets, author.userProfile.getId());
+        final List<Status> pos = getPosExample(user);
 
         if (pos.isEmpty()) {
             return null; // No positive example.
         }
-        // final List<Status> pos2 =
-        // getPosExample2(user.tweets, author.userProfile.getId());
+        pos2 = getPosExample2(user.tweets, author.userProfile.getId());
         // Get negative examples.
-        final List<Status> neg = getNegExample(author.tweets, user.tweets, pos);
+        final List<Status> neg = getNegExample(user, pos);
 
         return new PosAndNeg(pos, neg);
     }
 
-    private static List<Status> getPosExample (ArrayList<Status> tweets,
+    private static List<Status> getPosExample2 (ArrayList<Status> tweets,
             long authorId) {
         // Get positive examples.
         final List<Status> pos = new ArrayList<Status>();
@@ -335,69 +356,89 @@ public class ExampleExtractor {
                 while (t2.isRetweet()) { // find the original tweet of t.
                     t2 = t2.getRetweetedStatus();
                 }
+                // ot should within [TRAIN_START_DATE, TEST_END_DATE].
+                if (t2.getCreatedAt().before(TRAIN_START_DATE)) {
+                    break; // Too old.
+                } else if (t2.getCreatedAt().after(TEST_END_DATE)) {
+                    continue; // Too new.
+                }
                 // if (t2.getUser().getId() == authorId) {
                 pos.add(t2);
                 // }
 
             }
         } // for (Status t : user.tweets) {
+          // Make the order from oldest to latest.
+        Collections.sort(pos, TWEET_SORTER);
         return pos;
     }
 
-    private static final int POS_DAY = 1;
-
-    private static List<Status> getPosExample2 (ArrayList<Status> tweets,
-            long authorId) {
+    private static List<Status> getPosExample (final UserData f) {
+        aposcount = 0;
         // Get positive examples.
         final List<Status> pos = new ArrayList<Status>();
-        for (Status t : tweets) {
+        for (Status t : f.tweets) { // Order: latest to oldest.
             if (t.isRetweet()) {
-                Status ot = t.getRetweetedStatus();
+                final Status ot = t.getRetweetedStatus();
+                // ot should within [TRAIN_START_DATE, TEST_END_DATE].
+                if (ot.getCreatedAt().before(TRAIN_START_DATE)) {
+                    break; // Too old.
+                } else if (ot.getCreatedAt().after(TEST_END_DATE)) {
+                    continue; // Too new.
+                }
                 assert !ot.isRetweet(); // The original tweet of t.
-                final Date lastRetweetTime =
-                        MyMath.getNewTime(ot.getCreatedAt(), POS_DAY,
-                                Calendar.DAY_OF_YEAR);
-                if (t.getCreatedAt().before(lastRetweetTime)) {
-                    pos.add(ot);
+                assert f.friendsIds != null; // f is a follower.
+                // If the author of ot is the followee of f.
+                if (f.friendsIds.contains(ot.getUser().getId())) {
+                    final Date lastRetweetTime =
+                            MyMath.getNewTime(ot.getCreatedAt(), POS_DAY,
+                                    Calendar.DAY_OF_YEAR);
+                    // It's been retweeted within the time range.
+                    if (t.getCreatedAt().before(lastRetweetTime)) {
+                        pos.add(ot);
+                        if (ot.getUser().getId() == aid) {
+                            aposcount++;
+                        }
+                    }
                 }
             }
         } // for (Status t : user.tweets) {
+        Collections.sort(pos, TWEET_SORTER);
         return pos;
     }
 
-    private static List<Status> getNegExample (ArrayList<Status> atweets,
-            ArrayList<Status> ftweets, List<Status> pos) {
-        // Get negative examples.
-        // Negative example is the tweet t from author wasn't retweeted by
-        // follower, and in the time interval [1 hour before t, 3 hour after t]
-        // the follower has some activity.
+    private static List<Status> getNegExample (final UserData f,
+            List<Status> pos) {
+        anegcount = 0;
+        final HashSet<Long> posSet = new HashSet<Long>();
+        for (Status t : pos) {
+            posSet.add(t.getId());
+        }
+
         final List<Status> neg = new ArrayList<Status>();
-        int i = 0;
-        int j = 0;
-        while (i < atweets.size() && j < ftweets.size()) {
-            final Status tA = atweets.get(i);
-            if (pos.contains(tA.getId()) || tA.isRetweet()) {
-                i++; // It's a positive example or it's not a original tweet.
+        for (long authorId : f.friendsIds) { // All followees
+            final UserData author = OReadWriter.getUserDate(authorId);
+            if (author == null) {
                 continue;
             }
-
-            final Date al =
-                    MyMath.getNewTime(tA.getCreatedAt(), -1, Calendar.HOUR);
-            final Date ah =
-                    MyMath.getNewTime(tA.getCreatedAt(), 3, Calendar.HOUR);
-            Date f = ftweets.get(j).getCreatedAt();
-            while (f.after(ah) && j < ftweets.size() - 1) {
-                // The tweet of follower is too late.
-                j++; // Next follower t.
-                f = ftweets.get(j).getCreatedAt();
+            for (Status ot : author.tweets) { // All tweets.
+                // ot should within [TRAIN_START_DATE, TEST_END_DATE].
+                if (ot.getCreatedAt().before(TRAIN_START_DATE)) {
+                    break; // Too old.
+                } else if (ot.getCreatedAt().after(TEST_END_DATE)) {
+                    continue; // Too new.
+                }
+                // Original tweet and not retweeted by f.
+                if (!ot.isRetweet() && !posSet.contains(ot.getId())) {
+                    neg.add(ot);
+                    if (ot.getUser().getId() == aid) {
+                        anegcount++;
+                    }
+                }
             }
-
-            if (f.after(al) && f.before(ah)) {
-                // The tweet of follower is just in the interval.
-                neg.add(tA);
-            }
-            i++; // Next author t
-        } // while (i < author.tweets.size() && j < user.tweets.size()) {
+        }
+        // Make the order from oldest to latest.
+        Collections.sort(neg, TWEET_SORTER);
         return neg;
     }
 
@@ -407,7 +448,7 @@ public class ExampleExtractor {
         for (long authorId : DataCollector.AUTHOR_IDS) {
             // if (authorId == 497178013L) {
             final UserData author = OReadWriter.getUserDate(authorId);
-            howManyPosLess(author);
+            howManyPosRemain(author);
             // }
         }
         or.close();
