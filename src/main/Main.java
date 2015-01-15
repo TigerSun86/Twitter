@@ -3,7 +3,7 @@ package main;
 import java.util.ArrayList;
 import java.util.BitSet;
 
-import main.ExampleExtractor.ExsOfGlobalTest;
+import main.ExampleExtractor.Exs;
 import test.DataCollector;
 import test.UserData;
 import util.OReadWriter;
@@ -29,16 +29,41 @@ public class Main {
     private final UserData author;
     private final ExampleExtractor exGetter;
 
-    public static void main (String[] args) {
-        final OutputRedirection or = new OutputRedirection();
+    public Main(final long authorId) {
+        this.author = OReadWriter.getUserDate(authorId);
+        this.exGetter = new ExampleExtractor(author);
+    }
 
-        for (long authorId : DataCollector.AUTHOR_IDS) {
-            // if (authorId == 497178013L) {
-            new Main(authorId).globalTest();
-            // }
-        }
+    private void pairTest () {
+        assert author != null;
+        assert author.followersIds != null;
 
-        or.close();
+        System.out.println("****************");
+        System.out
+                .println("AuthorName AuthorId FolName FolId #PosTrain "
+                        + "#NegTrain #PosTestM1 #NegTestM1 #PosTestM2 #NegTestM2 FeatureTime TrainTime "
+                        + "TrainAcc TrainPrecision TrainRecall TrainFM TrainAct#Pos TrainPre#Pos "
+                        + "TestAcc TestPrecision TestRecall TestFM TestAct#Pos TestPre#Pos");
+
+        final Long[] fols = author.followersIds.toArray(new Long[0]);
+        for (int i = 0; i < fols.length; i++) {
+            final Long folId = fols[i];
+            final long time1 = SysUtil.getCpuTime();
+            final Exs exs = exGetter.getExsOfPairTest(folId);
+            if (exs != null) {
+                final long time2 = SysUtil.getCpuTime();
+                final String s =
+                        ModelExecuter.runPairTest(exs.train, exs.testM1,
+                                RAW_ATTR);
+                final long time3 = SysUtil.getCpuTime();
+
+                System.out.printf("%s %d %s %d %d %s%n",
+                        author.userProfile.getScreenName(),
+                        author.userProfile.getId(), exs.followerAndExsInfo,
+                        time2 - time1, time3 - time2, s);
+            }
+        } // for (Long folId : author.followersIds) {
+        System.out.println("****************");
     }
 
     private void globalTest () {
@@ -46,29 +71,31 @@ public class Main {
         assert author.followersIds != null;
 
         System.out.println("****************");
-        System.out.println("AuthorName AuthorId FolName FolId #PosTrain "
-                + "#NegTrain #PosTestM1 #NegTestM1 #PosTestM2 #NegTestM2 "
-                + "TrainAcc TestAcc FeatureTime TrainTime");
+        System.out
+                .println("AuthorName AuthorId FolName FolId #PosTrain "
+                        + "#NegTrain #PosTestM1 #NegTestM1 #PosTestM2 #NegTestM2 FeatureTime TrainTime "
+                        + "TrainAcc TrainPrecision TrainRecall TrainFM TrainAct#Pos TrainPre#Pos "
+                        + "TestAcc TestPrecision TestRecall TestFM TestAct#Pos TestPre#Pos");
 
         int userCount = 0;
         final Long[] fols = author.followersIds.toArray(new Long[0]);
         for (int i = 0; i < fols.length; i++) {
             final Long folId = fols[i];
             final long time1 = SysUtil.getCpuTime();
-            final ExsOfGlobalTest exs = exGetter.getExsOfGlobalTest(folId);
+            final Exs exs = exGetter.getExsOfGlobalTest(folId);
             if (exs != null) {
                 final long time2 = SysUtil.getCpuTime();
                 final String s =
-                        ModelExecuter.runGlobalTest(exs.train, exs.testM1, exs.testM2,
-                                RAW_ATTR);
+                        ModelExecuter.runGlobalTest(exs.train, exs.testM1,
+                                exs.testM2, RAW_ATTR);
                 final long time3 = SysUtil.getCpuTime();
 
                 final String[] ret = s.split("-");
 
-                System.out.printf("%s %d %s %s %d %d%n",
+                System.out.printf("%s %d %s %d %d %s%n",
                         author.userProfile.getScreenName(),
                         author.userProfile.getId(), exs.followerAndExsInfo,
-                        ret[0], time2 - time1, time3 - time2);
+                        time2 - time1, time3 - time2, ret[0]);
 
                 final String[] actuals = ret[1].split(" ");
                 final String[] predicts = ret[2].split(" ");
@@ -92,8 +119,8 @@ public class Main {
     }
 
     private void showFMeasure (int userCount) {
-        System.out.println("Tweet Actual#Ret Pre#Ret ErrorRate "
-                + "Accuracy Precision Recall FMeasure");
+        System.out.println("Tweet ErrorRate "
+                + "Accuracy Precision Recall FMeasure Actual#Pos Pre#Pos");
         for (int t = 0; t < resultTable.a.size(); t++) {
             final BitSet arow = resultTable.a.get(t);
             final BitSet prow = resultTable.p.get(t);
@@ -114,19 +141,31 @@ public class Main {
                     tn++;
                 }
             }
-            final int actualRet = tp + fn;
-            final int preRet = tp + fp;
+            final int numActPos = tp + fn;
+            final int numPrePos = tp + fp;
             final double errorRate =
-                    ((double) Math.abs(actualRet - preRet))
+                    ((double) Math.abs(numActPos - numPrePos))
                             / (tp + tn + fp + fn);
             final double accuracy = ((double) tp + tn) / (tp + tn + fp + fn);
-            final double precision = ((double) tp) / (tp + fp);
-            final double recall = ((double) tp) / (tp + fn);
-            final double fmeasure =
-                    (2 * precision * recall) / (precision + recall);
-            System.out.printf("t%d %d %d %.4f %.4f %.4f %.4f %.4f%n", t,
-                    actualRet, preRet, errorRate, accuracy, precision, recall,
-                    fmeasure);
+            final double precision;
+            final double recall;
+            if (tp == 0) {
+                precision = 0;
+                recall = 0;
+            } else {
+                precision = ((double) tp) / (tp + fp);
+                recall = ((double) tp) / (tp + fn);
+            }
+
+            final double fmeasure;
+            if (precision == 0 || recall == 0) {
+                fmeasure = 0;
+            } else {
+                fmeasure = (2 * precision * recall) / (precision + recall);
+            }
+            System.out.printf("t%d %.4f %.4f %.4f %.4f %.4f %d %d%n", t,
+                    errorRate, accuracy, precision, recall, fmeasure,
+                    numActPos, numPrePos);
         }
     }
 
@@ -142,8 +181,15 @@ public class Main {
         }
     }
 
-    public Main(final long authorId) {
-        this.author = OReadWriter.getUserDate(authorId);
-        this.exGetter = new ExampleExtractor(author);
+    public static void main (String[] args) {
+        final OutputRedirection or = new OutputRedirection();
+
+        for (long authorId : DataCollector.AUTHOR_IDS) {
+            // if (authorId == 1642106527L) {
+            new Main(authorId).pairTest();
+            // }
+        }
+
+        or.close();
     }
 }
