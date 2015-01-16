@@ -1,5 +1,6 @@
 *.class
 lib/*
+bin/*
 *.classpath
 *.project
 twitter4j.properties
