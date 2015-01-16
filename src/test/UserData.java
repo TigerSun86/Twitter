@@ -92,9 +92,9 @@ public class UserData implements java.io.Serializable {
             System.out.println("Got # of friends: " + ud.friendsIds.size());
         }
         final String userType;
-        if(isAuthor){
+        if (isAuthor) {
             userType = "Author";
-        } else if (ud.friendsIds != null){
+        } else if (ud.friendsIds != null) {
             userType = "Follower";
         } else {
             userType = "OtherAuthor";
@@ -117,22 +117,7 @@ public class UserData implements java.io.Serializable {
                 userProfile = user;
                 isRunning = false;
             } catch (TwitterException te) {
-                if (te.exceededRateLimitation()) { // Got limitation.
-                    final int seconds =
-                            te.getRateLimitStatus().getSecondsUntilReset();
-                    System.out
-                            .println("Got limitation in getUserProfile, retry in "
-                                    + seconds + " seconds.");
-                    if (seconds > 0) {
-                        try {
-                            Thread.sleep((seconds + 1) * 1000);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                } else {
-                    System.out.println("Failed in getUserProfile: "
-                            + te.getMessage());
+                if (!handleException(te)){
                     isRunning = false;
                 }
             }
@@ -155,22 +140,7 @@ public class UserData implements java.io.Serializable {
                 } while ((cursor = ids.getNextCursor()) != 0);
                 isRunning = false;
             } catch (TwitterException te) {
-                if (te.exceededRateLimitation()) { // Got limitation.
-                    final int seconds =
-                            te.getRateLimitStatus().getSecondsUntilReset();
-                    System.out
-                            .println("Got limitation in getFollowers, retry in "
-                                    + seconds + " seconds.");
-                    if (seconds > 0) {
-                        try {
-                            Thread.sleep((seconds + 1) * 1000);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                } else {
-                    System.out.println("Failed in getFollowers: "
-                            + te.getMessage());
+                if (!handleException(te)){
                     isRunning = false;
                 }
             }
@@ -193,22 +163,7 @@ public class UserData implements java.io.Serializable {
                 } while ((cursor = ids.getNextCursor()) != 0);
                 isRunning = false;
             } catch (TwitterException te) {
-                if (te.exceededRateLimitation()) { // Got limitation.
-                    final int seconds =
-                            te.getRateLimitStatus().getSecondsUntilReset();
-                    System.out
-                            .println("Got limitation in getFriends, retry in "
-                                    + seconds + " seconds.");
-                    if (seconds > 0) {
-                        try {
-                            Thread.sleep((seconds + 1) * 1000);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                } else {
-                    System.out.println("Failed in getFriends: "
-                            + te.getMessage());
+                if (!handleException(te)){
                     isRunning = false;
                 }
             }
@@ -248,21 +203,7 @@ public class UserData implements java.io.Serializable {
 
                 isRunning = false;
             } catch (TwitterException te) {
-                if (te.exceededRateLimitation()) { // Got limitation.
-                    final int seconds =
-                            te.getRateLimitStatus().getSecondsUntilReset();
-                    System.out.println("Got limitation in getTweets, retry in "
-                            + seconds + " seconds.");
-                    if (seconds > 0) {
-                        try {
-                            Thread.sleep((seconds + 1) * 1000);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                } else {
-                    System.out.println("Failed in getTweets: "
-                            + te.getMessage());
+                if (!handleException(te)){
                     isRunning = false;
                 }
             }
@@ -342,9 +283,9 @@ public class UserData implements java.io.Serializable {
                     .println("The user has been deleted/privated/no such user");
         }
         final String userType;
-        if(isAuthor){
+        if (isAuthor) {
             userType = "Author";
-        } else if (ud.friendsIds != null){
+        } else if (ud.friendsIds != null) {
             userType = "Follower";
         } else {
             userType = "OtherAuthor";
@@ -410,21 +351,7 @@ public class UserData implements java.io.Serializable {
 
                 isRunning = false;
             } catch (TwitterException te) {
-                if (te.exceededRateLimitation()) { // Got limitation.
-                    final int seconds =
-                            te.getRateLimitStatus().getSecondsUntilReset();
-                    System.out.println("Got limitation in getTweets, retry in "
-                            + seconds + " seconds.");
-                    if (seconds > 0) {
-                        try {
-                            Thread.sleep((seconds + 1) * 1000);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                } else {// The user has been deleted/privated/no such user.
-                    System.out.println("Failed in getTweets: "
-                            + te.getMessage());
+                if (!handleException(te)){
                     isRunning = false;
                     getUserFailed = true;
                 }
@@ -434,6 +361,39 @@ public class UserData implements java.io.Serializable {
             return null;
         } else {
             return tweets;
+        }
+    }
+
+    // Retry in 5 minuses.
+    private static final int RETRY_TIME = 5 * 60 * 1000;
+
+    /** @return true, ok for run; false, stop. */
+    private static boolean handleException (TwitterException te) {
+        final int time;
+        if (te.exceededRateLimitation()) { // Got limitation.
+            final int seconds = te.getRateLimitStatus().getSecondsUntilReset();
+            System.out.println("Got limitation of Twitter, retry in "
+                    + seconds + " seconds.");
+            time = (seconds + 1) * 1000;
+        } else if (te.isCausedByNetworkIssue()
+                || (te.isErrorMessageAvailable() && (te.getErrorCode() >= 500))) {
+            System.out.println("Got network or server problem, retry in "
+                    + (RETRY_TIME / 1000) + " seconds.");
+            time = RETRY_TIME;
+        } else {// The user has been deleted/privated/no such user.
+            System.out.println(te.getMessage());
+            time = 0;
+        }
+
+        if (time > 0) {
+            try {
+                Thread.sleep(time);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            return true;
+        } else {
+            return false;
         }
     }
 

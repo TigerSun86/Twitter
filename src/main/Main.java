@@ -41,7 +41,7 @@ public class Main {
         System.out.println("****************");
         System.out
                 .println("AuthorName AuthorId FolName FolId #PosTrain "
-                        + "#NegTrain #PosTestM1 #NegTestM1 #PosTestM2 #NegTestM2 FeatureTime TrainTime "
+                        + "#NegTrain #PosTestM1 #NegTestM1 FeatureTime TrainTime "
                         + "TrainAcc TrainPrecision TrainRecall TrainFM TrainAct#Pos TrainPre#Pos "
                         + "TestAcc TestPrecision TestRecall TestFM TestAct#Pos TestPre#Pos");
 
