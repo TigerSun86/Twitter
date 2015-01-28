@@ -5,7 +5,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
+import java.util.Date;
 
 /**
  * FileName: OutputRedirection.java
@@ -27,8 +27,7 @@ public class OutputRedirection {
         this.ps = System.out;
 
         final String curTime =
-                new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(Calendar
-                        .getInstance().getTime());
+                new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
         final String fileName =
                 Thread.currentThread().getContextClassLoader().getResource("")
                         .getPath()
@@ -37,7 +36,7 @@ public class OutputRedirection {
     }
 
     public void close () {
-        System.out.println(Calendar.getInstance().getTime());
+        System.out.println(new Date());
         System.out.close();
         System.setOut(ps);
         System.out.println("Writing finished");
@@ -51,7 +50,7 @@ public class OutputRedirection {
                 file.createNewFile();
             }
             System.setOut(new PrintStream(new FileOutputStream(file)));
-            System.out.println(Calendar.getInstance().getTime());
+            System.out.println(new Date());
         } catch (IOException e) {
             e.printStackTrace();
         }

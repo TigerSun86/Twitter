@@ -1,24 +1,14 @@
 package datacollection;
 
-import java.net.UnknownHostException;
-import java.util.Calendar;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import twitter4j.Status;
-import twitter4j.TwitterException;
-import twitter4j.TwitterObjectFactory;
 import twitter4j.User;
-
-import com.mongodb.BasicDBObject;
-import com.mongodb.DB;
-import com.mongodb.DBCollection;
-import com.mongodb.DBCursor;
-import com.mongodb.DBObject;
-import com.mongodb.MongoClient;
-import com.mongodb.util.JSON;
+import util.OutputRedirection;
 
 /**
  * FileName: AddNewFollower.java
@@ -33,33 +23,20 @@ public class AddNewFollower {
     private static final long DAY_IN_MILLISECONDS = TimeUnit.MILLISECONDS
             .convert(POS_DAY, TimeUnit.DAYS);
 
-    private DBCollection wtColl = null;
-    private DBCollection userInfosColl = null;
+    private Database db = null;
     private TwitterApi tapi = null;
     private HashMap<Long, UserInfo> keyAus = null;
 
-    private boolean connectDB () {
-        boolean suc = true;
-        try {
-            MongoClient mongoClient = new MongoClient();
-            DB otherDb = mongoClient.getDB("other");
-            wtColl = otherDb.getCollection("waitingTweets");
-            userInfosColl = otherDb.getCollection("userInfos");
-        } catch (UnknownHostException e) {
-            suc = false;
-            e.printStackTrace();
-        }
-        return suc;
-    }
-
     private boolean init () {
-        if (!connectDB()) {
+        db = Database.getInstance();
+        if (db == null) {
             return false;
         }
+
         tapi = new TwitterApi();
         keyAus = new HashMap<Long, UserInfo>();
         for (long id : UserInfo.KEY_AUTHORS) {
-            final UserInfo user = UserInfo.getUser(id, userInfosColl);
+            final UserInfo user = db.getUser(id);
             keyAus.put(id, user);
         }
         return true;
@@ -72,21 +49,8 @@ public class AddNewFollower {
         }
 
         while (true) {
-            // Find the first inserted tweet.
-            final DBCursor cursor =
-                    wtColl.find().sort(new BasicDBObject("_id", 1)).limit(1);
-            if (cursor.hasNext()) {
-                final DBObject dbObject = cursor.next();
-                // Remove from waiting list
-                wtColl.remove(dbObject);
-                dbObject.removeField("_id");
-                final String json = dbObject.toString();
-                Status t = null;
-                try {
-                    t = TwitterObjectFactory.createStatus(json);
-                } catch (TwitterException e) {
-                    e.printStackTrace();
-                }
+            final Status t = db.pollFirstWaitingTweet();
+            if (t != null) {
                 // Use long won't change the original Date object.
                 final long targetTime =
                         t.getCreatedAt().getTime() + DAY_IN_MILLISECONDS;
@@ -104,6 +68,8 @@ public class AddNewFollower {
                 checkRetweetsAndAddFollowers(t);
             } else { // There is no waiting tweets.
                 try { // Sleep a whole day.
+                    System.out
+                            .println("No waiting tweets, let me sleep a whole day.");
                     Thread.sleep(TimeUnit.MILLISECONDS.convert(POS_DAY,
                             TimeUnit.DAYS));
                 } catch (InterruptedException e) {
@@ -115,11 +81,15 @@ public class AddNewFollower {
 
     private void checkRetweetsAndAddFollowers (Status t) {
         assert t != null;
-
+        System.out.printf(
+                "Checking tweet: %d, createdAt: %s, currentTime: %s. ",
+                t.getId(), t.getCreatedAt().toString(), new Date().toString());
         final List<Status> retweets = tapi.getRetweets(t.getId());
         if (retweets == null) {
+            System.out.println("Cannot get retweet.");
             return; // t has already been deleted.
         }
+        System.out.println("Num of retweets: " + retweets.size() + ".");
         final long auId = t.getUser().getId();
         final UserInfo au = keyAus.get(auId);
         assert au != null;
@@ -129,12 +99,13 @@ public class AddNewFollower {
                 final boolean suc = crawlAndFollowAndStoreUser(userId);
                 if (suc) {// If false means user is private, just skip.
                     // Add friendship between key author and the follower.
-                    UserInfo.addFriendOrFollower(userId, auId, true,
-                            userInfosColl);
-                    UserInfo.addFriendOrFollower(auId, userId, false,
-                            userInfosColl);
+                    db.addFriendOrFollower(userId, auId, true);
+                    db.addFriendOrFollower(auId, userId, false);
                     // Also update global variable.
                     au.followersIds.add(userId);
+                    System.out.println("Author "
+                            + au.userProfile.getScreenName()
+                            + " had a new follower: " + userId);
                 } // if (suc) {
             } // if (!au.followersIds.contains(userId)) {
         } // for (Status r : retweets) {
@@ -142,7 +113,7 @@ public class AddNewFollower {
 
     /** @return true, success; false, failed by user is private. */
     private boolean crawlAndFollowAndStoreUser (long userId) {
-        if (UserInfo.getUser(userId, userInfosColl) != null) {
+        if (db.getUser(userId) != null) {
             return true; // Already has the user.
         }
         // Crawl user profile.
@@ -155,11 +126,21 @@ public class AddNewFollower {
             return false; // Failed.
         }
         final UserInfo user = new UserInfo(userId, userProfile, new Date());
-        UserInfo.storeUser(user, userInfosColl); // Store user in data base.
+        // Store user in data base.
+        db.storeUser(user);
+        System.out.printf("Followed id: %d, screen name: %s, time: %s.%n",
+                user.userId, user.userProfile.getScreenName(),
+                new Date().toString());
         return true;
     }
 
     public static void main (String[] args) {
+        final String curTime =
+                new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
+        final String file =
+                "D:/TwitterDB/stream/waitingTweetsLog_" + curTime + ".txt";
+        final OutputRedirection or = new OutputRedirection(file);
         new AddNewFollower().run();
+        or.close();
     }
 }

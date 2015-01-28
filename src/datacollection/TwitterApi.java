@@ -2,8 +2,8 @@ package datacollection;
 
 import java.util.List;
 
-import twitter4j.ResponseList;
 import twitter4j.Status;
+import twitter4j.Trends;
 import twitter4j.Twitter;
 import twitter4j.TwitterException;
 import twitter4j.TwitterFactory;
@@ -62,6 +62,23 @@ public class TwitterApi {
         return userProfile;
     }
 
+    public User getUserProfile (String userScreenName) {
+        User userProfile = null;
+        boolean isRunning = true;
+        while (isRunning) {
+            try {
+                userProfile = twitter.showUser(userScreenName);
+                isRunning = false;
+            } catch (TwitterException te) {
+                if (!handleException(te)) { // If got limitation then wait.
+                    // User is private, don't try again, just return null.
+                    isRunning = false;
+                }
+            }
+        }
+        return userProfile;
+    }
+
     public boolean createFriendship (long userId) {
         boolean isRunning = true;
         boolean suc = false;
@@ -78,6 +95,23 @@ public class TwitterApi {
             }
         }
         return suc;
+    }
+
+    public Trends getTrends (int woeid) {
+        Trends trends = null;
+        boolean isRunning = true;
+        while (isRunning) {
+            try {
+                trends = twitter.getPlaceTrends(woeid);
+                isRunning = false;
+            } catch (TwitterException te) {
+                if (!handleException(te)) { // If got limitation then wait.
+                    // Impossible to access here.
+                    isRunning = false;
+                }
+            }
+        }
+        return trends;
     }
 
     // Retry in 5 minuses.
