@@ -32,6 +32,7 @@ public class Database {
     private static final String COLL_USERINFOS = "userInfos";
     private static final String COLL_WAITINGTWEETS = "waitingTweets";
     private static final String COLL_TRENDS = "trends";
+    private static final String COLL_PARAMETERS = "parameters";
     // UserInfo fields.
     private static final String FEILD_ID = "UserId";
     private static final String FEILD_UP = "UserProfile";
@@ -41,6 +42,14 @@ public class Database {
     // Trends fields.
     private static final String FEILD_TRENDS_DATE = "TrendsDate";
     private static final String FEILD_TRENDS_INFO = "TrendsInfo";
+    // Tweet fields.
+    private static final String FEILD_TWEET_ID = "id";
+    // WaitingTweets fields
+    private static final String FEILD_WT_DATE = "LastCheckedDate";
+    // Parameter fields
+    private static final String FEILD_PARA_MODEL = "Model";
+    private static final String PARA_MODEL_WT = "waitingTweets";
+    private static final String FEILD_PARA_WT_FREQ = "Frequence";
 
     private static final String COLL_NAME_PREFIX = "u";
 
@@ -50,6 +59,7 @@ public class Database {
     private DBCollection userInfosColl = null;
     private DBCollection wtColl = null;
     private DBCollection trendsColl = null;
+    private DBCollection parametersColl = null;
 
     private Database() {
     }
@@ -100,6 +110,14 @@ public class Database {
         return trendsColl;
     }
 
+    public DBCollection getParametersColl () {
+        if (parametersColl == null) {
+            parametersColl =
+                    mongoClient.getDB(DB_OTHER).getCollection(COLL_PARAMETERS);
+        }
+        return parametersColl;
+    }
+
     /* UserInfo methods begin ********************* */
     public UserInfo getUser (long userId) {
         final DBCollection coll = this.getUserInfosColl();
@@ -132,7 +150,7 @@ public class Database {
         return user;
     }
 
-    public void storeUser (UserInfo user) {
+    public void putUser (UserInfo user) {
         final DBCollection coll = this.getUserInfosColl();
         // make a document and insert it
         final BasicDBObject doc =
@@ -174,10 +192,22 @@ public class Database {
         return true;
     }
 
+    public void updateTweet (Status status) {
+        final String str = TwitterObjectFactory.getRawJSON(status);
+        final DBObject dbObject = (DBObject) JSON.parse(str);
+        final long userId = status.getUser().getId();
+        final DBCollection coll =
+                this.getTweetsDb().getCollection(COLL_NAME_PREFIX + userId);
+        // Search tweet by Id.
+        final BasicDBObject queryDoc =
+                new BasicDBObject(FEILD_TWEET_ID, status.getId());
+        coll.update(queryDoc, dbObject);
+    }
+
     /* UserInfo methods end ********************* */
 
     /* MyUserStream methods begin ************** */
-    public void storeTweet (Status status) {
+    public void putTweet (Status status) {
         final String str = TwitterObjectFactory.getRawJSON(status);
         final DBObject dbObject = (DBObject) JSON.parse(str);
         final long userId = status.getUser().getId();
@@ -186,16 +216,50 @@ public class Database {
         coll.insert(dbObject);
     }
 
-    public void storeWaitingTweet (Status status) {
+    public void putWaitingTweet (Status status) {
         final String str = TwitterObjectFactory.getRawJSON(status);
         final DBObject dbObject = (DBObject) JSON.parse(str);
         this.getWaitTweetsColl().insert(dbObject);
     }
 
+    /**
+     * For AddNewFollower
+     * Use TwitterObjectFactory.getRawJSON(status) here will return null, so
+     * just use the original json.
+     */
+    public void putWaitingTweet (String json, Date lastCheckedDate) {
+        final DBObject dbObject = (DBObject) JSON.parse(json);
+        dbObject.put(FEILD_WT_DATE, lastCheckedDate);
+        this.getWaitTweetsColl().insert(dbObject);
+    }
+
+    public void removeTweet (long userId, long tweetId) {
+        // Remove tweet in tweets DB.
+        final DBCollection coll =
+                this.getTweetsDb().getCollection(COLL_NAME_PREFIX + userId);
+        coll.remove(new BasicDBObject(FEILD_TWEET_ID, tweetId));
+        // Also remove it from waiting collection (if there is).
+        if (UserInfo.KEY_AUTHORS.contains(userId)) {
+            this.getWaitTweetsColl().remove(
+                    new BasicDBObject(FEILD_TWEET_ID, tweetId));
+        }
+    }
+
     /* MyUserStream methods end ************** */
 
     /* AddNewFollower begin ******************** */
-    public Status pollFirstWaitingTweet () {
+    public static class StatusAndCheckedTime {
+        public final Status tweet;
+        public final Date date;
+
+        public StatusAndCheckedTime(Status tweet, Date date) {
+            super();
+            this.tweet = tweet;
+            this.date = date;
+        }
+    }
+
+    public StatusAndCheckedTime pollWaitingTweet () {
         // Find the first inserted tweet.
         final DBCursor cursor =
                 this.getWaitTweetsColl().find()
@@ -204,6 +268,15 @@ public class Database {
             final DBObject dbObject = cursor.next();
             // Remove from waiting list
             this.getWaitTweetsColl().remove(dbObject);
+
+            final Date lastCheckedDate;
+            if (dbObject.get(FEILD_WT_DATE) != null) {
+                lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
+                dbObject.removeField(FEILD_WT_DATE);
+            } else {
+                lastCheckedDate = null;
+            }
+
             dbObject.removeField("_id");
             final String json = dbObject.toString();
             Status t = null;
@@ -212,16 +285,81 @@ public class Database {
             } catch (TwitterException e) {
                 e.printStackTrace();
             }
-            return t;
+            return new StatusAndCheckedTime(t, lastCheckedDate);
         } else {
             return null;
         }
     }
 
+    public String pollWaitingTweetInJson () {
+        // Find the first inserted tweet.
+        final DBCursor cursor =
+                this.getWaitTweetsColl().find()
+                        .sort(new BasicDBObject("_id", 1)).limit(1);
+        if (cursor.hasNext()) {
+            final DBObject dbObject = cursor.next();
+            // Remove from waiting list
+            this.getWaitTweetsColl().remove(dbObject);
+
+            if (dbObject.get(FEILD_WT_DATE) != null) {
+                dbObject.removeField(FEILD_WT_DATE);
+            }
+            dbObject.removeField("_id");
+            final String json = dbObject.toString();
+            return json;
+        } else {
+            return null;
+        }
+    }
+
+    public StatusAndCheckedTime peekWaitingTweet () {
+        // Find the first inserted tweet.
+        final DBCursor cursor =
+                this.getWaitTweetsColl().find()
+                        .sort(new BasicDBObject("_id", 1)).limit(1);
+        if (cursor.hasNext()) {
+            final DBObject dbObject = cursor.next();
+
+            final Date lastCheckedDate;
+            if (dbObject.get(FEILD_WT_DATE) != null) {
+                lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
+                dbObject.removeField(FEILD_WT_DATE);
+            } else {
+                lastCheckedDate = null;
+            }
+
+            dbObject.removeField("_id");
+            final String json = dbObject.toString();
+            Status t = null;
+            try {
+                t = TwitterObjectFactory.createStatus(json);
+            } catch (TwitterException e) {
+                e.printStackTrace();
+            }
+            return new StatusAndCheckedTime(t, lastCheckedDate);
+        } else {
+            return null;
+        }
+    }
+
+    public int getWaitingTweetsCheckingFrequence () {
+        final DBCollection coll = this.getParametersColl();
+        DBObject doc =
+                coll.findOne(new BasicDBObject(FEILD_PARA_MODEL, PARA_MODEL_WT));
+        final int frequence;
+        final Object para = doc.get(FEILD_PARA_WT_FREQ);
+        if (para != null && ((double) para) >= 1) {
+            frequence = (int) ((double) para);
+        } else {
+            frequence = 1;
+        }
+        return frequence;
+    }
+
     /* AddNewFollower end ******************** */
 
     /* TrendsCollector begin *************** */
-    public void storeTrends (Trends trends) {
+    public void putTrends (Trends trends) {
         final DBCollection coll = this.getTrendsColl();
         final BasicDBObject doc =
                 new BasicDBObject(FEILD_TRENDS_DATE, new Date().getTime())

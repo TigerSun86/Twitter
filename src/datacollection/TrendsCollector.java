@@ -35,7 +35,7 @@ public class TrendsCollector {
         final TwitterApi tapi = new TwitterApi();
         while (true) {
             final Trends trends = tapi.getTrends(WOEID);
-            db.storeTrends(trends);
+            db.putTrends(trends);
             System.out.println(new Date().toString());
             System.out.println(trends.toString());
             try { // Sleep 2 hours.

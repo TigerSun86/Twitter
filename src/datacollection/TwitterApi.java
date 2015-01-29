@@ -45,6 +45,24 @@ public class TwitterApi {
         return statuses;
     }
 
+    public Status showStatus (long id) {
+        Status status = null;
+        boolean isRunning = true;
+        while (isRunning) {
+            try {
+                status = twitter.showStatus(id);
+                isRunning = false; // Only get retweets once, if it succeeded.
+            } catch (TwitterException te) {
+                if (!handleException(te)) { // If got limitation then wait.
+                    // It's deleted, don't try again, just return null.
+                    isRunning = false;
+                }
+            }
+        }
+        return status;
+
+    }
+
     public User getUserProfile (long userId) {
         User userProfile = null;
         boolean isRunning = true;

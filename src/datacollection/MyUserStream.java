@@ -41,12 +41,12 @@ public class MyUserStream {
     private class MyUserStreamListener implements UserStreamListener {
         @Override
         public void onStatus (Status status) {
-            db.storeTweet(status);
+            db.putTweet(status);
             if (UserInfo.KEY_AUTHORS.contains(status.getUser().getId())
                     && !status.isRetweet()) {
                 // It's an original tweet from key author.
                 // Use this tweet to get active followers of the key author.
-                db.storeWaitingTweet(status); // add to check list
+                db.putWaitingTweet(status); // add to check list
             }
 
             System.out.println("onStatus @" + status.getUser().getScreenName()
@@ -56,6 +56,9 @@ public class MyUserStream {
         @Override
         public void
                 onDeletionNotice (StatusDeletionNotice statusDeletionNotice) {
+            // Delete it from tweets db and also waiting tweets.
+            db.removeTweet(statusDeletionNotice.getUserId(),
+                    statusDeletionNotice.getStatusId());
             System.out.println("Got a status deletion notice id:"
                     + statusDeletionNotice.getStatusId());
         }

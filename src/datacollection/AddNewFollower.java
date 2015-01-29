@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 import twitter4j.Status;
 import twitter4j.User;
 import util.OutputRedirection;
+import datacollection.Database.StatusAndCheckedTime;
 
 /**
  * FileName: AddNewFollower.java
@@ -26,6 +27,9 @@ public class AddNewFollower {
     private Database db = null;
     private TwitterApi tapi = null;
     private HashMap<Long, UserInfo> keyAus = null;
+    // The checking times for a tweets, how many times to check within one day.
+    // The value is updated from database when every usage.
+    private int freq = 1;
 
     private boolean init () {
         db = Database.getInstance();
@@ -49,29 +53,20 @@ public class AddNewFollower {
         }
 
         while (true) {
-            final Status t = db.pollFirstWaitingTweet();
-            if (t != null) {
-                // Use long won't change the original Date object.
-                final long targetTime =
-                        t.getCreatedAt().getTime() + DAY_IN_MILLISECONDS;
-                long curTime = new Date().getTime();
-                while (targetTime > curTime) { // Sleep until it's target time.
-                    try {
-                        Thread.sleep(targetTime - curTime);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                    curTime = new Date().getTime();
+            StatusAndCheckedTime tandc = db.peekWaitingTweet();
+            if (tandc != null) {
+                waitUnilTimeToCheck(tandc.tweet.getCreatedAt(), tandc.date);
+                // Peek the tweet again to prevent it's been deleted while last
+                // waiting.
+                tandc = db.peekWaitingTweet();
+                if (tandc != null) {
+                    checkTweet(tandc.tweet);
                 }
-
-                // Add followers
-                checkRetweetsAndAddFollowers(t);
             } else { // There is no waiting tweets.
-                try { // Sleep a whole day.
+                try { // Sleep for a while.
                     System.out
-                            .println("No waiting tweets, let me sleep a whole day.");
-                    Thread.sleep(TimeUnit.MILLISECONDS.convert(POS_DAY,
-                            TimeUnit.DAYS));
+                            .println("No waiting tweets, let me sleep for a while.");
+                    Thread.sleep(DAY_IN_MILLISECONDS / 10);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -79,15 +74,77 @@ public class AddNewFollower {
         } // while (true) {
     }
 
-    private void checkRetweetsAndAddFollowers (Status t) {
+    private long getNextCheckPoint (Date createAt, Date lastCheckedTime) {
+        final long timeInterval = DAY_IN_MILLISECONDS / freq;
+        if (lastCheckedTime == null) { // Haven't check once.
+            return createAt.getTime() + timeInterval;
+        } else {
+            // Find the first check point later than last checked time.
+            long checkPoint = createAt.getTime();
+            for (int i = 0; i < freq; i++) {
+                checkPoint += timeInterval;
+                if (checkPoint > lastCheckedTime.getTime()) {
+                    break;
+                }
+            }
+            return checkPoint;
+        }
+    }
+
+    private void waitUnilTimeToCheck (Date createAt, Date lastCheckedTime) {
+        // Update frequence.
+        freq = db.getWaitingTweetsCheckingFrequence();
+        assert freq >= 1;
+        final long checkPoint = getNextCheckPoint(createAt, lastCheckedTime);
+        final long now = new Date().getTime();
+        if (now < checkPoint) { // Sleep until the time to check.
+            try {
+                Thread.sleep(checkPoint - now);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void checkTweet (Status t) {
+        // Add followers
+        final boolean suc = checkRetweetsAndAddFollowers(t);
+        // Firstly, remove this tweet from the peek of the queue.
+        // t2 for the method TwitterObjectFactory.getRawJSON(status)
+        // inside db.putWaitingTweet().
+        final String tjson = db.pollWaitingTweetInJson();
+        if (suc && needMoreCheck(t.getCreatedAt())) {
+            // If the tweet needs more check, push it into the queue
+            // and check later.
+            db.putWaitingTweet(tjson, new Date());
+        } else if (suc) { // If the last check succeed.
+            // Update the tweet from key author, for the number of
+            // retweets in the field of tweet.
+            final Status updatedT = tapi.showStatus(t.getId());
+            db.updateTweet(updatedT);
+        }
+    }
+
+    private boolean needMoreCheck (Date createAt) {
+        // Need more check when now is not the final check, which is one day
+        // after the created time.
+        return new Date().getTime() < createAt.getTime() + DAY_IN_MILLISECONDS;
+    }
+
+    private boolean checkRetweetsAndAddFollowers (Status t) {
         assert t != null;
-        System.out.printf(
-                "Checking tweet: %d, createdAt: %s, currentTime: %s. ",
-                t.getId(), t.getCreatedAt().toString(), new Date().toString());
+        final long timeInterval = DAY_IN_MILLISECONDS / freq;
+        int times =
+                (int) ((new Date().getTime() - t.getCreatedAt().getTime()) / timeInterval);
+        times = Math.min(times, freq);
+        System.out
+                .printf("Checking tweet: %d, createdAt: %s, currentTime: %s, times is %d/%d. ",
+                        t.getId(), t.getCreatedAt().toString(),
+                        new Date().toString(), times, freq);
         final List<Status> retweets = tapi.getRetweets(t.getId());
         if (retweets == null) {
             System.out.println("Cannot get retweet.");
-            return; // t has already been deleted.
+            return false; // t has already been deleted.
         }
         System.out.println("Num of retweets: " + retweets.size() + ".");
         final long auId = t.getUser().getId();
@@ -109,6 +166,7 @@ public class AddNewFollower {
                 } // if (suc) {
             } // if (!au.followersIds.contains(userId)) {
         } // for (Status r : retweets) {
+        return true;
     }
 
     /** @return true, success; false, failed by user is private. */
@@ -127,7 +185,7 @@ public class AddNewFollower {
         }
         final UserInfo user = new UserInfo(userId, userProfile, new Date());
         // Store user in data base.
-        db.storeUser(user);
+        db.putUser(user);
         System.out.printf("Followed id: %d, screen name: %s, time: %s.%n",
                 user.userId, user.userProfile.getScreenName(),
                 new Date().toString());
