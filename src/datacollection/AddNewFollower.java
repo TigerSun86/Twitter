@@ -55,12 +55,31 @@ public class AddNewFollower {
         while (true) {
             StatusAndCheckedTime tandc = db.peekWaitingTweet();
             if (tandc != null) {
-                waitUnilTimeToCheck(tandc.tweet.getCreatedAt(), tandc.date);
+                Status t;
+                if (tandc.tweet == null) {
+                    t = db.getTweet(tandc.userId, tandc.tweetId);
+                    if (t == null) {
+                        db.pollWaitingTweet();
+                        continue;
+                    }
+                } else {
+                    t = tandc.tweet;
+                }
+                waitUnilTimeToCheck(t.getCreatedAt(), tandc.date);
                 // Peek the tweet again to prevent it's been deleted while last
                 // waiting.
                 tandc = db.peekWaitingTweet();
                 if (tandc != null) {
-                    checkTweet(tandc.tweet);
+                    if (tandc.tweet == null) {
+                        t = db.getTweet(tandc.userId, tandc.tweetId);
+                        if (t == null) {
+                            db.pollWaitingTweet();
+                            continue;
+                        }
+                    } else {
+                        t = tandc.tweet;
+                    }
+                    checkTweet(t);
                 }
             } else { // There is no waiting tweets.
                 try { // Sleep for a while.
@@ -112,11 +131,11 @@ public class AddNewFollower {
         // Firstly, remove this tweet from the peek of the queue.
         // t2 for the method TwitterObjectFactory.getRawJSON(status)
         // inside db.putWaitingTweet().
-        final String tjson = db.pollWaitingTweetInJson();
+        db.pollWaitingTweet();
         if (suc && needMoreCheck(t.getCreatedAt())) {
             // If the tweet needs more check, push it into the queue
             // and check later.
-            db.putWaitingTweet(tjson, new Date());
+            db.putWaitingTweet(t.getUser().getId(), t.getId(), new Date());
         } else if (suc) { // If the last check succeed.
             // Update the tweet from key author, for the number of
             // retweets in the field of tweet.
@@ -153,7 +172,7 @@ public class AddNewFollower {
         for (Status r : retweets) {
             final long userId = r.getUser().getId();
             if (!au.followersIds.contains(userId)) { // Haven't added the user.
-                final boolean suc = crawlAndFollowAndStoreUser(userId);
+                final boolean suc = crawlAndStoreUser(userId);
                 if (suc) {// If false means user is private, just skip.
                     // Add friendship between key author and the follower.
                     db.addFriendOrFollower(userId, auId, true);
@@ -170,7 +189,7 @@ public class AddNewFollower {
     }
 
     /** @return true, success; false, failed by user is private. */
-    private boolean crawlAndFollowAndStoreUser (long userId) {
+    private boolean crawlAndStoreUser (long userId) {
         if (db.getUser(userId) != null) {
             return true; // Already has the user.
         }
@@ -179,10 +198,7 @@ public class AddNewFollower {
         if (userProfile == null) { // Private user.
             return false;
         }
-        // Follow this user.
-        if (!tapi.createFriendship(userId)) {
-            return false; // Failed.
-        }
+
         final UserInfo user = new UserInfo(userId, userProfile, new Date());
         // Store user in data base.
         db.putUser(user);

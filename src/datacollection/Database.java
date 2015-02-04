@@ -1,13 +1,16 @@
 package datacollection;
 
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 import twitter4j.Status;
 import twitter4j.Trends;
 import twitter4j.TwitterException;
 import twitter4j.TwitterObjectFactory;
 import twitter4j.User;
+import twitter4j.conf.ConfigurationBuilder;
 
 import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
@@ -33,6 +36,11 @@ public class Database {
     private static final String COLL_WAITINGTWEETS = "waitingTweets";
     private static final String COLL_TRENDS = "trends";
     private static final String COLL_PARAMETERS = "parameters";
+    private static final String COLL_CB = "cb";
+    private static final String COLL_STREAMUSERS = "streamUsers";
+
+    private static final String FEILD_GENERAL_ID = "id";
+
     // UserInfo fields.
     private static final String FEILD_ID = "UserId";
     private static final String FEILD_UP = "UserProfile";
@@ -45,11 +53,24 @@ public class Database {
     // Tweet fields.
     private static final String FEILD_TWEET_ID = "id";
     // WaitingTweets fields
+    private static final String FEILD_WT_USERID = "UserId";
+    private static final String FEILD_WT_TWEETID = "TweetId";
     private static final String FEILD_WT_DATE = "LastCheckedDate";
     // Parameter fields
     private static final String FEILD_PARA_MODEL = "Model";
     private static final String PARA_MODEL_WT = "waitingTweets";
     private static final String FEILD_PARA_WT_FREQ = "Frequence";
+    private static final String PARA_MODEL_RDC = "restDataCollector";
+    private static final String FEILD_PARA_RDC_SLEEPTIME = "SleepTime";
+
+    // CB fields
+    private static final String FEILD_CBANDCRAWL_ID = "cbId";
+    private static final String FEILD_CB_CK = "consumerKey";
+    private static final String FEILD_CB_CS = "consumerSecret";
+    private static final String FEILD_CB_AT = "accessToken";
+    private static final String FEILD_CB_ATS = "accessTokenSecret";
+    private static final String FEILD_CB_DEBUG = "debug";
+    private static final String FEILD_CB_JSON = "jsonStoreEnabled";
 
     private static final String COLL_NAME_PREFIX = "u";
 
@@ -60,6 +81,8 @@ public class Database {
     private DBCollection wtColl = null;
     private DBCollection trendsColl = null;
     private DBCollection parametersColl = null;
+    private DBCollection cbColl = null;
+    private DBCollection streamUsersColl = null;
 
     private Database() {
     }
@@ -118,6 +141,21 @@ public class Database {
         return parametersColl;
     }
 
+    public DBCollection getCbColl () {
+        if (cbColl == null) {
+            cbColl = mongoClient.getDB(DB_OTHER).getCollection(COLL_CB);
+        }
+        return cbColl;
+    }
+
+    public DBCollection getStreamUsersColl () {
+        if (streamUsersColl == null) {
+            streamUsersColl =
+                    mongoClient.getDB(DB_OTHER).getCollection(COLL_STREAMUSERS);
+        }
+        return streamUsersColl;
+    }
+
     /* UserInfo methods begin ********************* */
     public UserInfo getUser (long userId) {
         final DBCollection coll = this.getUserInfosColl();
@@ -148,6 +186,18 @@ public class Database {
             user.followersIds.add((Long) id);
         }
         return user;
+    }
+
+    public List<Long> getAllUsers () {
+        final ArrayList<Long> users = new ArrayList<Long>();
+        final DBCollection coll = this.getUserInfosColl();
+        final DBCursor cursor = coll.find();
+        while (cursor.hasNext()) {
+            final DBObject doc = cursor.next();
+            final Long userId = (Long) doc.get(FEILD_ID);
+            users.add(userId);
+        }
+        return users;
     }
 
     public void putUser (UserInfo user) {
@@ -216,21 +266,20 @@ public class Database {
         coll.insert(dbObject);
     }
 
-    public void putWaitingTweet (Status status) {
-        final String str = TwitterObjectFactory.getRawJSON(status);
-        final DBObject dbObject = (DBObject) JSON.parse(str);
-        this.getWaitTweetsColl().insert(dbObject);
+    public void putTweet (long userId, String status) {
+        final DBObject dbObject = (DBObject) JSON.parse(status);
+        final DBCollection coll =
+                this.getTweetsDb().getCollection(COLL_NAME_PREFIX + userId);
+        coll.insert(dbObject);
     }
 
-    /**
-     * For AddNewFollower
-     * Use TwitterObjectFactory.getRawJSON(status) here will return null, so
-     * just use the original json.
-     */
-    public void putWaitingTweet (String json, Date lastCheckedDate) {
-        final DBObject dbObject = (DBObject) JSON.parse(json);
-        dbObject.put(FEILD_WT_DATE, lastCheckedDate);
-        this.getWaitTweetsColl().insert(dbObject);
+    public void
+            putWaitingTweet (long userId, long tweetId, Date lastCheckedDate) {
+        final BasicDBObject doc =
+                new BasicDBObject(FEILD_WT_USERID, userId).append(
+                        FEILD_WT_TWEETID, tweetId).append(FEILD_WT_DATE,
+                        lastCheckedDate);
+        this.getWaitTweetsColl().insert(doc);
     }
 
     public void removeTweet (long userId, long tweetId) {
@@ -238,10 +287,48 @@ public class Database {
         final DBCollection coll =
                 this.getTweetsDb().getCollection(COLL_NAME_PREFIX + userId);
         coll.remove(new BasicDBObject(FEILD_TWEET_ID, tweetId));
-        // Also remove it from waiting collection (if there is).
-        if (UserInfo.KEY_AUTHORS.contains(userId)) {
-            this.getWaitTweetsColl().remove(
-                    new BasicDBObject(FEILD_TWEET_ID, tweetId));
+    }
+
+    public Status getTweet (long userId, long tweetId) {
+        // Get tweet in tweets DB.
+        final DBCollection coll =
+                this.getTweetsDb().getCollection(COLL_NAME_PREFIX + userId);
+        final DBObject doc =
+                coll.findOne(new BasicDBObject(FEILD_TWEET_ID, tweetId));
+        if (doc != null) {
+            doc.removeField("_id");
+            final String json = doc.toString();
+            Status t = null;
+            try {
+                t = TwitterObjectFactory.createStatus(json);
+            } catch (TwitterException e) {
+                e.printStackTrace();
+            }
+            return t;
+        } else {
+            return null;
+        }
+    }
+
+    public Status getLatestTweet (long userId) {
+        final DBCollection coll =
+                this.getTweetsDb().getCollection(COLL_NAME_PREFIX + userId);
+        // Find the last inserted one.
+        final DBCursor cursor =
+                coll.find().sort(new BasicDBObject("_id", -1)).limit(1);
+        if (cursor.hasNext()) {
+            final DBObject dbObject = cursor.next();
+            dbObject.removeField("_id");
+            final String json = dbObject.toString();
+            Status t = null;
+            try {
+                t = TwitterObjectFactory.createStatus(json);
+            } catch (TwitterException e) {
+                e.printStackTrace();
+            }
+            return t;
+        } else {
+            return null;
         }
     }
 
@@ -249,12 +336,24 @@ public class Database {
 
     /* AddNewFollower begin ******************** */
     public static class StatusAndCheckedTime {
+        public final long userId;
+        public final long tweetId;
         public final Status tweet;
         public final Date date;
 
         public StatusAndCheckedTime(Status tweet, Date date) {
             super();
+            this.userId = -1;
+            this.tweetId = -1;
             this.tweet = tweet;
+            this.date = date;
+        }
+
+        public StatusAndCheckedTime(long userId, long tweetId, Date date) {
+            super();
+            this.userId = userId;
+            this.tweetId = tweetId;
+            this.tweet = null;
             this.date = date;
         }
     }
@@ -268,45 +367,31 @@ public class Database {
             final DBObject dbObject = cursor.next();
             // Remove from waiting list
             this.getWaitTweetsColl().remove(dbObject);
+            if (dbObject.get(FEILD_WT_USERID) == null) {
+                final Date lastCheckedDate;
+                if (dbObject.get(FEILD_WT_DATE) != null) {
+                    lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
+                    dbObject.removeField(FEILD_WT_DATE);
+                } else {
+                    lastCheckedDate = null;
+                }
 
-            final Date lastCheckedDate;
-            if (dbObject.get(FEILD_WT_DATE) != null) {
-                lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
-                dbObject.removeField(FEILD_WT_DATE);
+                dbObject.removeField("_id");
+                final String json = dbObject.toString();
+                Status t = null;
+                try {
+                    t = TwitterObjectFactory.createStatus(json);
+                } catch (TwitterException e) {
+                    e.printStackTrace();
+                }
+                return new StatusAndCheckedTime(t, lastCheckedDate);
             } else {
-                lastCheckedDate = null;
+                final long userId = (long) dbObject.get(FEILD_WT_USERID);
+                final long tweetId = (long) dbObject.get(FEILD_WT_TWEETID);
+                final Date lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
+                return new StatusAndCheckedTime(userId, tweetId,
+                        lastCheckedDate);
             }
-
-            dbObject.removeField("_id");
-            final String json = dbObject.toString();
-            Status t = null;
-            try {
-                t = TwitterObjectFactory.createStatus(json);
-            } catch (TwitterException e) {
-                e.printStackTrace();
-            }
-            return new StatusAndCheckedTime(t, lastCheckedDate);
-        } else {
-            return null;
-        }
-    }
-
-    public String pollWaitingTweetInJson () {
-        // Find the first inserted tweet.
-        final DBCursor cursor =
-                this.getWaitTweetsColl().find()
-                        .sort(new BasicDBObject("_id", 1)).limit(1);
-        if (cursor.hasNext()) {
-            final DBObject dbObject = cursor.next();
-            // Remove from waiting list
-            this.getWaitTweetsColl().remove(dbObject);
-
-            if (dbObject.get(FEILD_WT_DATE) != null) {
-                dbObject.removeField(FEILD_WT_DATE);
-            }
-            dbObject.removeField("_id");
-            final String json = dbObject.toString();
-            return json;
         } else {
             return null;
         }
@@ -319,24 +404,31 @@ public class Database {
                         .sort(new BasicDBObject("_id", 1)).limit(1);
         if (cursor.hasNext()) {
             final DBObject dbObject = cursor.next();
+            if (dbObject.get(FEILD_WT_USERID) == null) {
+                final Date lastCheckedDate;
+                if (dbObject.get(FEILD_WT_DATE) != null) {
+                    lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
+                    dbObject.removeField(FEILD_WT_DATE);
+                } else {
+                    lastCheckedDate = null;
+                }
 
-            final Date lastCheckedDate;
-            if (dbObject.get(FEILD_WT_DATE) != null) {
-                lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
-                dbObject.removeField(FEILD_WT_DATE);
+                dbObject.removeField("_id");
+                final String json = dbObject.toString();
+                Status t = null;
+                try {
+                    t = TwitterObjectFactory.createStatus(json);
+                } catch (TwitterException e) {
+                    e.printStackTrace();
+                }
+                return new StatusAndCheckedTime(t, lastCheckedDate);
             } else {
-                lastCheckedDate = null;
+                final long userId = (long) dbObject.get(FEILD_WT_USERID);
+                final long tweetId = (long) dbObject.get(FEILD_WT_TWEETID);
+                final Date lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
+                return new StatusAndCheckedTime(userId, tweetId,
+                        lastCheckedDate);
             }
-
-            dbObject.removeField("_id");
-            final String json = dbObject.toString();
-            Status t = null;
-            try {
-                t = TwitterObjectFactory.createStatus(json);
-            } catch (TwitterException e) {
-                e.printStackTrace();
-            }
-            return new StatusAndCheckedTime(t, lastCheckedDate);
         } else {
             return null;
         }
@@ -348,8 +440,8 @@ public class Database {
                 coll.findOne(new BasicDBObject(FEILD_PARA_MODEL, PARA_MODEL_WT));
         final int frequence;
         final Object para = doc.get(FEILD_PARA_WT_FREQ);
-        if (para != null && ((double) para) >= 1) {
-            frequence = (int) ((double) para);
+        if (para != null && ((long) para) >= 1) {
+            frequence = (int) ((long) para);
         } else {
             frequence = 1;
         }
@@ -357,6 +449,16 @@ public class Database {
     }
 
     /* AddNewFollower end ******************** */
+
+    /* Stream users begin ******************** */
+    public boolean existStreamUser (long userId) {
+        final DBCollection coll = this.getStreamUsersColl();
+        final BasicDBObject query = new BasicDBObject(FEILD_GENERAL_ID, userId);
+        final DBCursor cursor = coll.find(query);
+        return cursor.hasNext();
+    }
+
+    /* Stream users end ******************** */
 
     /* TrendsCollector begin *************** */
     public void putTrends (Trends trends) {
@@ -415,5 +517,85 @@ public class Database {
         }
         return trends;
     }
+
     /* TrendsCollector end *************** */
+
+    /* Cb begin ********************* */
+    public ArrayList<ConfigurationBuilder> getCbs () {
+        final ArrayList<ConfigurationBuilder> cbs =
+                new ArrayList<ConfigurationBuilder>();
+
+        final DBCollection coll = this.getCbColl();
+        final DBCursor cursor =
+                coll.find().sort(new BasicDBObject(FEILD_CBANDCRAWL_ID, 1));
+
+        while (cursor.hasNext()) {
+            final DBObject doc = cursor.next();
+            final ConfigurationBuilder cb = new ConfigurationBuilder();
+            cb.setOAuthConsumerKey((String) doc.get(FEILD_CB_CK))
+                    .setOAuthConsumerSecret((String) doc.get(FEILD_CB_CS))
+                    .setOAuthAccessToken((String) doc.get(FEILD_CB_AT))
+                    .setOAuthAccessTokenSecret((String) doc.get(FEILD_CB_ATS))
+                    .setDebugEnabled((boolean) doc.get(FEILD_CB_DEBUG))
+                    .setJSONStoreEnabled((boolean) doc.get(FEILD_CB_JSON));
+            cbs.add(cb);
+        }
+        return cbs;
+    }
+
+    public ConfigurationBuilder getCb (long cbId) {
+        final DBCollection coll = this.getCbColl();
+        final BasicDBObject query =
+                new BasicDBObject(FEILD_CBANDCRAWL_ID, cbId);
+        final DBCursor cursor = coll.find(query);
+        if (!cursor.hasNext()) { // No such cb.
+            return null;
+        } else {
+            final DBObject doc = cursor.next();
+            final ConfigurationBuilder cb = new ConfigurationBuilder();
+            cb.setOAuthConsumerKey((String) doc.get(FEILD_CB_CK))
+                    .setOAuthConsumerSecret((String) doc.get(FEILD_CB_CS))
+                    .setOAuthAccessToken((String) doc.get(FEILD_CB_AT))
+                    .setOAuthAccessTokenSecret((String) doc.get(FEILD_CB_ATS))
+                    .setDebugEnabled((boolean) doc.get(FEILD_CB_DEBUG))
+                    .setJSONStoreEnabled((boolean) doc.get(FEILD_CB_JSON));
+            return cb;
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private void putCb (String ck, String cs, String at, String ats) {
+        final DBCollection coll = this.getCbColl();
+        final BasicDBObject doc =
+                new BasicDBObject(FEILD_CBANDCRAWL_ID, coll.count())
+                        .append(FEILD_CB_CK, ck).append(FEILD_CB_CS, cs)
+                        .append(FEILD_CB_AT, at).append(FEILD_CB_ATS, ats)
+                        .append(FEILD_CB_DEBUG, false)
+                        .append(FEILD_CB_JSON, true);
+        coll.insert(doc);
+    }
+
+    /* Cb end ********************* */
+
+    public long getRDCSleepTime () {
+        final DBCollection coll = this.getParametersColl();
+        DBObject doc =
+                coll.findOne(new BasicDBObject(FEILD_PARA_MODEL, PARA_MODEL_RDC));
+        final long time;
+        final Object para = doc.get(FEILD_PARA_RDC_SLEEPTIME);
+        if (para != null) {
+            time = (long) para;
+        } else {
+            time = 0;
+        }
+        return time;
+    }
+
+    public static void main (String[] args) {
+        // Database.getInstance().putCb("bD0F2CRafz4ARSR56SIFb6xfR",
+        // "nW7Py9vlzuiQiYhE6e0WfGqUNCIDjMZuZIKunqrPbu9B0tvf1O",
+        // "3015621693-zCkQqyHRHBYVdu80u1Zj81o0ktDixKMOuFTYcf1",
+        // "z2HDloJVC1ujpPGPMcFxTCTGmQC327jEWq7T4YptM2QcL");
+    }
+
 }

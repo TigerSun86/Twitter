@@ -1,12 +1,16 @@
 package datacollection;
 
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
+import twitter4j.Paging;
 import twitter4j.Status;
 import twitter4j.Trends;
 import twitter4j.Twitter;
 import twitter4j.TwitterException;
 import twitter4j.TwitterFactory;
+import twitter4j.TwitterObjectFactory;
 import twitter4j.User;
 
 /**
@@ -45,12 +49,12 @@ public class TwitterApi {
         return statuses;
     }
 
-    public Status showStatus (long id) {
+    public Status showStatus (long tweetId) {
         Status status = null;
         boolean isRunning = true;
         while (isRunning) {
             try {
-                status = twitter.showStatus(id);
+                status = twitter.showStatus(tweetId);
                 isRunning = false; // Only get retweets once, if it succeeded.
             } catch (TwitterException te) {
                 if (!handleException(te)) { // If got limitation then wait.
@@ -130,6 +134,58 @@ public class TwitterApi {
             }
         }
         return trends;
+    }
+
+    /**
+     * Order latest to oldest.
+     * @return Json format string new tweets after sinceDate; null if the user
+     *         has been deleted/privated/no such user.
+     */
+    public ArrayList<String> crawlTweets (long userId, Date sinceDate) {
+        final ArrayList<String> tweets = new ArrayList<String>();
+        final Paging paging = new Paging();
+        paging.setCount(200);
+
+        boolean getUserFailed = false;
+        boolean isRunning = true;
+        while (isRunning) {
+            try {
+                boolean needMoreTweets = true;
+                while (needMoreTweets) {
+                    final List<Status> statuses =
+                            twitter.getUserTimeline(userId, paging);
+                    for (Status t : statuses) {
+                        if (sinceDate.before(t.getCreatedAt())) {
+                            final String str =
+                                    TwitterObjectFactory.getRawJSON(t);
+                            tweets.add(str);
+                        } else { // Tweet too old.
+                            needMoreTweets = false;
+                        }
+                    }
+                    if (statuses.size() < 200) { // No more tweets.
+                        needMoreTweets = false;
+                    } else if (needMoreTweets) {
+                        // Next round search tweets older than last one.
+                        final long maxId =
+                                statuses.get(statuses.size() - 1).getId();
+                        paging.setMaxId(maxId - 1);
+                    }
+                } // while (needMoreTweets) {
+
+                isRunning = false;
+            } catch (TwitterException te) {
+                if (!handleException(te)) {
+                    isRunning = false;
+                    getUserFailed = true;
+                }
+            }
+        }
+        if (getUserFailed) {
+            return null;
+        } else {
+            return tweets;
+        }
     }
 
     // Retry in 5 minuses.

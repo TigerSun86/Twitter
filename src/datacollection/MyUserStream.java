@@ -46,7 +46,8 @@ public class MyUserStream {
                     && !status.isRetweet()) {
                 // It's an original tweet from key author.
                 // Use this tweet to get active followers of the key author.
-                db.putWaitingTweet(status); // add to check list
+                db.putWaitingTweet(status.getUser().getId(), status.getId(),
+                        status.getCreatedAt()); // add to check list
             }
 
             System.out.println("onStatus @" + status.getUser().getScreenName()
