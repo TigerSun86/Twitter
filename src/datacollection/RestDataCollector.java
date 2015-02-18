@@ -57,8 +57,8 @@ public class RestDataCollector {
             final long sleepTime = db.getRDCSleepTime();
             if (sleepTime > 0) {
                 try {
-                    System.out.printf("Sleep %d miliseconds. Now: %s%n",
-                            sleepTime, new Date().toString());
+                    System.out.printf("[%s] Sleep %d miliseconds.%n",new Date().toString(),
+                            sleepTime);
                     Thread.sleep(sleepTime);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -84,7 +84,7 @@ public class RestDataCollector {
             }
             printDbgInfo(userId, tweets);
         } else {
-            System.out.printf("User: %d, crawling user failed.%n", userId);
+            System.out.printf("[%s] User: %d, crawling user failed.%n", new Date().toString(),userId);
         }
     }
 
@@ -106,7 +106,7 @@ public class RestDataCollector {
         }
 
         System.out.printf(
-                "User: %d, new tweets: %d, oldest: %s, latest: %s.%n", userId,
+                "[%s] User: %d, new tweets: %d, oldest: %s, latest: %s.%n", new Date().toString(),userId,
                 tweets.size(), oldtime, newtime);
     }
 

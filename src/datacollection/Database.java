@@ -16,8 +16,10 @@ import twitter4j.TwitterObjectFactory;
 import twitter4j.User;
 import twitter4j.conf.ConfigurationBuilder;
 
+import com.mongodb.AggregationOptions;
 import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
+import com.mongodb.Cursor;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
@@ -327,7 +329,7 @@ public class Database {
         // Get tweet in tweets DB.
         final DBCollection coll = getTweetsDbCollection(userId);
         // Older to Later.
-        final DBCursor cursor = coll.find().sort(new BasicDBObject("_id", 1));
+        final DBCursor cursor = coll.find().sort(new BasicDBObject("id", 1));
         while (cursor.hasNext()) {
             final DBObject doc = cursor.next();
             final Status t = docToTweet(doc);
@@ -336,17 +338,39 @@ public class Database {
         return tweets;
     }
 
+    /**
+     * @return: the latest tweet of given user; null, if there is no tweet for
+     *          such user.
+     */
     public Status getLatestTweet (long userId) {
         final DBCollection coll = getTweetsDbCollection(userId);
-        // Find the last inserted one.
-        final DBCursor cursor =
-                coll.find().sort(new BasicDBObject("_id", -1)).limit(1);
+        // "_id" use null here means search based on all docs.
+        final DBObject groupFields = new BasicDBObject("_id", null);
+        final String fieldName = "max_id";
+        // Fisrt $max is the group Accumulator Operator, then the $id is the
+        // field name which want to be maxed: tweetId.
+        groupFields.put(fieldName, new BasicDBObject("$max", "$id"));
+        final DBObject group = new BasicDBObject("$group", groupFields);
+        final List<DBObject> pipeline = new ArrayList<DBObject>();
+        pipeline.add(group);
+        // From the official doc.
+        final AggregationOptions aggregationOptions =
+                AggregationOptions.builder().batchSize(1)
+                        .outputMode(AggregationOptions.OutputMode.CURSOR)
+                        .allowDiskUse(true).build();
+        final Cursor cursor = coll.aggregate(pipeline, aggregationOptions);
         if (cursor.hasNext()) {
-            final DBObject dbObject = cursor.next();
-            final Status t = docToTweet(dbObject);
-            return t;
+            final DBObject doc = cursor.next();
+            final long tweetId = (long) doc.get(fieldName);
+            final Status t = getTweet(userId, tweetId);
+            if (t != null) {
+                return t;
+            } else {
+                return null;
+            }
         } else {
             return null;
+
         }
     }
 
@@ -564,7 +588,7 @@ public class Database {
         // Get tweet in tweets DB.
         final DBCollection coll = getTweetsDbCollection(userId);
         // Older to Later.
-        final DBCursor cursor = coll.find().sort(new BasicDBObject("_id", 1));
+        final DBCursor cursor = coll.find().sort(new BasicDBObject("id", 1));
         boolean laterThanToDate = false;
         while (cursor.hasNext() && !laterThanToDate) {
             final DBObject doc = cursor.next();
@@ -598,7 +622,7 @@ public class Database {
         }
         final DBCollection coll = getTweetsDbCollection(fId);
         // Older to Later.
-        final DBCursor cursor = coll.find().sort(new BasicDBObject("_id", 1));
+        final DBCursor cursor = coll.find().sort(new BasicDBObject("id", 1));
         boolean laterThanLastDate = false;
         while (cursor.hasNext() && !laterThanLastDate) {
             final DBObject doc = cursor.next();
