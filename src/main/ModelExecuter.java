@@ -29,7 +29,7 @@ public class ModelExecuter {
 
     public static final Learner[] LEARNERS = {
             new DecisionTreeTest(DecisionTreeTest.RP_PRUNE),
-            new RIPPERk(true, 1) };
+            new RIPPERk(true, 0) };
 
     public static String runPairTest (final RawExampleList trainIn,
             final RawExampleList testM1In, final RawAttrList rawAttr) {
@@ -42,16 +42,19 @@ public class ModelExecuter {
 
         final Learner learner = LEARNERS[0];
         final Hypothesis h = learner.learn(train, rawAttr);
+        // System.out.println(h.toString());
         final FMeasureResult atrain =
                 Evaluator.evaluateFMeasure(h, train, ExampleExtractor.Y);
         final FMeasureResult atest =
                 Evaluator.evaluateFMeasure(h, testM1, ExampleExtractor.Y);
         final StringBuilder sb = new StringBuilder();
-        sb.append(String.format("%.4f %.4f %.4f %.4f %d %d", atrain.accuracy,
-                atrain.precision, atrain.recall, atrain.fmeasure,
-                atrain.numActPos, atrain.numPrePos));
-        sb.append(String.format(" %.4f %.4f %.4f %.4f %d %d", atest.accuracy,
-                atest.precision, atest.recall, atest.fmeasure, atest.numActPos,
+        sb.append(String.format("%.4f %.4f %.4f %.4f %.4f %d %d",
+                atrain.accuracy, atrain.precision, atrain.recall,
+                atrain.falsePositive, atrain.fmeasure, atrain.numActPos,
+                atrain.numPrePos));
+        sb.append(String.format(" %.4f %.4f %.4f %.4f %.4f %d %d",
+                atest.accuracy, atest.precision, atest.recall,
+                atest.falsePositive, atest.fmeasure, atest.numActPos,
                 atest.numPrePos));
         return sb.toString();
     }
@@ -76,11 +79,13 @@ public class ModelExecuter {
 
         // TrainAcc TestAcc-Actual classes of each example-Predicted classes
         final StringBuilder sb = new StringBuilder();
-        sb.append(String.format("%.4f %.4f %.4f %.4f %d %d", atrain.accuracy,
-                atrain.precision, atrain.recall, atrain.fmeasure,
-                atrain.numActPos, atrain.numPrePos));
-        sb.append(String.format(" %.4f %.4f %.4f %.4f %d %d", atest.accuracy,
-                atest.precision, atest.recall, atest.fmeasure, atest.numActPos,
+        sb.append(String.format("%.4f %.4f %.4f %.4f %.4f %d %d",
+                atrain.accuracy, atrain.precision, atrain.recall,
+                atrain.falsePositive, atrain.fmeasure, atrain.numActPos,
+                atrain.numPrePos));
+        sb.append(String.format(" %.4f %.4f %.4f %.4f %.4f %d %d",
+                atest.accuracy, atest.precision, atest.recall,
+                atest.falsePositive, atest.fmeasure, atest.numActPos,
                 atest.numPrePos));
 
         sb.append("-");

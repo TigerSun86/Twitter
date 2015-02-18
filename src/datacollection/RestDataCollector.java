@@ -57,7 +57,8 @@ public class RestDataCollector {
             final long sleepTime = db.getRDCSleepTime();
             if (sleepTime > 0) {
                 try {
-                    System.out.printf("Sleep %d miliseconds%n", sleepTime);
+                    System.out.printf("Sleep %d miliseconds. Now: %s%n",
+                            sleepTime, new Date().toString());
                     Thread.sleep(sleepTime);
                 } catch (InterruptedException e) {
                     e.printStackTrace();

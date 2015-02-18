@@ -10,22 +10,22 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import test.UserData;
 import twitter4j.HashtagEntity;
 import twitter4j.MediaEntity;
 import twitter4j.Status;
 import twitter4j.URLEntity;
-import twitter4j.User;
 import twitter4j.UserMentionEntity;
 
 /**
- * FileName: FeatureExtractor.java
+ * FileName: FeatureExtractorBackup.java
  * @Description:
  * 
  * @author Xunhu(Tiger) Sun
  *         email: sunx2013@my.fit.edu
  * @date Dec 18, 2014 4:04:46 PM
  */
-public class FeatureExtractor {
+public class FeatureExtractorBackup {
 
     private static final String F0 = "0";
     private static final String F1 = "1";
@@ -45,19 +45,16 @@ public class FeatureExtractor {
         GETTER_LIST.add(new F9());
     }
 
-    public static ArrayList<String> getFeatures (Status t, User userProfile,
-            List<Status> userTweets) {
+    public static ArrayList<String> getFeatures (Status t, UserData ud) {
         final ArrayList<String> fs = new ArrayList<String>();
         for (FeatureGetter f : GETTER_LIST) {
-            fs.add(f.getFeature(t, userProfile, userTweets));
+            fs.add(f.getFeature(t, ud));
         }
         return fs;
     }
 
     private static interface FeatureGetter {
-        // User tweets should be ordered by oldest to latest.
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets);
+        public String getFeature (Status t, UserData ud);
     }
 
     /**
@@ -66,29 +63,24 @@ public class FeatureExtractor {
      */
     private static class F1 implements FeatureGetter {
         @Override
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets) {
+        public String getFeature (Status t, UserData ud) {
             String feature = Long.toString(MOUNT_IN_HOUR);
             final Date endTime = t.getCreatedAt();
             final Date beginTime = getNewTime(endTime, -MOUNT_IN_HOUR);
-            // Go through tweets from latest to oldest.
-            for (int i = userTweets.size() - 1; i >= 0; i--) {
-                final Status ut = userTweets.get(i);
+            for (Status ut : ud.tweets) {
                 if (ut.isRetweet()) {
                     final Date utTime = ut.getCreatedAt();
                     if (beginTime.before(utTime) && endTime.after(utTime)) {
-                        // The first one found is the closest one before t.
                         final long diffInHours =
                                 TimeUnit.MILLISECONDS.toHours(endTime.getTime()
                                         - utTime.getTime());
                         feature = Long.toString(diffInHours);
                         break;
                     } else if (beginTime.after(utTime)) {
-                        break; // Too old tweets.
+                        break;
                     }
                 }
             }
-
             return feature;
         }
     }
@@ -99,17 +91,14 @@ public class FeatureExtractor {
      */
     private static class F2 implements FeatureGetter {
         @Override
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets) {
+        public String getFeature (Status t, UserData ud) {
             String feature = Long.toString(MOUNT_IN_HOUR);
             final HashtagEntity[] hashtags = t.getHashtagEntities();
             if (hashtags != null && hashtags.length != 0) {
                 final Date endTime = t.getCreatedAt();
                 final Date beginTime = getNewTime(endTime, -MOUNT_IN_HOUR);
 
-                // Go through tweets from latest to oldest.
-                for (int i = userTweets.size() - 1; i >= 0; i--) {
-                    final Status ut = userTweets.get(i);
+                for (Status ut : ud.tweets) {
                     final Date utTime = ut.getCreatedAt();
                     if (beginTime.before(utTime) && endTime.after(utTime)) {
                         final HashtagEntity[] utHt = ut.getHashtagEntities();
@@ -148,13 +137,12 @@ public class FeatureExtractor {
      */
     private static class F3 implements FeatureGetter {
         @Override
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets) {
+        public String getFeature (Status t, UserData ud) {
             String feature = F0;
             final UserMentionEntity[] mentions = t.getUserMentionEntities();
             if (mentions != null && mentions.length != 0) {
                 for (UserMentionEntity u : mentions) {
-                    if (u.getId() == userProfile.getId()) {
+                    if (u.getId() == ud.userProfile.getId()) {
                         feature = F1;
                         break;
                     }
@@ -169,8 +157,7 @@ public class FeatureExtractor {
      */
     private static class F4 implements FeatureGetter {
         @Override
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets) {
+        public String getFeature (Status t, UserData ud) {
             // 4. Whether t has picture.
             String feature = F0;
             final MediaEntity[] medias = t.getMediaEntities();
@@ -186,8 +173,7 @@ public class FeatureExtractor {
      */
     private static class F5 implements FeatureGetter {
         @Override
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets) {
+        public String getFeature (Status t, UserData ud) {
             // 5. Whether t has url.
             String feature = F0;
             final URLEntity[] urls = t.getURLEntities();
@@ -215,8 +201,7 @@ public class FeatureExtractor {
         }
 
         @Override
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets) {
+        public String getFeature (Status t, UserData ud) {
             final Date date = t.getCreatedAt();
             final Calendar c = Calendar.getInstance();
             c.setTime(date);
@@ -234,14 +219,11 @@ public class FeatureExtractor {
      */
     private static class F7 implements FeatureGetter {
         @Override
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets) {
+        public String getFeature (Status t, UserData ud) {
             String feature = Long.toString(MOUNT_IN_HOUR);
             final Date endTime = t.getCreatedAt();
             final Date beginTime = getNewTime(endTime, -MOUNT_IN_HOUR);
-            // Go through tweets from latest to oldest.
-            for (int i = userTweets.size() - 1; i >= 0; i--) {
-                final Status ut = userTweets.get(i);
+            for (Status ut : ud.tweets) {
                 if (!ut.isRetweet()) {
                     final Date utTime = ut.getCreatedAt();
                     if (beginTime.before(utTime) && endTime.after(utTime)) {
@@ -265,8 +247,7 @@ public class FeatureExtractor {
      */
     private static class F8 implements FeatureGetter {
         @Override
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets) {
+        public String getFeature (Status t, UserData ud) {
             String feature = Long.toString(MOUNT_IN_HOUR);
             final UserMentionEntity[] mentions =
                     getUserMentionEntitiesExceptRTAuthor(t);
@@ -274,9 +255,7 @@ public class FeatureExtractor {
                 final Date endTime = t.getCreatedAt();
                 final Date beginTime = getNewTime(endTime, -MOUNT_IN_HOUR);
 
-                // Go through tweets from latest to oldest.
-                for (int i = userTweets.size() - 1; i >= 0; i--) {
-                    final Status ut = userTweets.get(i);
+                for (Status ut : ud.tweets) {
                     final Date utTime = ut.getCreatedAt();
                     if (beginTime.before(utTime) && endTime.after(utTime)) {
                         final UserMentionEntity[] utmt =
@@ -342,17 +321,14 @@ public class FeatureExtractor {
      */
     private static class F9 implements FeatureGetter {
         @Override
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets) {
+        public String getFeature (Status t, UserData ud) {
             String feature = Long.toString(MOUNT_IN_HOUR);
             final String[] domains = getUrlDomains(t);
             if (domains != null && domains.length != 0) {
                 final Date endTime = t.getCreatedAt();
                 final Date beginTime = getNewTime(endTime, -MOUNT_IN_HOUR);
 
-                // Go through tweets from latest to oldest.
-                for (int i = userTweets.size() - 1; i >= 0; i--) {
-                    final Status ut = userTweets.get(i);
+                for (Status ut : ud.tweets) {
                     final Date utTime = ut.getCreatedAt();
                     if (beginTime.before(utTime) && endTime.after(utTime)) {
                         final String[] utDm = getUrlDomains(ut);

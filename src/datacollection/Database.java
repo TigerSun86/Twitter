@@ -3,8 +3,12 @@ package datacollection;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map.Entry;
 
+import main.ExampleGetter;
+import main.ExampleGetter.PosAndNeg;
 import twitter4j.Status;
 import twitter4j.Trends;
 import twitter4j.TwitterException;
@@ -30,7 +34,8 @@ import com.mongodb.util.JSON;
  * @date Jan 27, 2015 7:48:16 PM
  */
 public class Database {
-    private static final String DB_TWEETS = "tweets";
+    private static final String[] DB_TWEETS_NAMES = { "tweets", "tweets2",
+            "tweets3" };
     private static final String DB_OTHER = "other";
     private static final String COLL_USERINFOS = "userInfos";
     private static final String COLL_WAITINGTWEETS = "waitingTweets";
@@ -75,7 +80,7 @@ public class Database {
     private static final String COLL_NAME_PREFIX = "u";
 
     private MongoClient mongoClient = null;
-    private DB tweetsDb = null;
+    private DB[] tweetsDbs = new DB[DB_TWEETS_NAMES.length];
 
     private DBCollection userInfosColl = null;
     private DBCollection wtColl = null;
@@ -102,11 +107,30 @@ public class Database {
         }
     }
 
-    public DB getTweetsDb () {
-        if (tweetsDb == null) {
-            tweetsDb = mongoClient.getDB(DB_TWEETS);
+    public DB getTweetsDb (int index) {
+        assert index >= 0 && index < tweetsDbs.length;
+        if (tweetsDbs[index] == null) {
+            tweetsDbs[index] = mongoClient.getDB(DB_TWEETS_NAMES[index]);
         }
-        return tweetsDb;
+        return tweetsDbs[index];
+    }
+
+    private DBCollection getTweetsDbCollection (long userId) {
+        final int indexOfLastDb = tweetsDbs.length - 1;
+        DBCollection coll = null;
+        for (int i = 0; i <= indexOfLastDb; i++) {
+            coll = this.getTweetsDb(i).getCollection(COLL_NAME_PREFIX + userId);
+            if (coll.count() > 0) {
+                break; // Found the collection.
+            }
+        }
+        if (coll == null || coll.count() == 0) {
+            // Didn't find, just use the last db to store it.
+            coll =
+                    this.getTweetsDb(indexOfLastDb).getCollection(
+                            COLL_NAME_PREFIX + userId);
+        }
+        return coll;
     }
 
     public DBCollection getUserInfosColl () {
@@ -246,8 +270,7 @@ public class Database {
         final String str = TwitterObjectFactory.getRawJSON(status);
         final DBObject dbObject = (DBObject) JSON.parse(str);
         final long userId = status.getUser().getId();
-        final DBCollection coll =
-                this.getTweetsDb().getCollection(COLL_NAME_PREFIX + userId);
+        final DBCollection coll = getTweetsDbCollection(userId);
         // Search tweet by Id.
         final BasicDBObject queryDoc =
                 new BasicDBObject(FEILD_TWEET_ID, status.getId());
@@ -261,15 +284,13 @@ public class Database {
         final String str = TwitterObjectFactory.getRawJSON(status);
         final DBObject dbObject = (DBObject) JSON.parse(str);
         final long userId = status.getUser().getId();
-        final DBCollection coll =
-                this.getTweetsDb().getCollection(COLL_NAME_PREFIX + userId);
+        final DBCollection coll = getTweetsDbCollection(userId);
         coll.insert(dbObject);
     }
 
     public void putTweet (long userId, String status) {
         final DBObject dbObject = (DBObject) JSON.parse(status);
-        final DBCollection coll =
-                this.getTweetsDb().getCollection(COLL_NAME_PREFIX + userId);
+        final DBCollection coll = getTweetsDbCollection(userId);
         coll.insert(dbObject);
     }
 
@@ -284,48 +305,45 @@ public class Database {
 
     public void removeTweet (long userId, long tweetId) {
         // Remove tweet in tweets DB.
-        final DBCollection coll =
-                this.getTweetsDb().getCollection(COLL_NAME_PREFIX + userId);
+        final DBCollection coll = getTweetsDbCollection(userId);
         coll.remove(new BasicDBObject(FEILD_TWEET_ID, tweetId));
     }
 
     public Status getTweet (long userId, long tweetId) {
         // Get tweet in tweets DB.
-        final DBCollection coll =
-                this.getTweetsDb().getCollection(COLL_NAME_PREFIX + userId);
+        final DBCollection coll = getTweetsDbCollection(userId);
         final DBObject doc =
                 coll.findOne(new BasicDBObject(FEILD_TWEET_ID, tweetId));
         if (doc != null) {
-            doc.removeField("_id");
-            final String json = doc.toString();
-            Status t = null;
-            try {
-                t = TwitterObjectFactory.createStatus(json);
-            } catch (TwitterException e) {
-                e.printStackTrace();
-            }
+            final Status t = docToTweet(doc);
             return t;
         } else {
             return null;
         }
     }
 
+    public List<Status> getTweetList (long userId) {
+        final List<Status> tweets = new ArrayList<Status>();
+        // Get tweet in tweets DB.
+        final DBCollection coll = getTweetsDbCollection(userId);
+        // Older to Later.
+        final DBCursor cursor = coll.find().sort(new BasicDBObject("_id", 1));
+        while (cursor.hasNext()) {
+            final DBObject doc = cursor.next();
+            final Status t = docToTweet(doc);
+            tweets.add(t);
+        }
+        return tweets;
+    }
+
     public Status getLatestTweet (long userId) {
-        final DBCollection coll =
-                this.getTweetsDb().getCollection(COLL_NAME_PREFIX + userId);
+        final DBCollection coll = getTweetsDbCollection(userId);
         // Find the last inserted one.
         final DBCursor cursor =
                 coll.find().sort(new BasicDBObject("_id", -1)).limit(1);
         if (cursor.hasNext()) {
             final DBObject dbObject = cursor.next();
-            dbObject.removeField("_id");
-            final String json = dbObject.toString();
-            Status t = null;
-            try {
-                t = TwitterObjectFactory.createStatus(json);
-            } catch (TwitterException e) {
-                e.printStackTrace();
-            }
+            final Status t = docToTweet(dbObject);
             return t;
         } else {
             return null;
@@ -338,22 +356,12 @@ public class Database {
     public static class StatusAndCheckedTime {
         public final long userId;
         public final long tweetId;
-        public final Status tweet;
         public final Date date;
-
-        public StatusAndCheckedTime(Status tweet, Date date) {
-            super();
-            this.userId = -1;
-            this.tweetId = -1;
-            this.tweet = tweet;
-            this.date = date;
-        }
 
         public StatusAndCheckedTime(long userId, long tweetId, Date date) {
             super();
             this.userId = userId;
             this.tweetId = tweetId;
-            this.tweet = null;
             this.date = date;
         }
     }
@@ -367,31 +375,10 @@ public class Database {
             final DBObject dbObject = cursor.next();
             // Remove from waiting list
             this.getWaitTweetsColl().remove(dbObject);
-            if (dbObject.get(FEILD_WT_USERID) == null) {
-                final Date lastCheckedDate;
-                if (dbObject.get(FEILD_WT_DATE) != null) {
-                    lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
-                    dbObject.removeField(FEILD_WT_DATE);
-                } else {
-                    lastCheckedDate = null;
-                }
-
-                dbObject.removeField("_id");
-                final String json = dbObject.toString();
-                Status t = null;
-                try {
-                    t = TwitterObjectFactory.createStatus(json);
-                } catch (TwitterException e) {
-                    e.printStackTrace();
-                }
-                return new StatusAndCheckedTime(t, lastCheckedDate);
-            } else {
-                final long userId = (long) dbObject.get(FEILD_WT_USERID);
-                final long tweetId = (long) dbObject.get(FEILD_WT_TWEETID);
-                final Date lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
-                return new StatusAndCheckedTime(userId, tweetId,
-                        lastCheckedDate);
-            }
+            final long userId = (long) dbObject.get(FEILD_WT_USERID);
+            final long tweetId = (long) dbObject.get(FEILD_WT_TWEETID);
+            final Date lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
+            return new StatusAndCheckedTime(userId, tweetId, lastCheckedDate);
         } else {
             return null;
         }
@@ -404,31 +391,11 @@ public class Database {
                         .sort(new BasicDBObject("_id", 1)).limit(1);
         if (cursor.hasNext()) {
             final DBObject dbObject = cursor.next();
-            if (dbObject.get(FEILD_WT_USERID) == null) {
-                final Date lastCheckedDate;
-                if (dbObject.get(FEILD_WT_DATE) != null) {
-                    lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
-                    dbObject.removeField(FEILD_WT_DATE);
-                } else {
-                    lastCheckedDate = null;
-                }
+            final long userId = (long) dbObject.get(FEILD_WT_USERID);
+            final long tweetId = (long) dbObject.get(FEILD_WT_TWEETID);
+            final Date lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
+            return new StatusAndCheckedTime(userId, tweetId, lastCheckedDate);
 
-                dbObject.removeField("_id");
-                final String json = dbObject.toString();
-                Status t = null;
-                try {
-                    t = TwitterObjectFactory.createStatus(json);
-                } catch (TwitterException e) {
-                    e.printStackTrace();
-                }
-                return new StatusAndCheckedTime(t, lastCheckedDate);
-            } else {
-                final long userId = (long) dbObject.get(FEILD_WT_USERID);
-                final long tweetId = (long) dbObject.get(FEILD_WT_TWEETID);
-                final Date lastCheckedDate = (Date) dbObject.get(FEILD_WT_DATE);
-                return new StatusAndCheckedTime(userId, tweetId,
-                        lastCheckedDate);
-            }
         } else {
             return null;
         }
@@ -591,11 +558,95 @@ public class Database {
         return time;
     }
 
-    public static void main (String[] args) {
-        // Database.getInstance().putCb("bD0F2CRafz4ARSR56SIFb6xfR",
-        // "nW7Py9vlzuiQiYhE6e0WfGqUNCIDjMZuZIKunqrPbu9B0tvf1O",
-        // "3015621693-zCkQqyHRHBYVdu80u1Zj81o0ktDixKMOuFTYcf1",
-        // "z2HDloJVC1ujpPGPMcFxTCTGmQC327jEWq7T4YptM2QcL");
+    public List<Status> getOriginalTweetListInTimeRange (long userId,
+            Date fromDate, Date toDate) {
+        final List<Status> tweets = new ArrayList<Status>();
+        // Get tweet in tweets DB.
+        final DBCollection coll = getTweetsDbCollection(userId);
+        // Older to Later.
+        final DBCursor cursor = coll.find().sort(new BasicDBObject("_id", 1));
+        boolean laterThanToDate = false;
+        while (cursor.hasNext() && !laterThanToDate) {
+            final DBObject doc = cursor.next();
+            final Status t = docToTweet(doc);
+            final Date date = t.getCreatedAt();
+            if (date.after(fromDate) && date.before(toDate)) {
+                if (!t.isRetweet()) { // Original tweet.
+                    tweets.add(t);
+                }
+            } else if (date.after(toDate)) {
+                laterThanToDate = true;
+            }
+        }
+
+        return tweets;
     }
 
+    public PosAndNeg getPosAndNeg (long fId, List<Status> auTweets) {
+        final List<Status> pos = new ArrayList<Status>();
+        final List<Status> neg = new ArrayList<Status>();
+
+        assert !auTweets.isEmpty();
+        final long auId = auTweets.get(0).getUser().getId();
+        final Date lastDate =
+                new Date(auTweets.get(auTweets.size() - 1).getCreatedAt()
+                        .getTime()
+                        + ExampleGetter.DAY_IN_MILLISECONDS);
+        final HashMap<Long, Status> idToTweet = new HashMap<Long, Status>();
+        for (Status t : auTweets) {
+            idToTweet.put(t.getId(), t);
+        }
+        final DBCollection coll = getTweetsDbCollection(fId);
+        // Older to Later.
+        final DBCursor cursor = coll.find().sort(new BasicDBObject("_id", 1));
+        boolean laterThanLastDate = false;
+        while (cursor.hasNext() && !laterThanLastDate) {
+            final DBObject doc = cursor.next();
+            final Status t = docToTweet(doc);
+            if (t.isRetweet()
+                    && t.getRetweetedStatus().getUser().getId() == auId) {
+                // Retweeted from key author.
+                final long otId = t.getRetweetedStatus().getId();
+                final Status ot = idToTweet.get(otId);
+                if (ot != null) { // The original tweet is in the auTweets.
+                    final long timeDiff =
+                            t.getCreatedAt().getTime()
+                                    - ot.getCreatedAt().getTime();
+                    // Retweet should be later than original one.
+                    assert timeDiff >= 0;
+                    if (timeDiff < ExampleGetter.DAY_IN_MILLISECONDS) {
+                        // It's positive example only when it was retweeted with
+                        // in one day after published.
+                        pos.add(ot);
+                        // Remove this ot so all remaining ots are negative.
+                        idToTweet.remove(otId);
+                    }
+                }
+            }
+            final Date date = t.getCreatedAt();
+            if (date.after(lastDate)) {
+                laterThanLastDate = true;
+            }
+        } // while (cursor.hasNext() && !laterThanLastDate) {
+
+        // Add all remaining tweets as negative examples.
+        for (Entry<Long, Status> entry : idToTweet.entrySet()) {
+            neg.add(entry.getValue());
+        }
+
+        return new PosAndNeg(pos, neg);
+    }
+
+    private static final Status docToTweet (final DBObject doc) {
+        doc.removeField("_id");
+        final String json = doc.toString();
+        Status t = null;
+        try {
+            t = TwitterObjectFactory.createStatus(json);
+        } catch (TwitterException e) {
+            e.printStackTrace();
+        }
+        assert t != null;
+        return t;
+    }
 }

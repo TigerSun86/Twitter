@@ -60,7 +60,7 @@ public class ExampleExtractor {
             return o1.getCreatedAt().compareTo(o2.getCreatedAt());
         }
     }
-
+    // Sort from oldest to latest.
     private static final TweetSorter TWEET_SORTER = new TweetSorter();
 
     private final UserData authorData;
@@ -222,7 +222,7 @@ public class ExampleExtractor {
 
     private static RawExample processOneTweet (Status t, UserData ud,
             boolean isPos) {
-        final ArrayList<String> fs = FeatureExtractor.getFeatures(t, ud);
+        final ArrayList<String> fs = FeatureExtractorBackup.getFeatures(t, ud);
         final RawExample e = new RawExample();
         e.xList = fs;
         if (isPos) {

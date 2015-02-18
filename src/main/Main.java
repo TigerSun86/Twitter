@@ -2,15 +2,18 @@ package main;
 
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.List;
 
-import main.ExampleExtractor.Exs;
+import main.ExampleGetter.Exs;
 import test.DataCollector;
-import test.UserData;
-import util.OReadWriter;
+import twitter4j.Status;
 import util.OutputRedirection;
 import util.SysUtil;
 
 import common.RawAttrList;
+
+import datacollection.Database;
+import datacollection.UserInfo;
 
 /**
  * FileName: Main.java
@@ -26,12 +29,17 @@ public class Main {
 
     // It will be initialized at first time usage.
     private ResultTable resultTable = null;
-    private final UserData author;
-    private final ExampleExtractor exGetter;
 
-    public Main(final long authorId) {
-        this.author = OReadWriter.getUserDate(authorId);
-        this.exGetter = new ExampleExtractor(author);
+    private final UserInfo author;
+    private final ExampleGetter exGetter;
+
+    public Main(final Database db, final long authorId) {
+        this.author = db.getUser(authorId);
+        final List<Status> auTweets =
+                db.getOriginalTweetListInTimeRange(authorId,
+                        ExampleGetter.TRAIN_START_DATE,
+                        ExampleGetter.TEST_END_DATE);
+        this.exGetter = new ExampleGetter(db, auTweets);
     }
 
     private void pairTest () {
@@ -42,9 +50,8 @@ public class Main {
         System.out
                 .println("AuthorName AuthorId FolName FolId #PosTrain "
                         + "#NegTrain #PosTestM1 #NegTestM1 FeatureTime TrainTime "
-                        + "TrainAcc TrainPrecision TrainRecall TrainFM TrainAct#Pos TrainPre#Pos "
-                        + "TestAcc TestPrecision TestRecall TestFM TestAct#Pos TestPre#Pos");
-
+                        + "TrainAcc TrainPrecision TrainRecall TrainFP TrainFM TrainAct#Pos TrainPre#Pos "
+                        + "TestAcc TestPrecision TestRecall TestFP TestFM TestAct#Pos TestPre#Pos");
         final Long[] fols = author.followersIds.toArray(new Long[0]);
         for (int i = 0; i < fols.length; i++) {
             final Long folId = fols[i];
@@ -74,15 +81,15 @@ public class Main {
         System.out
                 .println("AuthorName AuthorId FolName FolId #PosTrain "
                         + "#NegTrain #PosTestM1 #NegTestM1 #PosTestM2 #NegTestM2 FeatureTime TrainTime "
-                        + "TrainAcc TrainPrecision TrainRecall TrainFM TrainAct#Pos TrainPre#Pos "
-                        + "TestAcc TestPrecision TestRecall TestFM TestAct#Pos TestPre#Pos");
+                        + "TrainAcc TrainPrecision TrainRecall TrainFP TrainFM TrainAct#Pos TrainPre#Pos "
+                        + "TestAcc TestPrecision TestRecall TestFP TestFM TestAct#Pos TestPre#Pos");
 
         int userCount = 0;
         final Long[] fols = author.followersIds.toArray(new Long[0]);
         for (int i = 0; i < fols.length; i++) {
             final Long folId = fols[i];
             final long time1 = SysUtil.getCpuTime();
-            final Exs exs = exGetter.getExsOfGlobalTest(folId);
+            final Exs exs = null;// exGetter.getExsOfGlobalTest(folId);
             if (exs != null) {
                 final long time2 = SysUtil.getCpuTime();
                 final String s =
@@ -120,7 +127,7 @@ public class Main {
 
     private void showFMeasure (int userCount) {
         System.out.println("Tweet ErrorRate "
-                + "Accuracy Precision Recall FMeasure Actual#Pos Pre#Pos");
+                + "Accuracy Precision Recall FP FMeasure Actual#Pos Pre#Pos");
         for (int t = 0; t < resultTable.a.size(); t++) {
             final BitSet arow = resultTable.a.get(t);
             final BitSet prow = resultTable.p.get(t);
@@ -156,16 +163,21 @@ public class Main {
                 precision = ((double) tp) / (tp + fp);
                 recall = ((double) tp) / (tp + fn);
             }
-
+            final double falsePositive;
+            if (fp == 0) {
+                falsePositive = 0;
+            } else {
+                falsePositive = ((double) fp) / (fp + tn);
+            }
             final double fmeasure;
             if (precision == 0 || recall == 0) {
                 fmeasure = 0;
             } else {
                 fmeasure = (2 * precision * recall) / (precision + recall);
             }
-            System.out.printf("t%d %.4f %.4f %.4f %.4f %.4f %d %d%n", t,
-                    errorRate, accuracy, precision, recall, fmeasure,
-                    numActPos, numPrePos);
+            System.out.printf("t%d %.4f %.4f %.4f %.4f %.4f %.4f %d %d%n", t,
+                    errorRate, accuracy, precision, recall, falsePositive,
+                    fmeasure, numActPos, numPrePos);
         }
     }
 
@@ -182,14 +194,14 @@ public class Main {
     }
 
     public static void main (String[] args) {
-        final OutputRedirection or = new OutputRedirection();
-
-        for (long authorId : DataCollector.AUTHOR_IDS) {
-            // if (authorId == 1642106527L) {
-            new Main(authorId).pairTest();
+        //final OutputRedirection or = new OutputRedirection();
+        final Database db = Database.getInstance();
+        for (long authorId :  UserInfo.KEY_AUTHORS) {
+            // if (authorId == 246774523L) {
+            new Main(db, authorId).pairTest();
             // }
         }
 
-        or.close();
+        //or.close();
     }
 }

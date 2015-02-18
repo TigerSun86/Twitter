@@ -55,36 +55,28 @@ public class AddNewFollower {
         while (true) {
             StatusAndCheckedTime tandc = db.peekWaitingTweet();
             if (tandc != null) {
-                Status t;
-                if (tandc.tweet == null) {
-                    t = db.getTweet(tandc.userId, tandc.tweetId);
-                    if (t == null) {
-                        db.pollWaitingTweet();
-                        continue;
-                    }
-                } else {
-                    t = tandc.tweet;
+                Status t = db.getTweet(tandc.userId, tandc.tweetId);
+                if (t == null) {
+                    db.pollWaitingTweet();
+                    continue;
                 }
                 waitUnilTimeToCheck(t.getCreatedAt(), tandc.date);
                 // Peek the tweet again to prevent it's been deleted while last
                 // waiting.
                 tandc = db.peekWaitingTweet();
                 if (tandc != null) {
-                    if (tandc.tweet == null) {
-                        t = db.getTweet(tandc.userId, tandc.tweetId);
-                        if (t == null) {
-                            db.pollWaitingTweet();
-                            continue;
-                        }
-                    } else {
-                        t = tandc.tweet;
+                    t = db.getTweet(tandc.userId, tandc.tweetId);
+                    if (t == null) {
+                        db.pollWaitingTweet();
+                        continue;
                     }
                     checkTweet(t);
                 }
             } else { // There is no waiting tweets.
                 try { // Sleep for a while.
                     System.out
-                            .println("No waiting tweets, let me sleep for a while.");
+                            .println("No waiting tweets, let me sleep for a while. Now: "
+                                    + new Date().toString());
                     Thread.sleep(DAY_IN_MILLISECONDS / 10);
                 } catch (InterruptedException e) {
                     e.printStackTrace();

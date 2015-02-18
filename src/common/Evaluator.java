@@ -44,16 +44,19 @@ public class Evaluator {
         public final double accuracy;
         public final double precision;
         public final double recall;
+        public final double falsePositive;
         public final double fmeasure;
         public final int numActPos;
         public final int numPrePos;
 
         public FMeasureResult(double accuracy, double precision, double recall,
-                double fmeasure, int numActPos, int numPrePos) {
+                double falsePositive, double fmeasure, int numActPos,
+                int numPrePos) {
             super();
             this.accuracy = accuracy;
             this.precision = precision;
             this.recall = recall;
+            this.falsePositive = falsePositive;
             this.fmeasure = fmeasure;
             this.numActPos = numActPos;
             this.numPrePos = numPrePos;
@@ -85,12 +88,19 @@ public class Evaluator {
         final double accuracy = ((double) tp + tn) / (tp + tn + fp + fn);
         final double precision;
         final double recall;
+
         if (tp == 0) {
             precision = 0;
             recall = 0;
         } else {
             precision = ((double) tp) / (tp + fp);
             recall = ((double) tp) / (tp + fn);
+        }
+        final double falsePositive;
+        if (fp == 0) {
+            falsePositive = 0;
+        } else {
+            falsePositive = ((double) fp) / (fp + tn);
         }
         final double fmeasure;
         if (precision == 0 || recall == 0) {
@@ -100,7 +110,7 @@ public class Evaluator {
         }
         final int numActPos = tp + fn;
         final int numPrePos = tp + fp;
-        return new FMeasureResult(accuracy, precision, recall, fmeasure,
-                numActPos, numPrePos);
+        return new FMeasureResult(accuracy, precision, recall, falsePositive,
+                fmeasure, numActPos, numPrePos);
     }
 }
