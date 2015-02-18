@@ -370,7 +370,6 @@ public class Database {
             }
         } else {
             return null;
-
         }
     }
 
@@ -623,10 +622,22 @@ public class Database {
         final DBCollection coll = getTweetsDbCollection(fId);
         // Older to Later.
         final DBCursor cursor = coll.find().sort(new BasicDBObject("id", 1));
+        Status dbgLastT = null;            // for dbg
         boolean laterThanLastDate = false;
         while (cursor.hasNext() && !laterThanLastDate) {
             final DBObject doc = cursor.next();
             final Status t = docToTweet(doc);
+            // for dbg begin
+            if (dbgLastT != null) {
+                if (dbgLastT.getCreatedAt().after(t.getCreatedAt())) {
+                    System.out.printf(
+                            "[Dbg bad order]user: %d, last: %s, this: %s.%n",
+                            fId, dbgLastT.getCreatedAt().toString(), t
+                                    .getCreatedAt().toString());
+                }
+            }
+            dbgLastT = t;
+            // for dbg end
             if (t.isRetweet()
                     && t.getRetweetedStatus().getUser().getId() == auId) {
                 // Retweeted from key author.

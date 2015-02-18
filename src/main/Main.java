@@ -5,9 +5,7 @@ import java.util.BitSet;
 import java.util.List;
 
 import main.ExampleGetter.Exs;
-import test.DataCollector;
 import twitter4j.Status;
-import util.OutputRedirection;
 import util.SysUtil;
 
 import common.RawAttrList;

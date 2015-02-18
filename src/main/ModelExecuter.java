@@ -40,7 +40,7 @@ public class ModelExecuter {
         final RawExampleList train = mAttr.mapExs(trainIn, rawAttr);
         final RawExampleList testM1 = mAttr.mapExs(testM1In, rawAttr);
 
-        final Learner learner = LEARNERS[0];
+        final Learner learner = LEARNERS[1];
         final Hypothesis h = learner.learn(train, rawAttr);
         // System.out.println(h.toString());
         final FMeasureResult atrain =
