@@ -36,8 +36,10 @@ import com.mongodb.util.JSON;
  * @date Jan 27, 2015 7:48:16 PM
  */
 public class Database {
-    private static final String[] DB_TWEETS_NAMES = { "tweets", "tweets2",
-            "tweets3" };
+    private static final String COLL_NAME_INDEXES = "system.indexes";
+    private static final long MAX_COLLECTIONS = 10000;
+
+    private static final String DB_TWEETS_NAME_PREFIX = "tweets";
     private static final String DB_OTHER = "other";
     private static final String COLL_USERINFOS = "userInfos";
     private static final String COLL_WAITINGTWEETS = "waitingTweets";
@@ -82,7 +84,6 @@ public class Database {
     private static final String COLL_NAME_PREFIX = "u";
 
     private MongoClient mongoClient = null;
-    private DB[] tweetsDbs = new DB[DB_TWEETS_NAMES.length];
 
     private DBCollection userInfosColl = null;
     private DBCollection wtColl = null;
@@ -109,28 +110,89 @@ public class Database {
         }
     }
 
-    public DB getTweetsDb (int index) {
-        assert index >= 0 && index < tweetsDbs.length;
-        if (tweetsDbs[index] == null) {
-            tweetsDbs[index] = mongoClient.getDB(DB_TWEETS_NAMES[index]);
+    private List<String> getTweetsDbNames () {
+        List<String> names = mongoClient.getDatabaseNames();
+        final List<String> result = new ArrayList<String>();
+        for (String name : names) {
+            if (name.startsWith(DB_TWEETS_NAME_PREFIX)) {
+                result.add(name);
+            }
         }
-        return tweetsDbs[index];
+        return result;
     }
 
-    private DBCollection getTweetsDbCollection (long userId) {
-        final int indexOfLastDb = tweetsDbs.length - 1;
+    private String getLastTweetsDbName () {
+        final List<String> names = getTweetsDbNames();
+        int lastIndex = 2;
+        for (String name : names) {
+            // Get the number part in the name.
+            final String num = name.substring(DB_TWEETS_NAME_PREFIX.length());
+            if (!num.equals("")) { // First db is "tweets" contains no number.
+                try {
+                    final int index = Integer.parseInt(num);
+                    if (lastIndex < index) { // Get the last index.
+                        lastIndex = index;
+                    }
+                } catch (NumberFormatException e) {
+                    // Do nothing if it's not a number.
+                }
+            }
+        }
+        // Some thing like "tweets2".
+        return DB_TWEETS_NAME_PREFIX + lastIndex;
+    }
+
+    private String getNextTweetsDbName (String lastName) {
+        final int lastIndex =
+                Integer.parseInt(lastName.substring(DB_TWEETS_NAME_PREFIX
+                        .length()));
+        final int nextIndex = lastIndex + 1;
+        return DB_TWEETS_NAME_PREFIX + nextIndex;
+    }
+
+    private long getNumberOfCollections (DB dbIn) {
+        return dbIn.getCollection(COLL_NAME_INDEXES).count();
+    }
+
+    /**
+     * @return the tweets collection of specific user;
+     *         null, if there's no such collection.
+     */
+    private DBCollection getExistingTweetsColl (long userId) {
         DBCollection coll = null;
-        for (int i = 0; i <= indexOfLastDb; i++) {
-            coll = this.getTweetsDb(i).getCollection(COLL_NAME_PREFIX + userId);
+        final List<String> dbNames = getTweetsDbNames();
+        for (String dbName : dbNames) {
+            final DB tweetDb = mongoClient.getDB(dbName);
+            coll = tweetDb.getCollection(COLL_NAME_PREFIX + userId);
             if (coll.count() > 0) {
                 break; // Found the collection.
             }
         }
-        if (coll == null || coll.count() == 0) {
-            // Didn't find, just use the last db to store it.
-            coll =
-                    this.getTweetsDb(indexOfLastDb).getCollection(
-                            COLL_NAME_PREFIX + userId);
+        if (coll != null && coll.count() > 0) {
+            // Found the existing collection.
+            return coll;
+        } else { // Return null if cannot find the user collection.
+            return null;
+        }
+    }
+
+    private DBCollection getTweetsCollToInsert (long userId) {
+        DBCollection coll = getExistingTweetsColl(userId);
+        if (coll == null) {
+            // Coll doesn't exist in database, so create a new one.
+            final String lastDbName = getLastTweetsDbName();
+            final DB tweetDb = mongoClient.getDB(lastDbName);
+            final long collCount = getNumberOfCollections(tweetDb);
+            if (collCount <= MAX_COLLECTIONS) {
+                // Create a collection on last db.
+                coll = tweetDb.getCollection(COLL_NAME_PREFIX + userId);
+            } else {// Last db is full.
+                // Create a new db to store new collection.
+                final String nextDbName = getNextTweetsDbName(lastDbName);
+                coll =
+                        mongoClient.getDB(nextDbName).getCollection(
+                                COLL_NAME_PREFIX + userId);
+            }
         }
         return coll;
     }
@@ -272,11 +334,13 @@ public class Database {
         final String str = TwitterObjectFactory.getRawJSON(status);
         final DBObject dbObject = (DBObject) JSON.parse(str);
         final long userId = status.getUser().getId();
-        final DBCollection coll = getTweetsDbCollection(userId);
-        // Search tweet by Id.
-        final BasicDBObject queryDoc =
-                new BasicDBObject(FEILD_TWEET_ID, status.getId());
-        coll.update(queryDoc, dbObject);
+        final DBCollection coll = getExistingTweetsColl(userId);
+        if (coll != null) {
+            // Search tweet by Id.
+            final BasicDBObject queryDoc =
+                    new BasicDBObject(FEILD_TWEET_ID, status.getId());
+            coll.update(queryDoc, dbObject);
+        }
     }
 
     /* UserInfo methods end ********************* */
@@ -286,13 +350,13 @@ public class Database {
         final String str = TwitterObjectFactory.getRawJSON(status);
         final DBObject dbObject = (DBObject) JSON.parse(str);
         final long userId = status.getUser().getId();
-        final DBCollection coll = getTweetsDbCollection(userId);
+        final DBCollection coll = getTweetsCollToInsert(userId);
         coll.insert(dbObject);
     }
 
     public void putTweet (long userId, String status) {
         final DBObject dbObject = (DBObject) JSON.parse(status);
-        final DBCollection coll = getTweetsDbCollection(userId);
+        final DBCollection coll = getTweetsCollToInsert(userId);
         coll.insert(dbObject);
     }
 
@@ -307,34 +371,43 @@ public class Database {
 
     public void removeTweet (long userId, long tweetId) {
         // Remove tweet in tweets DB.
-        final DBCollection coll = getTweetsDbCollection(userId);
-        coll.remove(new BasicDBObject(FEILD_TWEET_ID, tweetId));
+        final DBCollection coll = getExistingTweetsColl(userId);
+        if (coll != null) {
+            coll.remove(new BasicDBObject(FEILD_TWEET_ID, tweetId));
+        }
     }
 
     public Status getTweet (long userId, long tweetId) {
+        Status t = null;
         // Get tweet in tweets DB.
-        final DBCollection coll = getTweetsDbCollection(userId);
-        final DBObject doc =
-                coll.findOne(new BasicDBObject(FEILD_TWEET_ID, tweetId));
-        if (doc != null) {
-            final Status t = docToTweet(doc);
-            return t;
-        } else {
-            return null;
+        final DBCollection coll = getExistingTweetsColl(userId);
+        if (coll != null) {
+            final DBObject doc =
+                    coll.findOne(new BasicDBObject(FEILD_TWEET_ID, tweetId));
+            if (doc != null) {
+                t = docToTweet(doc);
+            }
         }
+        return t;
     }
 
     public List<Status> getTweetList (long userId) {
         final List<Status> tweets = new ArrayList<Status>();
         // Get tweet in tweets DB.
-        final DBCollection coll = getTweetsDbCollection(userId);
-        // Older to Later.
-        final DBCursor cursor = coll.find().sort(new BasicDBObject("id", 1));
-        while (cursor.hasNext()) {
-            final DBObject doc = cursor.next();
-            final Status t = docToTweet(doc);
-            tweets.add(t);
+        final DBCollection coll = getExistingTweetsColl(userId);
+        if (coll != null) {
+            // Older to Later.
+            coll.createIndex(FEILD_TWEET_ID); // Create sorting index for feild
+                                              // id
+            final DBCursor cursor =
+                    coll.find().sort(new BasicDBObject(FEILD_TWEET_ID, 1));
+            while (cursor.hasNext()) {
+                final DBObject doc = cursor.next();
+                final Status t = docToTweet(doc);
+                tweets.add(t);
+            }
         }
+
         return tweets;
     }
 
@@ -343,7 +416,10 @@ public class Database {
      *          such user.
      */
     public Status getLatestTweet (long userId) {
-        final DBCollection coll = getTweetsDbCollection(userId);
+        final DBCollection coll = getExistingTweetsColl(userId);
+        if (coll == null) { // Cannot find the user collection.
+            return null;
+        }
         // "_id" use null here means search based on all docs.
         final DBObject groupFields = new BasicDBObject("_id", null);
         final String fieldName = "max_id";
@@ -359,18 +435,13 @@ public class Database {
                         .outputMode(AggregationOptions.OutputMode.CURSOR)
                         .allowDiskUse(true).build();
         final Cursor cursor = coll.aggregate(pipeline, aggregationOptions);
+        Status t = null;
         if (cursor.hasNext()) {
             final DBObject doc = cursor.next();
             final long tweetId = (long) doc.get(fieldName);
-            final Status t = getTweet(userId, tweetId);
-            if (t != null) {
-                return t;
-            } else {
-                return null;
-            }
-        } else {
-            return null;
+            t = getTweet(userId, tweetId);
         }
+        return t;
     }
 
     /* MyUserStream methods end ************** */
@@ -585,9 +656,14 @@ public class Database {
             Date fromDate, Date toDate) {
         final List<Status> tweets = new ArrayList<Status>();
         // Get tweet in tweets DB.
-        final DBCollection coll = getTweetsDbCollection(userId);
+        final DBCollection coll = getExistingTweetsColl(userId);
+        if (coll == null) {
+            return tweets;
+        }
         // Older to Later.
-        final DBCursor cursor = coll.find().sort(new BasicDBObject("id", 1));
+        coll.createIndex(FEILD_TWEET_ID); // Create sorting index for feild id
+        final DBCursor cursor =
+                coll.find().sort(new BasicDBObject(FEILD_TWEET_ID, 1));
         boolean laterThanToDate = false;
         while (cursor.hasNext() && !laterThanToDate) {
             final DBObject doc = cursor.next();
@@ -606,6 +682,11 @@ public class Database {
     }
 
     public PosAndNeg getPosAndNeg (long fId, List<Status> auTweets) {
+        final DBCollection coll = getExistingTweetsColl(fId);
+        if (coll == null) { // Cannot find the user.
+            return null;
+        }
+
         final List<Status> pos = new ArrayList<Status>();
         final List<Status> neg = new ArrayList<Status>();
 
@@ -619,9 +700,11 @@ public class Database {
         for (Status t : auTweets) {
             idToTweet.put(t.getId(), t);
         }
-        final DBCollection coll = getTweetsDbCollection(fId);
+
         // Older to Later.
-        final DBCursor cursor = coll.find().sort(new BasicDBObject("id", 1));
+        coll.createIndex(FEILD_TWEET_ID); // Create sorting index for feild id
+        final DBCursor cursor =
+                coll.find().sort(new BasicDBObject(FEILD_TWEET_ID, 1));
         Status dbgLastT = null;            // for dbg
         boolean laterThanLastDate = false;
         while (cursor.hasNext() && !laterThanLastDate) {
