@@ -391,23 +391,19 @@ public class Database {
         return t;
     }
 
+    /** Order of tweets is not guaranteed on date. */
     public List<Status> getTweetList (long userId) {
         final List<Status> tweets = new ArrayList<Status>();
         // Get tweet in tweets DB.
         final DBCollection coll = getExistingTweetsColl(userId);
         if (coll != null) {
-            // Older to Later.
-            coll.createIndex(FEILD_TWEET_ID); // Create sorting index for feild
-                                              // id
-            final DBCursor cursor =
-                    coll.find().sort(new BasicDBObject(FEILD_TWEET_ID, 1));
+            final DBCursor cursor = coll.find();
             while (cursor.hasNext()) {
                 final DBObject doc = cursor.next();
                 final Status t = docToTweet(doc);
                 tweets.add(t);
             }
         }
-
         return tweets;
     }
 
@@ -660,12 +656,9 @@ public class Database {
         if (coll == null) {
             return tweets;
         }
-        // Older to Later.
-        coll.createIndex(FEILD_TWEET_ID); // Create sorting index for feild id
-        final DBCursor cursor =
-                coll.find().sort(new BasicDBObject(FEILD_TWEET_ID, 1));
-        boolean laterThanToDate = false;
-        while (cursor.hasNext() && !laterThanToDate) {
+        final DBCursor cursor = coll.find();
+        // Iterator order is not guaranteed in date order.
+        while (cursor.hasNext()) {
             final DBObject doc = cursor.next();
             final Status t = docToTweet(doc);
             final Date date = t.getCreatedAt();
@@ -673,8 +666,6 @@ public class Database {
                 if (!t.isRetweet()) { // Original tweet.
                     tweets.add(t);
                 }
-            } else if (date.after(toDate)) {
-                laterThanToDate = true;
             }
         }
 
@@ -692,35 +683,16 @@ public class Database {
 
         assert !auTweets.isEmpty();
         final long auId = auTweets.get(0).getUser().getId();
-        final Date lastDate =
-                new Date(auTweets.get(auTweets.size() - 1).getCreatedAt()
-                        .getTime()
-                        + ExampleGetter.DAY_IN_MILLISECONDS);
         final HashMap<Long, Status> idToTweet = new HashMap<Long, Status>();
         for (Status t : auTweets) {
             idToTweet.put(t.getId(), t);
         }
 
-        // Older to Later.
-        coll.createIndex(FEILD_TWEET_ID); // Create sorting index for feild id
-        final DBCursor cursor =
-                coll.find().sort(new BasicDBObject(FEILD_TWEET_ID, 1));
-        Status dbgLastT = null;            // for dbg
-        boolean laterThanLastDate = false;
-        while (cursor.hasNext() && !laterThanLastDate) {
+        final DBCursor cursor = coll.find();
+        // Iterator order is not guaranteed in date order.
+        while (cursor.hasNext()) {
             final DBObject doc = cursor.next();
             final Status t = docToTweet(doc);
-            // for dbg begin
-            if (dbgLastT != null) {
-                if (dbgLastT.getCreatedAt().after(t.getCreatedAt())) {
-                    System.out.printf(
-                            "[Dbg bad order]user: %d, last: %s, this: %s.%n",
-                            fId, dbgLastT.getCreatedAt().toString(), t
-                                    .getCreatedAt().toString());
-                }
-            }
-            dbgLastT = t;
-            // for dbg end
             if (t.isRetweet()
                     && t.getRetweetedStatus().getUser().getId() == auId) {
                 // Retweeted from key author.
@@ -740,10 +712,6 @@ public class Database {
                         idToTweet.remove(otId);
                     }
                 }
-            }
-            final Date date = t.getCreatedAt();
-            if (date.after(lastDate)) {
-                laterThanLastDate = true;
             }
         } // while (cursor.hasNext() && !laterThanLastDate) {
 

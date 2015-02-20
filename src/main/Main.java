@@ -2,6 +2,7 @@ package main;
 
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Collections;
 import java.util.List;
 
 import main.ExampleGetter.Exs;
@@ -37,6 +38,7 @@ public class Main {
                 db.getOriginalTweetListInTimeRange(authorId,
                         ExampleGetter.TRAIN_START_DATE,
                         ExampleGetter.TEST_END_DATE);
+        Collections.sort(auTweets, ExampleGetter.TWEET_SORTER);
         this.exGetter = new ExampleGetter(db, auTweets);
     }
 
@@ -192,14 +194,14 @@ public class Main {
     }
 
     public static void main (String[] args) {
-        //final OutputRedirection or = new OutputRedirection();
+        // final OutputRedirection or = new OutputRedirection();
         final Database db = Database.getInstance();
-        for (long authorId :  UserInfo.KEY_AUTHORS) {
+        for (long authorId : UserInfo.KEY_AUTHORS) {
             // if (authorId == 246774523L) {
             new Main(db, authorId).pairTest();
             // }
         }
 
-        //or.close();
+        // or.close();
     }
 }

@@ -56,8 +56,6 @@ public class ExampleGetter {
         }
     }
 
-    private static final int LEAST_POS_NUM = 10;
-
     public static Date TRAIN_START_DATE = null;
     public static Date TEST_START_DATE = null;
     public static Date TEST_END_DATE = null;
@@ -85,7 +83,9 @@ public class ExampleGetter {
     }
 
     // Sort from oldest to latest.
-    private static final TweetSorter TWEET_SORTER = new TweetSorter();
+    public static final TweetSorter TWEET_SORTER = new TweetSorter();
+
+    private static final int LEAST_POS_NUM = 10;
 
     private final Database db;
     private final List<Status> auTweets;
@@ -110,6 +110,10 @@ public class ExampleGetter {
 
         final PosAndNeg pan = db.getPosAndNeg(folId, auTweets);
         if (pan != null && pan.pos.size() > LEAST_POS_NUM) {
+            // Sort them again because order might be changed by user retweets
+            // new tweet first.
+            Collections.sort(pan.pos, TWEET_SORTER);
+            Collections.sort(pan.neg, TWEET_SORTER);
             final List<List<Status>> poss = splitByDate(pan.pos);
             final List<List<Status>> negs = splitByDate(pan.neg);
             final RawExampleList train =
