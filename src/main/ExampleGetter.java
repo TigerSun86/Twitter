@@ -6,13 +6,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import twitter4j.Status;
 import twitter4j.User;
+
 import common.RawExample;
 import common.RawExampleList;
+
 import datacollection.Database;
 import datacollection.UserInfo;
 
@@ -240,6 +243,7 @@ public class ExampleGetter {
                             TRAIN_START_DATE.toString(),
                             TEST_END_DATE.toString());
             // Sort auTweets.
+            Collections.sort(auTweets, TWEET_SORTER);
             for (long fId : au.followersIds) {
                 final PosAndNeg pan = db.getPosAndNeg(fId, auTweets);
                 System.out.printf("FollowerId: %d, #pos: %d, #neg: %d%n", fId,
@@ -254,6 +258,89 @@ public class ExampleGetter {
         }
     }
 
+    private static void showValidFollowersInfo () {
+        System.out.println("Begin at: " + new Date().toString());
+        final Database db = Database.getInstance();
+        for (Long keyAu : UserInfo.KEY_AUTHORS) {
+            final UserInfo au = db.getUser(keyAu);
+            final List<Status> auTweets =
+                    db.getOriginalTweetListInTimeRange(keyAu, TRAIN_START_DATE,
+                            TEST_END_DATE);
+            // Sort auTweets.
+            Collections.sort(auTweets, TWEET_SORTER);
+
+            int testStartIdx = 0;
+            while (testStartIdx < auTweets.size()) {
+                if (!auTweets.get(testStartIdx).getCreatedAt()
+                        .before(TEST_START_DATE)) {
+                    break;
+                }
+                testStartIdx++;
+            }
+
+            int nTrain = testStartIdx * 2 / 3;
+            int nVal = testStartIdx - nTrain;
+            int nTest = auTweets.size() - testStartIdx;
+            System.out.printf("Author: %s, id: %d, #fols: %d, "
+                    + "trainStart: %s, testStart: %s, testEnd: %s.%n",
+                    au.userProfile.getScreenName(), au.userId,
+                    au.followersIds.size(), TRAIN_START_DATE.toString(),
+                    TEST_START_DATE.toString(), TEST_END_DATE.toString());
+            System.out.printf(
+                    "Total#exs: %d, train#: %d, val#: %d, test#: %d.%n",
+                    auTweets.size(), nTrain, nVal, nTest);
+            System.out.println("******************************");
+            if (nTrain < LEAST_POS_NUM || nTest < LEAST_POS_NUM) {
+                continue; // Skip the author for few examples.
+            }
+            System.out
+                    .println("AuthorId fId #pos #neg train#p train#n val#p val#n test#p test#n");
+            for (long fId : au.followersIds) {
+                final PosAndNeg pan = db.getPosAndNeg(fId, auTweets);
+                HashSet<Status> pset = new HashSet<Status>();
+                pset.addAll(pan.pos);
+                String trainPan =
+                        countPosAndNegInRange(auTweets, pset, 0, nTrain);
+                String valPan =
+                        countPosAndNegInRange(auTweets, pset, nTrain,
+                                testStartIdx);
+                String testPan =
+                        countPosAndNegInRange(auTweets, pset, testStartIdx,
+                                auTweets.size());
+                if (Integer.parseInt(trainPan.split(" ")[0]) >= LEAST_POS_NUM
+                        && Integer.parseInt(testPan.split(" ")[0]) >= LEAST_POS_NUM) {
+                    // Only print when there are enough #pos in both train and
+                    // test set.
+                    System.out.printf("%d %d %d %d %s %s %s%n", au.userId, fId,
+                            pan.pos.size(), pan.neg.size(), trainPan, valPan,
+                            testPan);
+                }
+
+            }
+            System.out.println("******************************");
+        }
+        System.out.println("End at: " + new Date().toString());
+    }
+
+    /**
+     * @param int from: inclusive
+     *        int to: exclusive
+     */
+    private static String countPosAndNegInRange (List<Status> ts,
+            HashSet<Status> pset, int from, int to) {
+        int p = 0;
+        int n = 0;
+        for (int i = from; i < Math.min(ts.size(), to); i++) {
+            if (pset.contains(ts.get(i))) {
+                p++;
+            } else {
+                n++;
+            }
+        }
+        return p + " " + n;
+    }
+
     public static void main (String[] args) {
+        showValidFollowersInfo();
     }
 }
