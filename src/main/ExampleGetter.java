@@ -297,6 +297,9 @@ public class ExampleGetter {
                     .println("AuthorId fId #pos #neg train#p train#n val#p val#n test#p test#n");
             for (long fId : au.followersIds) {
                 final PosAndNeg pan = db.getPosAndNeg(fId, auTweets);
+                if (pan == null || pan.pos.isEmpty() || pan.neg.isEmpty()) {
+                    continue;
+                }
                 HashSet<Status> pset = new HashSet<Status>();
                 pset.addAll(pan.pos);
                 String trainPan =
