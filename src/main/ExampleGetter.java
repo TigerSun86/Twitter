@@ -66,13 +66,13 @@ public class ExampleGetter {
         try {
             TRAIN_START_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-                            .parse("Tue Jan 27 22:34:47 EST 2015");
+                            .parse("Sat Jan 31 22:34:47 EST 2015");
             TEST_START_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-                            .parse("Thu Feb 5 22:34:47 EST 2015");
+                            .parse("Sat Feb 21 22:34:47 EST 2015");
             TEST_END_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-                            .parse("Wed Feb 11 22:34:47 EST 2015");
+                            .parse("Sat Feb 28 11:14:36 EST 2015");
         } catch (ParseException e) {
             e.printStackTrace();
         }
