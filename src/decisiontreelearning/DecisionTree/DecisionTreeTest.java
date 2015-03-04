@@ -22,23 +22,30 @@ import decisiontreelearning.Rule.RuleList;
 import decisiontreelearning.Rule.RulePostPruning;
 import decisiontreelearning.Rule.TreeToRule;
 
-public class DecisionTreeTest implements Learner{
+public class DecisionTreeTest implements Learner {
     public static final String MODULE = "DTT";
     public static final boolean DBG = true;
 
     public static final int NO_PRUNE = 0;
     public static final int RP_PRUNE = 1;
     public static final int CR_PRUNE = 2;
-    
+
     private final int pruneWay;
-    
-    public DecisionTreeTest(final int pruneWay){
+    private final ID3.SplitCriteria sc;
+
+    public DecisionTreeTest(final int pruneWay, final ID3.SplitCriteria sc) {
         this.pruneWay = pruneWay;
+        this.sc = sc;
     }
-    
-    private static ExampleSet convertExs(RawExampleList set){
+
+    public DecisionTreeTest(final int pruneWay) {
+        this.pruneWay = pruneWay;
+        this.sc = ID3.SplitCriteria.ENTROPY;
+    }
+
+    private static ExampleSet convertExs (RawExampleList set) {
         final ExampleSet ret = new ExampleSet();
-        for (RawExample e: set){
+        for (RawExample e : set) {
             Example e2 = new Example();
             e2.addAll(e.xList);
             e2.add(e.t);
@@ -46,31 +53,33 @@ public class DecisionTreeTest implements Learner{
         }
         return ret;
     }
-    
-    private static AttributeList convertAttr(RawAttrList attrs){
+
+    private static AttributeList convertAttr (RawAttrList attrs) {
         final AttributeList ret = new AttributeList();
-        for (RawAttr a: attrs.xList){
+        for (RawAttr a : attrs.xList) {
             final Attribute a2 = new Attribute(a.name);
-            if(a.isContinuous){
+            if (a.isContinuous) {
                 a2.add(Discretizor.CONT);
-            }else {
+            } else {
                 a2.addAll(a.valueList);
-            }ret.add(a2);
+            }
+            ret.add(a2);
         }
         final Attribute a2 = new Attribute(attrs.t.name);
-        if(attrs.t.isContinuous){
+        if (attrs.t.isContinuous) {
             a2.add(Discretizor.CONT);
-        }else {
+        } else {
             a2.addAll(attrs.t.valueList);
-        }ret.add(a2);
+        }
+        ret.add(a2);
         return ret;
     }
-    
+
     @Override
     public Hypothesis learn (RawExampleList dataSet, RawAttrList attrs) {
         AttrAndData aad = new AttrAndData();
-        if(pruneWay != NO_PRUNE){
-            // 2/3 as train, 1/3 as test.
+        if (pruneWay != NO_PRUNE) {
+            // 2/3 as train, 1/3 as validation.
             RawExampleList train1 = new RawExampleList();
             RawExampleList val1 = new RawExampleList();
             final int mid = dataSet.size() * 2 / 3;
@@ -87,34 +96,34 @@ public class DecisionTreeTest implements Learner{
         } else { // No need prune.
             aad.trainSet = convertExs(dataSet);
         }
-        
+
         AttributeList a = convertAttr(attrs);
         aad.attrList = a;
 
-        AttributeList oldAttrList; 
+        AttributeList oldAttrList;
         oldAttrList = a;
-        AttributeList newAttrList; 
+        AttributeList newAttrList;
         Discretizor discretizor;
         // Ensure all attributes are discrete.
         aad = DiscretizeContinuousValues(aad);
         newAttrList = aad.attrList;
         discretizor = aad.discretizor;
-        
+
         // Learning the decision tree.
         final DecisionTree dTree =
-                ID3.learnDecisionTree(aad.trainSet, aad.attrList,
+                new ID3(this.sc).learnDecisionTree(aad.trainSet, aad.attrList,
                         aad.trainSet.mode(aad.attrList));
-        dTree.oldAttrList  = oldAttrList;
-        dTree.newAttrList  = newAttrList;
-        dTree.discretizor  = discretizor;
+        dTree.oldAttrList = oldAttrList;
+        dTree.newAttrList = newAttrList;
+        dTree.discretizor = discretizor;
         // System.out.println(dTree);
-        if(pruneWay == NO_PRUNE){
+        if (pruneWay == NO_PRUNE) {
             return dTree;
-        }else{
+        } else {
             // Convert decision tree to rules.
             final RuleList ruleList = TreeToRule.convert(dTree);
             final RuleList prunedRL;
-    
+
             if (pruneWay == RP_PRUNE) {
                 // Prune rule by Rule Post-pruning.
                 prunedRL =
@@ -123,13 +132,13 @@ public class DecisionTreeTest implements Learner{
             } else { // if (pruneWay == CR_PRUNE)
                 // Prune rule by Combined Rule Post-pruning.
                 prunedRL =
-                        CombinedRulePostPruning.prune(ruleList, aad.validationSet,
-                                aad.attrList);
+                        CombinedRulePostPruning.prune(ruleList,
+                                aad.validationSet, aad.attrList);
             }
-            
-            prunedRL.oldAttrList  = oldAttrList;
-            prunedRL.newAttrList  = newAttrList;
-            prunedRL.discretizor  = discretizor;
+
+            prunedRL.oldAttrList = oldAttrList;
+            prunedRL.newAttrList = newAttrList;
+            prunedRL.discretizor = discretizor;
             prunedRL.defaultPre = aad.trainSet.mode(aad.attrList);
             return prunedRL;
         }
@@ -148,7 +157,7 @@ public class DecisionTreeTest implements Learner{
 
         // Learning the decision tree.
         final DecisionTree dTree =
-                ID3.learnDecisionTree(aad.trainSet, aad.attrList,
+                new ID3().learnDecisionTree(aad.trainSet, aad.attrList,
                         aad.trainSet.mode(aad.attrList));
         Dbg.print(DBG, MODULE,
                 "Decision Tree:" + Dbg.NEW_LINE + dTree.toString());
@@ -191,8 +200,7 @@ public class DecisionTreeTest implements Learner{
         ExampleSet validationSet = null;
         if (pruneWay != NO_PRUNE) { // Initialize the validation and train set.
             // Split data set into train set and validation set.
-            final ExampleSet[] eArray =
-                    ExampleSet.split(trainSet, 0.6);
+            final ExampleSet[] eArray = ExampleSet.split(trainSet, 0.6);
             trainSet = eArray[0];
             validationSet = eArray[1];
             Dbg.print(DBG, MODULE, "Train set size: " + trainSet.size()
