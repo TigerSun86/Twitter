@@ -31,6 +31,33 @@ public class ModelExecuter {
             new DecisionTreeTest(DecisionTreeTest.RP_PRUNE),
             new RIPPERk(true, 0) };
 
+    private final Learner learner;
+
+    public ModelExecuter(Learner l) {
+        this.learner = l;
+    }
+
+    public String runPairTest2 (final RawExampleList train,
+            final RawExampleList testM1, final RawAttrList rawAttr) {
+        final Learner learner = this.learner;
+        final Hypothesis h = learner.learn(train, rawAttr);
+        // System.out.println(h.toString());
+        final FMeasureResult atrain =
+                Evaluator.evaluateFMeasure(h, train, ExampleExtractor.Y);
+        final FMeasureResult atest =
+                Evaluator.evaluateFMeasure(h, testM1, ExampleExtractor.Y);
+        final StringBuilder sb = new StringBuilder();
+        sb.append(String.format("%.4f %.4f %.4f %.4f %.4f %d %d",
+                atrain.accuracy, atrain.precision, atrain.recall,
+                atrain.falsePositive, atrain.fmeasure, atrain.numActPos,
+                atrain.numPrePos));
+        sb.append(String.format(" %.4f %.4f %.4f %.4f %.4f %d %d",
+                atest.accuracy, atest.precision, atest.recall,
+                atest.falsePositive, atest.fmeasure, atest.numActPos,
+                atest.numPrePos));
+        return sb.toString();
+    }
+
     public static String runPairTest (final RawExampleList trainIn,
             final RawExampleList testM1In, final RawAttrList rawAttr) {
         // Map all attributes in range 0 to 1.

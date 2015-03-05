@@ -12,10 +12,10 @@ import java.util.concurrent.TimeUnit;
 
 import twitter4j.Status;
 import twitter4j.User;
-
+import common.MappedAttrList;
+import common.RawAttrList;
 import common.RawExample;
 import common.RawExampleList;
-
 import datacollection.Database;
 import datacollection.UserInfo;
 
@@ -28,6 +28,8 @@ import datacollection.UserInfo;
  * @date Feb 5, 2015 2:20:41 PM
  */
 public class ExampleGetter {
+    private static final RawAttrList RAW_ATTR = new RawAttrList(
+            ModelExecuter.ATTR);
     public static final int POS_DAY = 1;
     public static final long DAY_IN_MILLISECONDS = TimeUnit.MILLISECONDS
             .convert(POS_DAY, TimeUnit.DAYS);
@@ -119,10 +121,10 @@ public class ExampleGetter {
             Collections.sort(pan.neg, TWEET_SORTER);
             final List<List<Status>> poss = splitByDate(pan.pos);
             final List<List<Status>> negs = splitByDate(pan.neg);
-            final RawExampleList train =
+            RawExampleList train =
                     getFeatures(poss.get(0), negs.get(0), user.userProfile,
                             folTweets);
-            final RawExampleList testM1 =
+            RawExampleList testM1 =
                     getFeatures(poss.get(1), negs.get(1), user.userProfile,
                             folTweets);
 
@@ -131,6 +133,12 @@ public class ExampleGetter {
                             .getScreenName(), user.userProfile.getId(), poss
                             .get(0).size(), negs.get(0).size(), poss.get(1)
                             .size(), negs.get(1).size());
+
+            // Map all attributes in range 0 to 1.
+            final MappedAttrList mAttr = new MappedAttrList(train, RAW_ATTR);
+            // Rescale (map) all data in range 0 to 1.
+            train = mAttr.mapExs(train, RAW_ATTR);
+            testM1 = mAttr.mapExs(testM1, RAW_ATTR);
 
             return new Exs(train, testM1, null, followerAndExsInfo);
         } else {

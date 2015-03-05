@@ -3,16 +3,25 @@ package main;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
+import learners.SetSplitLearner;
+import learners.SimpleEasyEnsemble;
 import main.ExampleGetter.Exs;
+import ripperk.RIPPERk;
 import twitter4j.Status;
 import util.SysUtil;
-
+import common.DataReader;
+import common.Learner;
 import common.RawAttrList;
-
 import datacollection.Database;
 import datacollection.UserInfo;
+import decisiontreelearning.DecisionTree.DecisionTreeTest;
+import decisiontreelearning.DecisionTree.ID3;
 
 /**
  * FileName: Main.java
@@ -25,6 +34,51 @@ import datacollection.UserInfo;
 public class Main {
     private static final RawAttrList RAW_ATTR = new RawAttrList(
             ModelExecuter.ATTR);
+
+    private static final Learner[] LEARNERS =
+            {
+                    new DecisionTreeTest(DecisionTreeTest.RP_PRUNE),
+                    new DecisionTreeTest(DecisionTreeTest.RP_PRUNE,
+                            ID3.SplitCriteria.DKM),
+                    new DecisionTreeTest(DecisionTreeTest.NO_PRUNE,
+                            ID3.SplitCriteria.DKM),
+                    new SimpleEasyEnsemble(5, new DecisionTreeTest(
+                            DecisionTreeTest.RP_PRUNE)),
+                    new SetSplitLearner(new DecisionTreeTest(
+                            DecisionTreeTest.RP_PRUNE)), new RIPPERk(true, 0),
+                    new RIPPERk(true, 1) };
+    private static final String[] L_NAMES = { "DecisionTree", "DKM",
+            "DKMnoprune", "Easy", "Split", "Ripper", "RipperOp" };
+
+    private static final HashMap<Long, HashSet<Long>> VALID_USERS =
+            getValidUsers();
+
+    private static HashMap<Long, HashSet<Long>> getValidUsers () {
+        String fileName =
+                "file://localhost/C:/WorkSpace/Twitter/data/validUsers.txt";
+        final DataReader in = new DataReader(fileName);
+        HashMap<Long, HashSet<Long>> map = new HashMap<Long, HashSet<Long>>();
+        while (true) {
+            final String str = in.nextLine();
+            if (str == null) {
+                break;
+            }
+            if (!str.isEmpty() && Character.isDigit(str.charAt(0))) {
+                String[] s = str.split(" ");
+                long au = Long.parseLong(s[0]);
+                long fol = Long.parseLong(s[1]);
+                if (map.containsKey(au)) {
+                    map.get(au).add(fol);
+                } else {
+                    HashSet<Long> set = new HashSet<Long>();
+                    set.add(fol);
+                    map.put(au, set);
+                }
+            }
+        } // End of while (true) {
+        in.close();
+        return map;
+    }
 
     // It will be initialized at first time usage.
     private ResultTable resultTable = null;
@@ -48,31 +102,35 @@ public class Main {
 
         System.out.println("****************");
         System.out
-                .println("AuthorName AuthorId FolName FolId #PosTrain "
+                .println("Learner AuthorName AuthorId FolName FolId #PosTrain "
                         + "#NegTrain #PosTestM1 #NegTestM1 FeatureTime TrainTime "
                         + "TrainAcc TrainPrecision TrainRecall TrainFP TrainFM TrainAct#Pos TrainPre#Pos "
                         + "TestAcc TestPrecision TestRecall TestFP TestFM TestAct#Pos TestPre#Pos");
-        final Long[] fols = author.followersIds.toArray(new Long[0]);
-        for (int i = 0; i < fols.length; i++) {
-            final Long folId = fols[i];
+        final Set<Long> fols = VALID_USERS.get(author.userId);
+        for (long folId : fols) {
             final long time1 = SysUtil.getCpuTime();
             final Exs exs = exGetter.getExsOfPairTest(folId);
-            if (exs != null) {
-                final long time2 = SysUtil.getCpuTime();
-                final String s =
-                        ModelExecuter.runPairTest(exs.train, exs.testM1,
-                                RAW_ATTR);
-                final long time3 = SysUtil.getCpuTime();
+            final long time2 = SysUtil.getCpuTime();
 
-                System.out.printf("%s %d %s %d %d %s%n",
-                        author.userProfile.getScreenName(),
-                        author.userProfile.getId(), exs.followerAndExsInfo,
-                        time2 - time1, time3 - time2, s);
+            if (exs != null) {
+                for (int l = 0; l < LEARNERS.length; l++) {
+                    final long time3 = SysUtil.getCpuTime();
+                    final String s =
+                            new ModelExecuter(LEARNERS[l]).runPairTest2(
+                                    exs.train, exs.testM1, RAW_ATTR);
+                    final long time4 = SysUtil.getCpuTime();
+
+                    System.out.printf("%s %s %d %s %d %d %s%n", L_NAMES[l],
+                            author.userProfile.getScreenName(),
+                            author.userProfile.getId(), exs.followerAndExsInfo,
+                            time2 - time1, time4 - time3, s);
+                }
             }
         } // for (Long folId : author.followersIds) {
         System.out.println("****************");
     }
 
+    @SuppressWarnings("unused")
     private void globalTest () {
         assert author != null;
         assert author.followersIds != null;
@@ -195,13 +253,13 @@ public class Main {
 
     public static void main (String[] args) {
         // final OutputRedirection or = new OutputRedirection();
+        System.out.println("Begin at: " + new Date().toString());
         final Database db = Database.getInstance();
-        for (long authorId : UserInfo.KEY_AUTHORS) {
-            // if (authorId == 246774523L) {
+        for (long authorId : VALID_USERS.keySet()) {
             new Main(db, authorId).pairTest();
-            // }
-        }
 
+        }
+        System.out.println("End at: " + new Date().toString());
         // or.close();
     }
 }
