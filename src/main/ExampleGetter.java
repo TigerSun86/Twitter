@@ -68,13 +68,13 @@ public class ExampleGetter {
         try {
             TRAIN_START_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-                            .parse("Sat Jan 31 22:34:47 EST 2015");
+                            .parse("Tue Jan 27 22:34:47 EST 2015");
             TEST_START_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
                             .parse("Sat Feb 21 22:34:47 EST 2015");
             TEST_END_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-                            .parse("Sat Feb 28 11:14:36 EST 2015");
+                            .parse("Sat Mar 07 15:27:40 EST 2015");
         } catch (ParseException e) {
             e.printStackTrace();
         }
@@ -236,36 +236,40 @@ public class ExampleGetter {
         }
     }
 
-    @SuppressWarnings("unused")
     private static void showNumOfPosAndNegs () {
+        System.out.printf(
+                "Begin at: %s, train start at: %s, test end at: %s.%n",
+                new Date().toString(), TRAIN_START_DATE.toString(),
+                TEST_END_DATE.toString());
         final Database db = Database.getInstance();
         for (Long keyAu : UserInfo.KEY_AUTHORS) {
             final UserInfo au = db.getUser(keyAu);
             final List<Status> auTweets =
                     db.getOriginalTweetListInTimeRange(keyAu, TRAIN_START_DATE,
                             TEST_END_DATE);
-            System.out
-                    .printf("Author: %s, id: %d, #followers: %d, #examples: %d, from: %s, to: %s%n",
-                            au.userProfile.getScreenName(), au.userId,
-                            au.followersIds.size(), auTweets.size(),
-                            TRAIN_START_DATE.toString(),
-                            TEST_END_DATE.toString());
             // Sort auTweets.
             Collections.sort(auTweets, TWEET_SORTER);
+
+            System.out.printf("Author: %s, id: %d, #fols: %d, #exs: %d.%n",
+                    au.userProfile.getScreenName(), au.userId,
+                    au.followersIds.size(), auTweets.size());
+            System.out.println("******************************");
+
+            System.out.println("AuthorId fId #pos #neg #userTweets");
             for (long fId : au.followersIds) {
                 final PosAndNeg pan = db.getPosAndNeg(fId, auTweets);
-                System.out.printf("FollowerId: %d, #pos: %d, #neg: %d%n", fId,
-                        pan.pos.size(), pan.neg.size());
-                for (Status t : auTweets) {
-                    final String cls = pan.pos.contains(t) ? "Y" : "N";
-                    System.out.printf("Id: %d, date: %s, class: %s%n",
-                            t.getId(), t.getCreatedAt().toString(), cls);
+                if (pan == null) {
+                    continue; // Didn't find the user.
                 }
+                System.out.printf("%d %d %d %d %d%n", au.userId, fId,
+                        pan.pos.size(), pan.neg.size(), db.getTweetsCount(fId));
             }
             System.out.println("******************************");
         }
+        System.out.println("End at: " + new Date().toString());
     }
 
+    @SuppressWarnings("unused")
     private static void showValidFollowersInfo () {
         System.out.println("Begin at: " + new Date().toString());
         final Database db = Database.getInstance();
@@ -352,6 +356,6 @@ public class ExampleGetter {
     }
 
     public static void main (String[] args) {
-        showValidFollowersInfo();
+        showNumOfPosAndNegs();
     }
 }

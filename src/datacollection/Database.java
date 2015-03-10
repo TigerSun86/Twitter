@@ -407,6 +407,16 @@ public class Database {
         return tweets;
     }
 
+    /** @return: tweets count of given user. */
+    public long getTweetsCount (long userId) {
+        final DBCollection coll = getExistingTweetsColl(userId);
+        if (coll != null) {
+            return coll.count();
+        } else {
+            return 0;
+        }
+    }
+
     /**
      * @return: the latest tweet of given user; null, if there is no tweet for
      *          such user.
