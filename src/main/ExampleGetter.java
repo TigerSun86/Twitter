@@ -16,6 +16,7 @@ import common.MappedAttrList;
 import common.RawAttrList;
 import common.RawExample;
 import common.RawExampleList;
+import common.TrainTestSplitter;
 import datacollection.Database;
 import datacollection.UserInfo;
 
@@ -90,7 +91,7 @@ public class ExampleGetter {
     // Sort from oldest to latest.
     public static final TweetSorter TWEET_SORTER = new TweetSorter();
 
-    private static final int LEAST_POS_NUM = 10;
+    public static final int LEAST_POS_NUM = 20;
 
     private final Database db;
     private final List<Status> auTweets;
@@ -98,6 +99,79 @@ public class ExampleGetter {
     public ExampleGetter(Database db, List<Status> auTweets) {
         this.db = db;
         this.auTweets = auTweets;
+    }
+
+    public Exs getExsOfPairTest2 (long folId) {
+        final UserInfo user = db.getUser(folId);
+        if (user == null) {
+            return null;
+        }
+        final List<Status> folTweets = db.getTweetList(folId);
+        Collections.sort(folTweets, TWEET_SORTER);
+        if (folTweets.isEmpty()) {
+            return null; // No tweets for this follower.
+        }
+
+        final PosAndNeg pan = db.getPosAndNeg(folId, auTweets);
+        if (pan != null && pan.pos.size() >= LEAST_POS_NUM) {
+            // Sort them again because order might be changed by user retweets
+            // new tweet first.
+            Collections.sort(pan.pos, TWEET_SORTER);
+            Collections.sort(pan.neg, TWEET_SORTER);
+            RawExampleList all =
+                    getFeatures(pan.pos, pan.neg, user.userProfile, folTweets);
+            // Discard all neg examples before the first pos example.
+            RawExampleList tmp = new RawExampleList();
+            boolean firstPos = false;
+            for (RawExample e : all) {
+                if (e.t.equals(Y)) {
+                    firstPos = true;
+                    tmp.add(e);
+                } else { // Neg example.
+                    if (firstPos) {
+                        tmp.add(e);
+                    } // else discard negs before the first pos.
+                }
+            }
+            all = tmp;
+
+            // Map all attributes in range 0 to 1.
+            final MappedAttrList mAttr = new MappedAttrList(all, RAW_ATTR);
+            // Rescale (map) all data in range 0 to 1.
+            all = mAttr.mapExs(all, RAW_ATTR);
+
+            // Train and test will split into same pos rate.
+            final RawExampleList[] exs2 =
+                    TrainTestSplitter.split(all, RAW_ATTR,
+                            TrainTestSplitter.DEFAULT_RATIO);
+            final RawExampleList train = exs2[0];
+            final RawExampleList test = exs2[1];
+
+            String trainPosAndNeg = countPosAndNeg(train);
+            String testPosAndNeg = countPosAndNeg(test);
+            final String followerAndExsInfo =
+                    String.format("%s %d %s %s",
+                            user.userProfile.getScreenName(),
+                            user.userProfile.getId(), trainPosAndNeg,
+                            testPosAndNeg);
+            return new Exs(train, test, null, followerAndExsInfo);
+        } else {
+            return null;
+        }
+    }
+
+    private static String countPosAndNeg (RawExampleList dataSet) {
+        // Count np and nn.
+        int np = 0;
+        int nn = 0;
+        for (int i = 0; i < dataSet.size(); i++) {
+            if (dataSet.get(i).t.equals(ExampleGetter.Y)) {
+                np++;
+            } else {
+                nn++;
+            }
+        }
+        return np + " " + nn;
     }
 
     public Exs getExsOfPairTest (long folId) {
@@ -114,7 +188,7 @@ public class ExampleGetter {
         }
 
         final PosAndNeg pan = db.getPosAndNeg(folId, auTweets);
-        if (pan != null && pan.pos.size() > LEAST_POS_NUM) {
+        if (pan != null && pan.pos.size() >= LEAST_POS_NUM) {
             // Sort them again because order might be changed by user retweets
             // new tweet first.
             Collections.sort(pan.pos, TWEET_SORTER);

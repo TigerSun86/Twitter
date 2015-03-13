@@ -75,7 +75,7 @@ public class TimeStatistic {
     }
 
     /**
-     * Get the standard diviation of given day (Mon, Tus...)
+     * Get the standard deviation of given day (Mon, Tus...)
      * SdLd(m) = sqrt of (Ld(m,w1) - AvgLd(m))^2 + (Ld(m,w2) - AvgLd(m))^2 +
      * (Ld(m,w3) - AvgLd(m))^2 / weekCount
      * */
@@ -140,7 +140,7 @@ public class TimeStatistic {
     }
 
     /**
-     * Get the standard diviation of given hour (0,...,23) in given day (Mon,
+     * Get the standard deviation of given hour (0,...,23) in given day (Mon,
      * Tus...)
      * SdLh(18,m) = sqrt of (Lh(18,m,w1) - AvgLh(18,m))^2+ (Lh(18,m,w2) -
      * AvgLh(18,m))^2 + (Lh(18,m,w1) - AvgLh(18,m))^2 / weekCount
@@ -160,6 +160,13 @@ public class TimeStatistic {
         sd /= weekCount;
         sd = Math.sqrt(sd);
         return sd;
+    }
+
+    /** @return true, if has data in the week of given date; false, otherwise. */
+    public boolean hasDataInTheWeek (Date date) {
+        Calendar c = getCalendarInConstantTimeZone(date);
+        String weekId = getWeekId(c);
+        return weekData.containsKey(weekId);
     }
 
     public static Date getLastWeekDate (Date date) {

@@ -67,12 +67,15 @@ public class Main {
                 String[] s = str.split(" ");
                 long au = Long.parseLong(s[0]);
                 long fol = Long.parseLong(s[1]);
-                if (map.containsKey(au)) {
-                    map.get(au).add(fol);
-                } else {
-                    HashSet<Long> set = new HashSet<Long>();
-                    set.add(fol);
-                    map.put(au, set);
+                long pos = Long.parseLong(s[2]);
+                if (pos >= ExampleGetter.LEAST_POS_NUM) {
+                    if (map.containsKey(au)) {
+                        map.get(au).add(fol);
+                    } else {
+                        HashSet<Long> set = new HashSet<Long>();
+                        set.add(fol);
+                        map.put(au, set);
+                    }
                 }
             }
         } // End of while (true) {

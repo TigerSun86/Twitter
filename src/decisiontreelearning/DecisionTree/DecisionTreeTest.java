@@ -8,15 +8,17 @@ package decisiontreelearning.DecisionTree;
  *         email: TigerSun86@gmail.com
  * @date Feb 25, 2014
  */
-import util.Dbg;
+import java.util.ArrayList;
+import java.util.List;
 
+import util.Dbg;
 import common.Hypothesis;
 import common.Learner;
 import common.RawAttr;
 import common.RawAttrList;
 import common.RawExample;
 import common.RawExampleList;
-
+import common.TrainTestSplitter;
 import decisiontreelearning.Rule.CombinedRulePostPruning;
 import decisiontreelearning.Rule.RuleList;
 import decisiontreelearning.Rule.RulePostPruning;
@@ -75,22 +77,42 @@ public class DecisionTreeTest implements Learner {
         return ret;
     }
 
+    private List<RawExampleList> splitTrainVal (RawExampleList dataSet,
+            RawAttrList attrs, boolean isRandomSplit) {
+        List<RawExampleList> list = new ArrayList<RawExampleList>();
+        if (isRandomSplit) {
+            // Train and test will split into same pos rate.
+            final RawExampleList[] exs2 =
+                    TrainTestSplitter.split(dataSet, attrs,
+                            TrainTestSplitter.DEFAULT_RATIO);
+            final RawExampleList train = exs2[0];
+            final RawExampleList val = exs2[1];
+            list.add(train);
+            list.add(val);
+        } else { // Time split
+            // 2/3 as train, 1/3 as validation.
+            RawExampleList train = new RawExampleList();
+            RawExampleList val = new RawExampleList();
+            final int mid = dataSet.size() * 2 / 3;
+            for (int i = 0; i < mid; i++) {
+                train.add(dataSet.get(i));
+            }
+            for (int i = mid; i < dataSet.size(); i++) {
+                val.add(dataSet.get(i));
+            }
+            list.add(train);
+            list.add(val);
+        }
+        return list;
+    }
+
     @Override
     public Hypothesis learn (RawExampleList dataSet, RawAttrList attrs) {
         AttrAndData aad = new AttrAndData();
         if (pruneWay != NO_PRUNE) {
-            // 2/3 as train, 1/3 as validation.
-            RawExampleList train1 = new RawExampleList();
-            RawExampleList val1 = new RawExampleList();
-            final int mid = dataSet.size() * 2 / 3;
-            for (int i = 0; i < mid; i++) {
-                train1.add(dataSet.get(i));
-            }
-            for (int i = mid; i < dataSet.size(); i++) {
-                val1.add(dataSet.get(i));
-            }
-            ExampleSet train2 = convertExs(train1);
-            ExampleSet val2 = convertExs(val1);
+            List<RawExampleList> list = splitTrainVal(dataSet, attrs, true);
+            ExampleSet train2 = convertExs(list.get(0));
+            ExampleSet val2 = convertExs(list.get(1));
             aad.trainSet = train2;
             aad.validationSet = val2;
         } else { // No need prune.

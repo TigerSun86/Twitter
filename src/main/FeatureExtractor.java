@@ -26,23 +26,78 @@ import twitter4j.UserMentionEntity;
  * @date Dec 18, 2014 4:04:46 PM
  */
 public class FeatureExtractor {
-
     private static final String F0 = "0";
     private static final String F1 = "1";
     private static final int MOUNT_IN_HOUR = 30 * 24;
 
+    /* 1Retweet. How many hours before t since last time f retweet something, at
+     * most 1 month (0-720).
+     * 
+     * 2LastHashtag. How many hours before t since last time f published
+     * something containing the hashtag in t, at most 1 month (0-720).
+     * 
+     * 3Mentioned. Whether f is mentioned in the tweet.
+     * 
+     * 4Picture. Whether t has picture.
+     * 
+     * 5Url. Whether t has url.
+     * 
+     * 6Hour. Hour in the week (the time t published). (0-167)
+     * 
+     * 7Otweet. How many hours before t since last time f published an original
+     * tweet, at most 1 month (0-720).
+     * 
+     * 8LastMention. How many hours before t since last time f published
+     * something containing the mentioned user name in t, at most 1 month
+     * (0-720).
+     * 
+     * 9LastDomain. How many hours before t since last time f published
+     * something containing the domain of url in t, at most 1 month (0-720).
+     * 
+     * 10OtLDay. Likelihood of writing an original tweet at the day (Mon,
+     * Tus...) in last week
+     * 
+     * 11OtStDay. Standard deviation of likelihood of writing ot at the day
+     * (Mon, Tus...)
+     * 
+     * 12OtLHour. Likelihood of writing an original tweet at the hour (0-23) of
+     * the day (Mon, Tus...) in last week
+     * 
+     * 13OtStHour. Standard deviation of likelihood of writing ot at the hour
+     * (0-23) of the day (Mon, Tus...)
+     * 
+     * 14RtLDay. Likelihood of retweet some thing at the day (Mon, Tus...) in
+     * last week
+     * 
+     * 15RtStDay. Standard deviation of likelihood of rt at the day (Mon,
+     * Tus...)
+     * 
+     * 16RtLHour. Likelihood of rt at the hour (0-23) of the day (Mon, Tus...)
+     * in last week
+     * 
+     * 17RtStHour. Standard deviation of likelihood of rt at the hour (0-23) of
+     * the day (Mon, Tus...) */
     private static final List<FeatureGetter> GETTER_LIST =
             new ArrayList<FeatureGetter>();
     static {
-        GETTER_LIST.add(new F1());
-        GETTER_LIST.add(new F2());
-        GETTER_LIST.add(new F3());
-        GETTER_LIST.add(new F4());
-        GETTER_LIST.add(new F5());
-        GETTER_LIST.add(new F6());
-        GETTER_LIST.add(new F7());
-        GETTER_LIST.add(new F8());
-        GETTER_LIST.add(new F9());
+        GETTER_LIST.add(new F1()); // 1Retweet
+        GETTER_LIST.add(new F2()); // 2LastHashtag
+        GETTER_LIST.add(new F3()); // 3Mentioned
+        GETTER_LIST.add(new F4()); // 4Picture
+        GETTER_LIST.add(new F5()); // 5Url
+        // GETTER_LIST.add(new F6()); // 6Hour
+        GETTER_LIST.add(new F7()); // 7Otweet
+        GETTER_LIST.add(new F8()); // 8LastMention
+        GETTER_LIST.add(new F9()); // 9LastDomain
+        GETTER_LIST.add(new F10()); // 10OtLDay
+        GETTER_LIST.add(new F11()); // 11OtStDay
+        GETTER_LIST.add(new F12()); // 12OtLHour
+        GETTER_LIST.add(new F13()); // 13OtStHour
+        GETTER_LIST.add(new F14()); // 14RtLDay
+        GETTER_LIST.add(new F15()); // 15RtStDay
+        GETTER_LIST.add(new F16()); // 16RtLHour
+        GETTER_LIST.add(new F17()); // 17RtStHour
+
     }
 
     public static ArrayList<String> getFeatures (Status t, User userProfile,
@@ -201,6 +256,7 @@ public class FeatureExtractor {
     /**
      * Hour in the week (the time t published). (0-168)
      */
+    @SuppressWarnings("unused")
     private static class F6 implements FeatureGetter {
         private static final HashMap<Integer, Integer> DAY_MAP =
                 new HashMap<Integer, Integer>();
@@ -438,5 +494,208 @@ public class FeatureExtractor {
         final int h = c.get(Calendar.HOUR);
         c.set(Calendar.HOUR, h + dif);
         return c.getTime();
+    }
+
+    private static long userIdOfLikelihood = -1;
+    private static TimeStatistic otStatistic = null; // Original tweet st.
+    private static TimeStatistic rtStatistic = null; // Retweet st.
+
+    private static void doStatistic (long userId, List<Status> userTweets) {
+        if (userId != userIdOfLikelihood) { // A different user.
+            // Do statistic for the user: count all tweets.
+            userIdOfLikelihood = userId;
+            otStatistic = new TimeStatistic();
+            rtStatistic = new TimeStatistic();
+            for (Status t : userTweets) {
+                Date d = t.getCreatedAt();
+                if (!t.isRetweet()) { // Is original tweet.
+                    otStatistic.add(d);
+                } else {// Is retweet.
+                    rtStatistic.add(d);
+                }
+            }
+        }
+    }
+
+    /**
+     * 10. Likelihood of writing an original tweet at the day (Mon, Tus...) in
+     * last week:
+     * Ld(mon,w1) = m of w1 / sum of w1
+     * If the user do not have information at the last week, just use average
+     * probability.
+     */
+    private static class F10 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            doStatistic(userProfile.getId(), userTweets);
+            // Get the date one week before t.
+            Date date = TimeStatistic.getLastWeekDate(t.getCreatedAt());
+            // Get the probability.
+            double prob;
+            if (otStatistic.hasDataInTheWeek(date)) {
+                prob = otStatistic.probOfDay(date);
+            } else { // Have no information at that week.
+                prob = otStatistic.avgProbOfDay(date);
+            }
+            String feature = Double.toString(prob);
+            return feature;
+        }
+    }
+
+    /**
+     * 11. Standard deviation of writing ot at the day (Mon, Tus...):
+     * 
+     * SdLd(m) = sqrt of (Ld(m,w1) - AvgLd(m))^2 + (Ld(m,w2) - AvgLd(m))^2 +
+     * (Ld(m,w3) - AvgLd(m))^2 / weekCount
+     */
+    private static class F11 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            doStatistic(userProfile.getId(), userTweets);
+            // Get the date one week before t.
+            Date date = TimeStatistic.getLastWeekDate(t.getCreatedAt());
+            // Get the probability.
+            double prob = otStatistic.stdDivOfDay(date);
+            String feature = Double.toString(prob);
+            return feature;
+        }
+    }
+
+    /**
+     * 12. Likelihood of writing an original tweet at the hour (0-23) of the day
+     * (Mon, Tus...) in last week:
+     * Lh(18pm,m,w1) = 18 of m of w1 / m of w1
+     * If the user do not have information at the last week, just use average
+     * probability.
+     */
+    private static class F12 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            doStatistic(userProfile.getId(), userTweets);
+            // Get the date one week before t.
+            Date date = TimeStatistic.getLastWeekDate(t.getCreatedAt());
+            // Get the probability.
+            double prob;
+            if (otStatistic.hasDataInTheWeek(date)) {
+                prob = otStatistic.probOfHour(date);
+            } else { // Have no information at that week.
+                prob = otStatistic.avgProbOfHour(date);
+            }
+            String feature = Double.toString(prob);
+            return feature;
+        }
+    }
+
+    /**
+     * 13. Standard deviation of writing ot at the hour (0-23) of the day (Mon,
+     * Tus...):
+     * SdLh(18,m) = sqrt of (Lh(18,m,w1) - AvgLh(18,m))^2+ (Lh(18,m,w2) -
+     * AvgLh(18,m))^2 + (Lh(18,m,w1) - AvgLh(18,m))^2 / weekCount
+     */
+    private static class F13 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            doStatistic(userProfile.getId(), userTweets);
+            // Get the date one week before t.
+            Date date = TimeStatistic.getLastWeekDate(t.getCreatedAt());
+            // Get the probability.
+            double prob = otStatistic.stdDivOfHour(date);
+            String feature = Double.toString(prob);
+            return feature;
+        }
+    }
+
+    /**
+     * 14. Likelihood of retweet some thing at the day (Mon, Tus...) in last
+     * week:
+     * Ld(mon,w1) = m of w1 / sum of w1
+     * If the user do not have information at the last week, just use average
+     * probability.
+     */
+    private static class F14 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            doStatistic(userProfile.getId(), userTweets);
+            // Get the date one week before t.
+            Date date = TimeStatistic.getLastWeekDate(t.getCreatedAt());
+            // Get the probability.
+            double prob;
+            if (rtStatistic.hasDataInTheWeek(date)) {
+                prob = rtStatistic.probOfDay(date);
+            } else { // Have no information at that week.
+                prob = rtStatistic.avgProbOfDay(date);
+            }
+            String feature = Double.toString(prob);
+            return feature;
+        }
+    }
+
+    /**
+     * 15. Standard deviation of rt at the day (Mon, Tus...):
+     * SdLd(m) = sqrt of (Ld(m,w1) - AvgLd(m))^2 + (Ld(m,w2) - AvgLd(m))^2 +
+     * (Ld(m,w3) - AvgLd(m))^2 / weekCount
+     */
+    private static class F15 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            doStatistic(userProfile.getId(), userTweets);
+            // Get the date one week before t.
+            Date date = TimeStatistic.getLastWeekDate(t.getCreatedAt());
+            // Get the probability.
+            double prob = rtStatistic.stdDivOfDay(date);
+            String feature = Double.toString(prob);
+            return feature;
+        }
+    }
+
+    /**
+     * 16. Likelihood of rt at the hour (0-23) of the day (Mon, Tus...) in last
+     * week:
+     * Lh(18pm,m,w1) = 18 of m of w1 / m of w1
+     * If the user do not have information at the last week, just use average
+     * probability.
+     */
+    private static class F16 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            doStatistic(userProfile.getId(), userTweets);
+            // Get the date one week before t.
+            Date date = TimeStatistic.getLastWeekDate(t.getCreatedAt());
+            // Get the probability.
+            double prob;
+            if (rtStatistic.hasDataInTheWeek(date)) {
+                prob = rtStatistic.probOfHour(date);
+            } else { // Have no information at that week.
+                prob = rtStatistic.avgProbOfHour(date);
+            }
+            String feature = Double.toString(prob);
+            return feature;
+        }
+    }
+
+    /**
+     * 17. Standard deviation of rt at the hour (0-23) of the day (Mon, Tus...):
+     * SdLh(18,m) = sqrt of (Lh(18,m,w1) - AvgLh(18,m))^2+ (Lh(18,m,w2) -
+     * AvgLh(18,m))^2 + (Lh(18,m,w1) - AvgLh(18,m))^2 / weekCount
+     */
+    private static class F17 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            doStatistic(userProfile.getId(), userTweets);
+            // Get the date one week before t.
+            Date date = TimeStatistic.getLastWeekDate(t.getCreatedAt());
+            // Get the probability.
+            double prob = rtStatistic.stdDivOfHour(date);
+            String feature = Double.toString(prob);
+            return feature;
+        }
     }
 }
