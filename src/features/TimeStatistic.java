@@ -14,7 +14,15 @@ import java.util.TreeMap;
  * @date Mar 11, 2015 6:53:35 PM
  */
 public class TimeStatistic {
+    // mEstimate to avoid extreme probability 0 caused by few data on certain
+    // time range.
+    private static final boolean M_ESTIMATE = true;
+    private static final double PRIOR_PROB_DAY = 1.0 / 7;
+    private static final double PRIOR_PROB_HOUR = 1.0 / 24;
+
     WeekSt total = new WeekSt();
+    // TreeMap instead of HashMap could be convenient when print by the order of
+    // weekId.
     TreeMap<String, WeekSt> weekData = new TreeMap<String, WeekSt>();
 
     public void add (Date date) {
@@ -40,22 +48,22 @@ public class TimeStatistic {
     public double probOfDay (Date date) {
         Calendar c = getCalendarInConstantTimeZone(date);
         String weekId = getWeekId(c);
+        double prob;
         if (!weekData.containsKey(weekId)) {
-            return 0; // Have no statistic for the given day.
+            // Have no statistic for the given day.
+            prob = divideUsingDayPrior(0, 0);
         } else {
-            return probOfDay2(weekId, c.get(Calendar.DAY_OF_WEEK));
+            prob = probOfDay2(weekId, c.get(Calendar.DAY_OF_WEEK));
         }
+        return prob;
     }
 
     private double probOfDay2 (String weekId, int day) {
         WeekSt wData = weekData.get(weekId);
         double dayCount = (double) wData.get(day);
         double sum = (double) wData.get();
-        if (sum == 0) {
-            return 0; // No data for the week (Impossible for this code).
-        } else {
-            return dayCount / sum;
-        }
+        double prob = divideUsingDayPrior(dayCount, sum);
+        return prob;
     }
 
     /**
@@ -67,11 +75,8 @@ public class TimeStatistic {
         int day = c.get(Calendar.DAY_OF_WEEK);
         double dayCountInTotal = (double) total.get(day);
         double sumInTotal = (double) total.get();
-        if (sumInTotal == 0) {
-            return 0; // No any data.
-        } else {
-            return dayCountInTotal / sumInTotal;
-        }
+        double prob = divideUsingDayPrior(dayCountInTotal, sumInTotal);
+        return prob;
     }
 
     /**
@@ -102,23 +107,25 @@ public class TimeStatistic {
     public double probOfHour (Date date) {
         Calendar c = getCalendarInConstantTimeZone(date);
         String weekId = getWeekId(c);
+        double prob;
         if (!weekData.containsKey(weekId)) {
-            return 0; // Have no statistic for the given time.
+            // Have no statistic for the given time.
+            prob = divideUsingHourPrior(0, 0);
+            ;
         } else {
-            return probOfHour2(weekId, c.get(Calendar.DAY_OF_WEEK),
-                    c.get(Calendar.HOUR_OF_DAY));
+            prob =
+                    probOfHour2(weekId, c.get(Calendar.DAY_OF_WEEK),
+                            c.get(Calendar.HOUR_OF_DAY));
         }
+        return prob;
     }
 
     private double probOfHour2 (String weekId, int day, int hour) {
         WeekSt wData = weekData.get(weekId);
         double hourCount = (double) wData.get(day, hour);
         double dayCount = (double) wData.get(day);
-        if (dayCount == 0) {
-            return 0; // No data for such day.
-        } else {
-            return hourCount / dayCount;
-        }
+        double prob = divideUsingHourPrior(hourCount, dayCount);
+        return prob;
     }
 
     /**
@@ -132,11 +139,8 @@ public class TimeStatistic {
         int hour = c.get(Calendar.HOUR_OF_DAY);
         double hourCountInTotal = (double) total.get(day, hour);
         double dayCountInTotal = (double) total.get(day);
-        if (dayCountInTotal == 0) {
-            return 0; // No any data at the day.
-        } else {
-            return hourCountInTotal / dayCountInTotal;
-        }
+        double prob = divideUsingHourPrior(hourCountInTotal, dayCountInTotal);
+        return prob;
     }
 
     /**
@@ -189,6 +193,30 @@ public class TimeStatistic {
         int weekOfYear = c.get(Calendar.WEEK_OF_YEAR);
         String weekId = year + " " + weekOfYear;
         return weekId;
+    }
+
+    private double divideUsingDayPrior (double numerator, double denominator) {
+        if (M_ESTIMATE) {
+            return (numerator + PRIOR_PROB_DAY) / (denominator + 1);
+        } else { // Not mEstimate, just normal divide.
+            if (denominator == 0) {
+                return 0;
+            } else {
+                return numerator / denominator;
+            }
+        }
+    }
+
+    private double divideUsingHourPrior (double numerator, double denominator) {
+        if (M_ESTIMATE) {
+            return (numerator + PRIOR_PROB_HOUR) / (denominator + 1);
+        } else { // Not mEstimate, just normal divide.
+            if (denominator == 0) {
+                return 0;
+            } else {
+                return numerator / denominator;
+            }
+        }
     }
 
     /** Statistic table for whole week time (7 days * 24 hours) */

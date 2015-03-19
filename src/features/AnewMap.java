@@ -22,7 +22,7 @@ public class AnewMap extends HashMap<String, Anew> {
     public AnewMap() {
         super();
         String fileName =
-                "file://localhost/C:/WorkSpace/Twitter/data/AnewTable.txt";
+                "C:/WorkSpace/Twitter/data/AnewTable.txt";
         try {
             BufferedReader file = new BufferedReader(new FileReader(fileName));
             while (true) {
