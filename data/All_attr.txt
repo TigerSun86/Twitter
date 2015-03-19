@@ -16,5 +16,8 @@
 16RtLHour continuous
 17RtStHour continuous
 18RtWord 0 1
-	 
+19Valence continuous
+20Arousal continuous
+21Dominance continuous
+
 Class Y N

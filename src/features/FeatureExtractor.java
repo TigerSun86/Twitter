@@ -1,4 +1,4 @@
-package main;
+package features;
 
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -16,6 +16,7 @@ import twitter4j.Status;
 import twitter4j.URLEntity;
 import twitter4j.User;
 import twitter4j.UserMentionEntity;
+import features.AnewMap.Anew;
 
 /**
  * FileName: FeatureExtractor.java
@@ -78,7 +79,13 @@ public class FeatureExtractor {
      * 17RtStHour. Standard deviation of likelihood of rt at the hour (0-23) of
      * the day (Mon, Tus...)
      * 
-     * 18RtWord. Contain words "retweet", "rt" or not. */
+     * 18RtWord. Contain words "retweet", "rt" or not.
+     * 
+     * 19Valence. ANEW score valence (pleasure vs displeasure).
+     * 
+     * 20Arousal. ANEW score arousal (excitement vs calmness).
+     * 
+     * 21Dominance. ANEW score dominance (weakness vs strength). */
     private static final List<FeatureGetter> GETTER_LIST =
             new ArrayList<FeatureGetter>();
     static {
@@ -100,6 +107,9 @@ public class FeatureExtractor {
         GETTER_LIST.add(new F16()); // 16RtLHour
         GETTER_LIST.add(new F17()); // 17RtStHour
         GETTER_LIST.add(new F18()); // 18RtWord
+        GETTER_LIST.add(new F19()); // 19Valence
+        GETTER_LIST.add(new F20()); // 20Arousal
+        GETTER_LIST.add(new F21()); // 21Dominance
 
     }
 
@@ -705,8 +715,8 @@ public class FeatureExtractor {
     /**
      * 18RtWord. Contain words "retweet", "rt" or not.
      * This means this (original) tweet has a sentence like
-     * "retweet this please" or "plz rt", it could have a higher chance than not
-     * saying that.
+     * "retweet this please" or "plz rt", it could have a higher chance
+     * than not saying that.
      */
     private static class F18 implements FeatureGetter {
         @Override
@@ -717,6 +727,72 @@ public class FeatureExtractor {
             if (content.contains("retweet") || content.contains("rt")) {
                 feature = F1;
             }
+            return feature;
+        }
+    }
+
+    // Initialize when need it.
+    private static AnewMap ANEW_MAP = null;
+    private static long tweetIdForAnew = -1;
+    // Make anew score reusable for f19,20,21
+    private static Anew anewScore = null;
+
+    /**
+     * 19Valence. ANEW_MAP score valence (pleasure vs displeasure).
+     */
+    private static class F19 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            if (ANEW_MAP == null) {
+                ANEW_MAP = new AnewMap();
+            }
+            if (t.getId() != tweetIdForAnew) {
+                tweetIdForAnew = t.getId();
+                anewScore = ANEW_MAP.score(t.getText());
+            }
+
+            String feature = Double.toString(anewScore.valence);
+            return feature;
+        }
+    }
+
+    /**
+     * 20Arousal. ANEW score arousal (excitement vs calmness).
+     */
+    private static class F20 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            if (ANEW_MAP == null) {
+                ANEW_MAP = new AnewMap();
+            }
+            if (t.getId() != tweetIdForAnew) {
+                tweetIdForAnew = t.getId();
+                anewScore = ANEW_MAP.score(t.getText());
+            }
+
+            String feature = Double.toString(anewScore.arousal);
+            return feature;
+        }
+    }
+
+    /**
+     * 21Dominance. ANEW score dominance (weakness vs strength).
+     */
+    private static class F21 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            if (ANEW_MAP == null) {
+                ANEW_MAP = new AnewMap();
+            }
+            if (t.getId() != tweetIdForAnew) {
+                tweetIdForAnew = t.getId();
+                anewScore = ANEW_MAP.score(t.getText());
+            }
+
+            String feature = Double.toString(anewScore.dominance);
             return feature;
         }
     }
