@@ -101,7 +101,7 @@ public class ExampleGetter {
         this.auTweets = auTweets;
     }
 
-    public Exs getExsOfPairTest2 (long folId) {
+    public Exs getExsOfPairTest (long folId) {
         final UserInfo user = db.getUser(folId);
         if (user == null) {
             return null;
@@ -173,8 +173,9 @@ public class ExampleGetter {
         }
         return np + " " + nn;
     }
-
-    public Exs getExsOfPairTest (long folId) {
+    
+    @SuppressWarnings("unused")
+    private Exs getExsOfPairTest2 (long folId) {
         final UserInfo user = db.getUser(folId);
         if (user == null) {
             // System.out.println("Cannot find user id " + folId);

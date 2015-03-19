@@ -76,7 +76,9 @@ public class FeatureExtractor {
      * in last week
      * 
      * 17RtStHour. Standard deviation of likelihood of rt at the hour (0-23) of
-     * the day (Mon, Tus...) */
+     * the day (Mon, Tus...)
+     * 
+     * 18RtWord. Contain words "retweet", "rt" or not. */
     private static final List<FeatureGetter> GETTER_LIST =
             new ArrayList<FeatureGetter>();
     static {
@@ -97,6 +99,7 @@ public class FeatureExtractor {
         GETTER_LIST.add(new F15()); // 15RtStDay
         GETTER_LIST.add(new F16()); // 16RtLHour
         GETTER_LIST.add(new F17()); // 17RtStHour
+        GETTER_LIST.add(new F18()); // 18RtWord
 
     }
 
@@ -695,6 +698,25 @@ public class FeatureExtractor {
             // Get the probability.
             double prob = rtStatistic.stdDivOfHour(date);
             String feature = Double.toString(prob);
+            return feature;
+        }
+    }
+
+    /**
+     * 18RtWord. Contain words "retweet", "rt" or not.
+     * This means this (original) tweet has a sentence like
+     * "retweet this please" or "plz rt", it could have a higher chance than not
+     * saying that.
+     */
+    private static class F18 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            String feature = F0;
+            String content = t.getText().toLowerCase(); // Ignore case.
+            if (content.contains("retweet") || content.contains("rt")) {
+                feature = F1;
+            }
             return feature;
         }
     }

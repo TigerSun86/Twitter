@@ -276,6 +276,23 @@ public class Database {
         return user;
     }
 
+    /**
+     * Remove the user profile and tweets coll, do not remove from the follower
+     * list of authors
+     */
+    public void removeUser (long userId) {
+        final DBCollection userColl = this.getUserInfosColl();
+        // Remove user profile.
+        final BasicDBObject query = new BasicDBObject(FEILD_ID, userId);
+        userColl.remove(query);
+
+        // Remove tweets of the user.
+        final DBCollection tweetsColl = getExistingTweetsColl(userId);
+        if (tweetsColl != null) {
+            tweetsColl.drop();
+        }
+    }
+
     public List<Long> getAllUsers () {
         final ArrayList<Long> users = new ArrayList<Long>();
         final DBCollection coll = this.getUserInfosColl();

@@ -3,6 +3,7 @@
 3Mentioned 0 1
 4Picture 0 1
 5Url 0 1
+6Hour continuous
 7Otweet continuous
 8LastMention continuous
 9LastDomain continuous
@@ -15,5 +16,5 @@
 16RtLHour continuous
 17RtStHour continuous
 18RtWord 0 1
-
+	 
 Class Y N

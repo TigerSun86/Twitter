@@ -158,6 +158,8 @@ public class AddNewFollower {
             return false; // t has already been deleted.
         }
         System.out.println("Num of retweets: " + retweets.size() + ".");
+        if (true) return true; // Don't create new users.
+        @SuppressWarnings("unused")
         final long auId = t.getUser().getId();
         final UserInfo au = keyAus.get(auId);
         assert au != null;
