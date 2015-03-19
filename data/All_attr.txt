@@ -19,5 +19,8 @@
 19Valence continuous
 20Arousal continuous
 21Dominance continuous
+22PosSenti continuous
+23NegSenti continuous
+24Len continuous
 
 Class Y N

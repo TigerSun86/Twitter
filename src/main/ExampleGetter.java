@@ -19,6 +19,7 @@ import common.RawExampleList;
 import common.TrainTestSplitter;
 import datacollection.Database;
 import datacollection.UserInfo;
+import features.FeatureExtractor;
 
 /**
  * FileName: ExampleGetter.java

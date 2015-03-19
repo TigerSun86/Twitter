@@ -85,7 +85,13 @@ public class FeatureExtractor {
      * 
      * 20Arousal. ANEW score arousal (excitement vs calmness).
      * 
-     * 21Dominance. ANEW score dominance (weakness vs strength). */
+     * 21Dominance. ANEW score dominance (weakness vs strength).
+     * 
+     * 22PosSenti. SentiStrength positive sentiment score.
+     * 
+     * 23NegSenti. SentiStrength negative sentiment score.
+     * 
+     * 24Len. Length of text. */
     private static final List<FeatureGetter> GETTER_LIST =
             new ArrayList<FeatureGetter>();
     static {
@@ -110,7 +116,9 @@ public class FeatureExtractor {
         GETTER_LIST.add(new F19()); // 19Valence
         GETTER_LIST.add(new F20()); // 20Arousal
         GETTER_LIST.add(new F21()); // 21Dominance
-
+        GETTER_LIST.add(new F22()); // 22PosSenti
+        GETTER_LIST.add(new F23()); // 23NegSenti
+        GETTER_LIST.add(new F24()); // 24Len
     }
 
     public static ArrayList<String> getFeatures (Status t, User userProfile,
@@ -737,6 +745,17 @@ public class FeatureExtractor {
     // Make anew score reusable for f19,20,21
     private static Anew anewScore = null;
 
+    private static Anew getAnewScore (Status t) {
+        if (ANEW_MAP == null) {
+            ANEW_MAP = new AnewMap();
+        }
+        if (t.getId() != tweetIdForAnew) {
+            tweetIdForAnew = t.getId();
+            anewScore = ANEW_MAP.score(t.getText());
+        }
+        return anewScore;
+    }
+
     /**
      * 19Valence. ANEW_MAP score valence (pleasure vs displeasure).
      */
@@ -744,15 +763,8 @@ public class FeatureExtractor {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
-            if (ANEW_MAP == null) {
-                ANEW_MAP = new AnewMap();
-            }
-            if (t.getId() != tweetIdForAnew) {
-                tweetIdForAnew = t.getId();
-                anewScore = ANEW_MAP.score(t.getText());
-            }
-
-            String feature = Double.toString(anewScore.valence);
+            Anew score = getAnewScore(t);
+            String feature = Double.toString(score.valence);
             return feature;
         }
     }
@@ -764,15 +776,8 @@ public class FeatureExtractor {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
-            if (ANEW_MAP == null) {
-                ANEW_MAP = new AnewMap();
-            }
-            if (t.getId() != tweetIdForAnew) {
-                tweetIdForAnew = t.getId();
-                anewScore = ANEW_MAP.score(t.getText());
-            }
-
-            String feature = Double.toString(anewScore.arousal);
+            Anew score = getAnewScore(t);
+            String feature = Double.toString(score.arousal);
             return feature;
         }
     }
@@ -784,15 +789,64 @@ public class FeatureExtractor {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
-            if (ANEW_MAP == null) {
-                ANEW_MAP = new AnewMap();
-            }
-            if (t.getId() != tweetIdForAnew) {
-                tweetIdForAnew = t.getId();
-                anewScore = ANEW_MAP.score(t.getText());
-            }
+            Anew score = getAnewScore(t);
+            String feature = Double.toString(score.dominance);
+            return feature;
+        }
+    }
 
-            String feature = Double.toString(anewScore.dominance);
+    private static MySentiStrength SENTI_STRENGTH = null;
+    private static long tweetIdForSenti = -1;
+    // Make sentiment score reusable for f22,23
+    private static int[] sentiScore = null;
+
+    private static int[] getSentiScore (Status t) {
+        if (SENTI_STRENGTH == null) {
+            SENTI_STRENGTH = new MySentiStrength();
+        }
+        if (t.getId() != tweetIdForSenti) {
+            tweetIdForSenti = t.getId();
+            sentiScore = SENTI_STRENGTH.score(t.getText());
+        }
+        return sentiScore;
+    }
+
+    /**
+     * 22PosSenti. SentiStrength positive sentiment score.
+     */
+    private static class F22 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            // sentiScore[0] is positive sentiment
+            int[] score = getSentiScore(t);
+            String feature = Integer.toString(score[0]);
+            return feature;
+        }
+    }
+
+    /**
+     * 23NegSenti. SentiStrength negative sentiment score.
+     */
+    private static class F23 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            // sentiScore[1] is negative sentiment
+            int[] score = getSentiScore(t);
+            String feature = Integer.toString(score[1]);
+            return feature;
+        }
+    }
+
+    /**
+     * 24Len. Length of text.
+     */
+    private static class F24 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            String feature = Integer.toString(t.getText().length());
             return feature;
         }
     }
