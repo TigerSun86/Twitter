@@ -12,8 +12,12 @@ package decisiontreelearning.DecisionTree;
 import java.util.HashSet;
 import java.util.Random;
 
+import main.ExampleGetter;
+
 public class ExampleSet {
     private final HashSet<Example> eSet;
+    // Initialize it when first time run mode()
+    private double priorPosProb = -1;
 
     public ExampleSet() {
         this.eSet = new HashSet<Example>();
@@ -35,17 +39,29 @@ public class ExampleSet {
         return eSet;
     }
 
+    public static class ClassAndPosProb {
+        String cl;
+        double posProb;
+
+        public ClassAndPosProb(String cl2, double prob) {
+            cl = cl2;
+            posProb = prob;
+        }
+    }
+
     /**
      * public final String sameClassification ()
      * 
      * Returns a certain classification if all examples are the same
      * classification.
+     * And the probability of positive examples.
      * 
      * @return: class, if all examples have the same classification. null, if
      *          examples don'tList have the same classification or there's no
      *          example.
      */
-    public final String sameClassification (final AttributeList attrList) {
+    public final ClassAndPosProb sameClassification (
+            final AttributeList attrList) {
         if (eSet.isEmpty()) {
             return null;
         }
@@ -62,27 +78,55 @@ public class ExampleSet {
                 break;
             }
         }
-        return sameClass;
+        if (sameClass != null) {
+            // Calculate prob by m-estimate.
+            double posProb; 
+            if (sameClass.equals(ExampleGetter.Y)) {// Pos class.
+                posProb = (eSet.size() + priorPosProb) / (eSet.size() + 1);
+            } else { // Neg class
+                posProb = priorPosProb / (eSet.size() + 1);
+            }
+            return new ClassAndPosProb(sameClass, posProb);
+        } else {
+            return null;
+        }
     }
 
     /**
-     * public final String mode ()
+     * public final ClassAndPosProb mode ()
      * 
      * Returns the classification occurring the most times in the example set.
+     * And the probability of positive examples.
      * 
      * @return: class occurring the most. null, if there's no example.
      */
-    public final String mode (final AttributeList attrList) {
+    public final ClassAndPosProb mode (final AttributeList attrList) {
         int max = 0;
+        int sum = 0;
+        int numOfPos = 0;
         String maxClass = null;
         for (String classifi : attrList.classList()) {
             final int num = numberOf(attrList, null, null, classifi);
+            sum += num;
+            if (classifi.equals(ExampleGetter.Y)) {
+                numOfPos = num;
+            }
+
             if (max < num) {
                 max = num;
                 maxClass = classifi;
             }
         }
-        return maxClass;
+
+        if (priorPosProb == -1) {
+            // Initialize prior probability of positive examples when
+            // first time run.
+            assert sum != 0;
+            priorPosProb = ((double) numOfPos) / sum;
+        }
+        // M-estimate to calculate probability.
+        double posProb = (numOfPos + priorPosProb) / (sum + 1);
+        return new ClassAndPosProb(maxClass, posProb);
     }
 
     /**
@@ -102,6 +146,8 @@ public class ExampleSet {
                 subExampleList.add(example);
             }
         }
+        // Set the prior prob of pos of subset the same to full set.
+        subExampleList.priorPosProb = this.priorPosProb;
         return subExampleList;
     }
 

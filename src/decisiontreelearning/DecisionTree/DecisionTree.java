@@ -14,18 +14,18 @@ import java.util.HashMap;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import common.Hypothesis;
 import util.Dbg;
 
-public class DecisionTree implements Hypothesis{
-    public AttributeList oldAttrList; 
-    public AttributeList newAttrList; 
+import common.ProbPredictor;
+
+public class DecisionTree extends ProbPredictor {
+    public AttributeList oldAttrList;
+    public AttributeList newAttrList;
     public Discretizor discretizor;
-    
-    
-    
+
     // Root is an attribute or a class.
     private String root;
+    private double posProb;
     private DecisionTree parent;
     private String valueOfParent;
 
@@ -33,19 +33,30 @@ public class DecisionTree implements Hypothesis{
     // The second is a subtree.
     private HashMap<String, DecisionTree> branches;
 
+    /** For non-leaf node */
     public DecisionTree(final String root2) {
         this.root = root2;
-        this.parent = null; // Default parent is null. Call setParent() if
-                            // needed.
+        this.posProb = 1.0;
+        // Default parent is null. Call setParent() if needed.
+        this.parent = null;
         this.valueOfParent = null;
         this.branches = new HashMap<String, DecisionTree>();
     }
 
-    @Override
-    public String predict (ArrayList<String> attrs) {
+    /** For leaf node */
+    public DecisionTree(final String className, double prob) {
+        this.root = className;
+        this.posProb = prob;
+        // Default parent is null. Call setParent() if needed.
+        this.parent = null;
+        this.valueOfParent = null;
+        this.branches = new HashMap<String, DecisionTree>();
+    }
+
+    private ArrayList<String> discretizeValues (ArrayList<String> attrs) {
         final ArrayList<String> newValues = new ArrayList<String>();
         // Convert each attribute value into several discrete attributes.
-        for (int index = 0; index < oldAttrList.size()-1; index++) {
+        for (int index = 0; index < oldAttrList.size() - 1; index++) {
 
             final Attribute attr = oldAttrList.get(index);
             final String name = attr.getName();
@@ -66,11 +77,10 @@ public class DecisionTree implements Hypothesis{
                 }
             }
         } // End of for (int index = 0; index < attrList.size(); index++) {
-        
-        
-        
-        
-        
+        return newValues;
+    }
+
+    private DecisionTree findLeaf (ArrayList<String> newValues) {
         DecisionTree subTree = this;
         // Hit the leaf of decision tree according to the example.
         while (!subTree.isLeaf()) {
@@ -84,16 +94,30 @@ public class DecisionTree implements Hypothesis{
             subTree = subTree.getSubTree(value);
         }
         // The sub tree is a leaf.
-        final String classOfTree = subTree.getRoot();
-        return classOfTree;
+        return subTree;
     }
-    
+
+    @Override
+    public double posProb (ArrayList<String> attrs) {
+        final ArrayList<String> newValues = discretizeValues(attrs);
+        DecisionTree leaf = findLeaf(newValues);
+        return leaf.posProb;
+    }
+
     public final String getRoot () {
         return root;
     }
 
     public final void setRoot (final String root2) {
         this.root = root2;
+    }
+
+    public final double getPosProb () {
+        return this.posProb;
+    }
+
+    public final void setPosProb (final double prob) {
+        this.posProb = prob;
     }
 
     public final DecisionTree getParent () {
@@ -155,11 +179,11 @@ public class DecisionTree implements Hypothesis{
 
     @Override
     public final String toString () {
-        return print("", true,5);
+        return print("", true, 5);
     }
 
-    private String print (String prefix, boolean isTail,int d) {
-        if(d == 0){
+    private String print (String prefix, boolean isTail, int d) {
+        if (d == 0) {
             return "";
         }
         final StringBuffer sb = new StringBuffer();
@@ -172,13 +196,12 @@ public class DecisionTree implements Hypothesis{
             counter++;
             if (counter < branches.size()) {
                 sb.append(childBranch.getValue().print(
-                        prefix + (isTail ? "    " : "|   "), false,d-1));
+                        prefix + (isTail ? "    " : "|   "), false, d - 1));
             } else { // Last child.
                 sb.append(childBranch.getValue().print(
-                        prefix + (isTail ? "    " : "|   "), true,d-1));
+                        prefix + (isTail ? "    " : "|   "), true, d - 1));
             }
         }
         return sb.toString();
     }
-
 }

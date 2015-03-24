@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 import util.Dbg;
+import decisiontreelearning.DecisionTree.ExampleSet.ClassAndPosProb;
 
 public class ID3 {
     public static final String MODULE = "ID3";
@@ -32,16 +33,21 @@ public class ID3 {
     }
 
     public DecisionTree learnDecisionTree (final ExampleSet examples,
-            final AttributeList attrList, final String defaultClass) {
+            final AttributeList attrList,
+            final ClassAndPosProb defaultClassAndPosProb) {
+        // Stop conditions for leaf nodes.
         if (examples.isEmpty()) {
-            return new DecisionTree(defaultClass);
+            return new DecisionTree(defaultClassAndPosProb.cl,
+                    defaultClassAndPosProb.posProb);
         }
-        final String classification = examples.sameClassification(attrList);
+        final ClassAndPosProb classification =
+                examples.sameClassification(attrList);
         if (classification != null) {
-            return new DecisionTree(classification);
+            return new DecisionTree(classification.cl, classification.posProb);
         }
         if (attrList.isAllDisabled()) {
-            return new DecisionTree(examples.mode(attrList));
+            ClassAndPosProb clAndProb = examples.mode(attrList);
+            return new DecisionTree(clAndProb.cl, clAndProb.posProb);
         }
         // Choose the best attribute for the tree constructing.
         final Attribute best = chooseAttribute(examples, attrList);

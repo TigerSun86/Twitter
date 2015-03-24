@@ -161,7 +161,7 @@ public class DecisionTreeTest implements Learner {
             prunedRL.oldAttrList = oldAttrList;
             prunedRL.newAttrList = newAttrList;
             prunedRL.discretizor = discretizor;
-            prunedRL.defaultPre = aad.trainSet.mode(aad.attrList);
+            prunedRL.defaultPre = aad.trainSet.mode(aad.attrList).cl;
             return prunedRL;
         }
     }
