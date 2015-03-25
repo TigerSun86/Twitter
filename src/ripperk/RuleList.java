@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 
 import util.Dbg;
+
 import common.Hypothesis;
 import common.RawAttrList;
 
@@ -20,7 +21,7 @@ public class RuleList extends LinkedList<Rule> implements Hypothesis {
 
     public final String defaultPrediction;
 
-    private final RawAttrList attrs;
+    public final RawAttrList attrs;
 
     public RuleList(final String def, final RawAttrList attrs) {
         this.defaultPrediction = def;

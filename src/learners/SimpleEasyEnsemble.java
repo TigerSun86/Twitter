@@ -5,8 +5,8 @@ import java.util.HashSet;
 import main.ExampleGetter;
 import util.MyMath;
 
-import common.Hypothesis;
 import common.Learner;
+import common.ProbPredictor;
 import common.RawAttrList;
 import common.RawExample;
 import common.RawExampleList;
@@ -29,7 +29,7 @@ public class SimpleEasyEnsemble implements Learner {
     }
 
     @Override
-    public Hypothesis learn (RawExampleList dataSet, RawAttrList attrs) {
+    public ProbPredictor learn (RawExampleList dataSet, RawAttrList attrs) {
         // Count np and nn.
         int np = 0;
         int nn = 0;
@@ -49,7 +49,7 @@ public class SimpleEasyEnsemble implements Learner {
         EnsembleHypo hypos = new EnsembleHypo();
         for (int i = 0; i < t; i++) {
             RawExampleList newset = getNewSet(dataSet, np, nn);
-            Hypothesis h = learner.learn(newset, attrs);
+            ProbPredictor h = learner.learn(newset, attrs);
             hypos.add(h);
         }
         return hypos;

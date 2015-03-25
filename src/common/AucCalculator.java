@@ -20,7 +20,7 @@ public class AucCalculator {
         int actp = 0;
         int actn = 0;
         for (RawExample e : dataSet) {
-            double prob = h.posProb(e.xList);
+            double prob = h.predictPosProb(e.xList);
             ExAndProb ans = new ExAndProb(e.t, prob);
             predictAns.add(ans);
             if (e.t.equals(ExampleGetter.Y)) {

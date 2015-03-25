@@ -16,6 +16,7 @@ import common.RawAttrList;
 public class Rule extends LinkedList<RuleCondition> {
     private static final long serialVersionUID = 1L;
     public final String prediction;
+    public double posProb = -1;
 
     public Rule(String prediction) {
         this.prediction = prediction;
@@ -48,10 +49,15 @@ public class Rule extends LinkedList<RuleCondition> {
 
         return ret;
     }
-    
+
+    public void setPosProb (double prob) {
+        this.posProb = prob;
+    }
+
     @Override
-    public String toString(){
+    public String toString () {
         final StringBuilder sb = new StringBuilder();
+        sb.append(String.format("%2.2f%% ", posProb));
         sb.append("IF ");
         for (RuleCondition p : this) {
             sb.append("(");

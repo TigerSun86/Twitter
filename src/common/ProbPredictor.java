@@ -21,7 +21,7 @@ public abstract class ProbPredictor implements Hypothesis {
 
     @Override
     public String predict (final ArrayList<String> attrs) {
-        double posProb = this.posProb(attrs);
+        double posProb = this.predictPosProb(attrs);
         if (Double.compare(posProb, threshold) >= 0) {
             return ExampleGetter.Y;
         } else {
@@ -29,5 +29,5 @@ public abstract class ProbPredictor implements Hypothesis {
         }
     }
 
-    public abstract double posProb (final ArrayList<String> attrs);
+    public abstract double predictPosProb (final ArrayList<String> attrs);
 }

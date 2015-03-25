@@ -9,22 +9,28 @@ package decisiontreelearning.Rule;
  * @date Feb 25, 2014
  */
 import java.util.ArrayList;
+import java.util.Iterator;
 
+import main.ExampleGetter;
 import util.Dbg;
-import common.Hypothesis;
+
+import common.ProbPredictor;
+
 import decisiontreelearning.DecisionTree.Attribute;
 import decisiontreelearning.DecisionTree.AttributeList;
 import decisiontreelearning.DecisionTree.ContinuousAttr;
 import decisiontreelearning.DecisionTree.Discretizor;
+import decisiontreelearning.DecisionTree.Example;
+import decisiontreelearning.DecisionTree.ExampleSet;
 
-public class RuleList implements Hypothesis{
+public class RuleList extends ProbPredictor {
     public final ArrayList<Rule> list;
 
-    public AttributeList oldAttrList; 
-    public AttributeList newAttrList; 
+    public AttributeList oldAttrList;
+    public AttributeList newAttrList;
     public Discretizor discretizor;
     public String defaultPre = null;
-    
+
     public RuleList() {
         list = new ArrayList<Rule>();
     }
@@ -39,6 +45,36 @@ public class RuleList implements Hypothesis{
         }
     }
 
+    public void setPosProb (ExampleSet dataSet) {
+        ExampleSet exs = new ExampleSet();
+        for (Example e : dataSet.getExampleSet()) {
+            exs.add(e);
+        }
+        exs.initPriorPosProb();
+        double priorProb = exs.priorPosProb;
+
+        for (Rule r : list) {
+            int numOfMatched = 0;
+            int numOfPos = 0;
+            Iterator<Example> iter = exs.getExampleSet().iterator();
+            while (iter.hasNext()) {
+                Example e = iter.next();
+                boolean matched = r.match(e.getExample(), newAttrList);
+                if (matched) { // Matched rule.
+                    numOfMatched++;
+                    if (e.get(e.size() - 1).equals(ExampleGetter.Y)) {
+                        numOfPos++; // Is pos example.
+                    }
+                    iter.remove();// Remove example when the rule matched it.
+                }
+            } // while (iter.hasNext()) {
+
+            // Pos prob by m-estimate.
+            double prob = (numOfPos + priorProb) / (numOfMatched + 1);
+            r.setPosProb(prob);
+        }
+    }
+
     @Override
     public String toString () {
         final StringBuffer sb = new StringBuffer();
@@ -50,10 +86,22 @@ public class RuleList implements Hypothesis{
     }
 
     @Override
-    public String predict (ArrayList<String> attrs) {
+    public double predictPosProb (ArrayList<String> attrs) {
+        final ArrayList<String> newValues = discretizeValues(attrs);
+        for (Rule r : this.list) {
+            if (r.match(newValues, newAttrList)) {
+                return r.posProb;
+            }
+        } // End of for (Rule r : rl.list) {
+        assert false;
+        return 0;
+    }
+
+    private ArrayList<String> discretizeValues (ArrayList<String> attrs) {
         final ArrayList<String> newValues = new ArrayList<String>();
         // Convert each attribute value into several discrete attributes.
-        for (int index = 0; index < oldAttrList.size()-1; index++) {
+        for (int index = 0; index < oldAttrList.size() - 1; index++) {
+
             final Attribute attr = oldAttrList.get(index);
             final String name = attr.getName();
             final ContinuousAttr ca = discretizor.get(name);
@@ -73,28 +121,6 @@ public class RuleList implements Hypothesis{
                 }
             }
         } // End of for (int index = 0; index < attrList.size(); index++) {
-        
-        for (Rule r : this.list) {
-            // If the rule r has no precondition, it mean no matter what
-            // value example has, it will be accepted by this rule.
-            boolean accepted = true;
-            for (RuleCondition precond : r.preconds) {
-                final String attrName = precond.name;
-                // Get value of the attribute from test example
-                final int attrIndex =
-                        newAttrList.indexOf(newAttrList.get(attrName));
-                final String value = newValues.get(attrIndex);
-                if (!value.equals(precond.value)) {
-                    accepted = false; // Violated a precondition.
-                    break; // Check next rule.
-                }
-            } // End of for (RuleCondition precond : r.preconds) {
-            if (accepted) {
-                return r.postcond.value;
-            }
-        } // End of for (Rule r : rl.list) {
-        assert false;
-        return defaultPre;
+        return newValues;
     }
-
 }

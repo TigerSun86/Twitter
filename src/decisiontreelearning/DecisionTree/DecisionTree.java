@@ -36,7 +36,7 @@ public class DecisionTree extends ProbPredictor {
     /** For non-leaf node */
     public DecisionTree(final String root2) {
         this.root = root2;
-        this.posProb = 1.0;
+        this.posProb = -1;
         // Default parent is null. Call setParent() if needed.
         this.parent = null;
         this.valueOfParent = null;
@@ -98,7 +98,7 @@ public class DecisionTree extends ProbPredictor {
     }
 
     @Override
-    public double posProb (ArrayList<String> attrs) {
+    public double predictPosProb (ArrayList<String> attrs) {
         final ArrayList<String> newValues = discretizeValues(attrs);
         DecisionTree leaf = findLeaf(newValues);
         return leaf.posProb;
@@ -179,7 +179,7 @@ public class DecisionTree extends ProbPredictor {
 
     @Override
     public final String toString () {
-        return print("", true, 5);
+        return print("", true, 10);
     }
 
     private String print (String prefix, boolean isTail, int d) {
@@ -187,7 +187,10 @@ public class DecisionTree extends ProbPredictor {
             return "";
         }
         final StringBuffer sb = new StringBuffer();
-        sb.append(prefix + (isTail ? "+-- " : "+-- ") + root + Dbg.NEW_LINE);
+        final String probStr =
+                (this.isLeaf() ? String.format(" %2.2f%%", posProb) : "");
+        sb.append(prefix + (isTail ? "+-- " : "+-- ") + root + probStr
+                + Dbg.NEW_LINE);
         final Collection<Entry<String, DecisionTree>> branches = branchSet();
         int counter = 0;
         for (Entry<String, DecisionTree> childBranch : branches) {

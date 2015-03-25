@@ -1,11 +1,10 @@
 package learners;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map.Entry;
 
-import common.Hypothesis;
+import util.Dbg;
+import common.ProbPredictor;
 
 /**
  * FileName: EnsembleHypo.java
@@ -15,34 +14,31 @@ import common.Hypothesis;
  *         email: sunx2013@my.fit.edu
  * @date Mar 4, 2015 5:59:42 PM
  */
-public class EnsembleHypo implements Hypothesis {
-    List<Hypothesis> hypos = new ArrayList<Hypothesis>();
+public class EnsembleHypo extends ProbPredictor {
+    List<ProbPredictor> hypos = new ArrayList<ProbPredictor>();
 
-    public void add (Hypothesis h) {
+    public void add (ProbPredictor h) {
         hypos.add(h);
     }
 
     @Override
-    public String predict (ArrayList<String> attrs) {
-        HashMap<String, Integer> counts = new HashMap<String, Integer>();
-        for (Hypothesis h : hypos) { // Vote
-            String p = h.predict(attrs);
-            if (counts.containsKey(p)) {
-                counts.put(p, counts.get(p) + 1);
-            } else {
-                counts.put(p, 1);
-            }
+    public double predictPosProb (ArrayList<String> attrs) {
+        double posProb = 0;
+        for (ProbPredictor h : hypos) {
+            posProb += h.predictPosProb(attrs);
         }
-        String maxp = null;
-        int maxc = 0;
-        for (Entry<String, Integer> en : counts.entrySet()) {
-            if (maxc < en.getValue()) { // If tie, pick first.
-                maxp = en.getKey();
-                maxc = en.getValue();
-            }
-        }
-        assert maxp != null;
-        return maxp;
+        posProb /= hypos.size();
+        return posProb;
     }
 
+    @Override
+    public String toString () {
+        final StringBuilder sb = new StringBuilder();
+        for (int i = 1; i <= hypos.size(); i++) {
+            sb.append("Predictor " + i + Dbg.NEW_LINE);
+            sb.append(hypos.get(i - 1).toString());
+            sb.append(Dbg.NEW_LINE);
+        }
+        return sb.toString();
+    }
 }

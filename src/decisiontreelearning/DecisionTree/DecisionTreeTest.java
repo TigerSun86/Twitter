@@ -12,13 +12,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 import util.Dbg;
-import common.Hypothesis;
+
 import common.Learner;
+import common.ProbPredictor;
 import common.RawAttr;
 import common.RawAttrList;
 import common.RawExample;
 import common.RawExampleList;
 import common.TrainTestSplitter;
+
 import decisiontreelearning.Rule.CombinedRulePostPruning;
 import decisiontreelearning.Rule.RuleList;
 import decisiontreelearning.Rule.RulePostPruning;
@@ -107,7 +109,7 @@ public class DecisionTreeTest implements Learner {
     }
 
     @Override
-    public Hypothesis learn (RawExampleList dataSet, RawAttrList attrs) {
+    public ProbPredictor learn (RawExampleList dataSet, RawAttrList attrs) {
         AttrAndData aad = new AttrAndData();
         if (pruneWay != NO_PRUNE) {
             List<RawExampleList> list = splitTrainVal(dataSet, attrs, true);
@@ -131,6 +133,7 @@ public class DecisionTreeTest implements Learner {
         newAttrList = aad.attrList;
         discretizor = aad.discretizor;
 
+        aad.trainSet.initPriorPosProb();
         // Learning the decision tree.
         final DecisionTree dTree =
                 new ID3(this.sc).learnDecisionTree(aad.trainSet, aad.attrList,
@@ -162,6 +165,11 @@ public class DecisionTreeTest implements Learner {
             prunedRL.newAttrList = newAttrList;
             prunedRL.discretizor = discretizor;
             prunedRL.defaultPre = aad.trainSet.mode(aad.attrList).cl;
+            // Set pos probability for rule list.
+            ExampleSet fullSet = new ExampleSet();
+            fullSet.getExampleSet().addAll(aad.trainSet.getExampleSet());
+            fullSet.getExampleSet().addAll(aad.validationSet.getExampleSet());
+            prunedRL.setPosProb(fullSet);
             return prunedRL;
         }
     }

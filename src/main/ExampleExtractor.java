@@ -28,6 +28,8 @@ import common.RawExampleList;
  *         email: sunx2013@my.fit.edu
  * @date Oct 30, 2014 5:04:46 PM
  */
+
+/**@deprecated*/
 public class ExampleExtractor {
     public static final String Y = "Y";
     public static final String N = "N";

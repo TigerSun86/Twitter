@@ -7,7 +7,9 @@ import java.util.Map.Entry;
 import java.util.TreeMap;
 
 import util.Dbg;
+
 import common.Learner;
+import common.ProbPredictor;
 import common.RawAttr;
 import common.RawAttrList;
 import common.RawExample;
@@ -53,12 +55,12 @@ public class RIPPERk implements Learner {
 
     }
 
-    public RuleList learn (RawExampleList exs, final RawAttrList attrs) {
+    public ProbPredictor learn (RawExampleList exs, final RawAttrList attrs) {
         return learn(exs, attrs, this.needPrune, this.k);
     }
 
-    public static RuleList learn (RawExampleList exs, final RawAttrList attrs,
-            final boolean needPrune, final int k) {
+    public static ProbPredictor learn (RawExampleList exs,
+            final RawAttrList attrs, final boolean needPrune, final int k) {
         final RawExampleList[] subSets =
                 TrainTestSplitter.splitSetbyClass(exs, attrs);
         final Node[] ascendingSets = new Node[subSets.length];
@@ -89,8 +91,9 @@ public class RIPPERk implements Learner {
 
             ruleList.addAll(subRuleList); // Add result to total rule list.
         }
-
-        return ruleList;
+        ProbRuleList pRuleList = new ProbRuleList(ruleList);
+        pRuleList.setPosProb(exs);
+        return pRuleList;
     }
 
     /**

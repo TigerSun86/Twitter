@@ -107,8 +107,8 @@ public class Main {
         System.out
                 .println("Learner AuthorName AuthorId FolName FolId #PosTrain "
                         + "#NegTrain #PosTestM1 #NegTestM1 FeatureTime TrainTime "
-                        + "TrainAcc TrainPrecision TrainRecall TrainFP TrainFM TrainAct#Pos TrainPre#Pos "
-                        + "TestAcc TestPrecision TestRecall TestFP TestFM TestAct#Pos TestPre#Pos");
+                        + "TrainAcc TrainPrecision TrainRecall TrainFP TrainFM TrainAct#Pos TrainPre#Pos TrainAuc"
+                        + "TestAcc TestPrecision TestRecall TestFP TestFM TestAct#Pos TestPre#Pos TestAuc");
         final Set<Long> fols = VALID_USERS.get(author.userId);
         for (long folId : fols) {
             final long time1 = SysUtil.getCpuTime();
@@ -174,9 +174,9 @@ public class Main {
 
                 for (int t = 0; t < actuals.length; t++) {
                     resultTable.a.get(t).set(userCount,
-                            (actuals[t].equals(ExampleExtractor.Y)));
+                            (actuals[t].equals(ExampleGetter.Y)));
                     resultTable.p.get(t).set(userCount,
-                            (predicts[t].equals(ExampleExtractor.Y)));
+                            (predicts[t].equals(ExampleGetter.Y)));
                 }
                 userCount++;
             }

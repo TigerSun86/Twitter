@@ -16,8 +16,8 @@ import main.ExampleGetter;
 
 public class ExampleSet {
     private final HashSet<Example> eSet;
-    // Initialize it when first time run mode()
-    private double priorPosProb = -1;
+    // Initialize it by initPriorPosProb()
+    public double priorPosProb = -1;
 
     public ExampleSet() {
         this.eSet = new HashSet<Example>();
@@ -37,6 +37,21 @@ public class ExampleSet {
 
     public final HashSet<Example> getExampleSet () {
         return eSet;
+    }
+
+    /** Initialize prior probability of positive examples */
+    public void initPriorPosProb () {
+        int numOfPos = 0;
+        for (Example e : eSet) {
+            if (e.get(e.size() - 1).equals(ExampleGetter.Y)) {
+                numOfPos++;
+            }
+        }
+        if (eSet.size() != 0) {
+            priorPosProb = ((double) numOfPos) / eSet.size();
+        } else {
+            priorPosProb = 0;
+        }
     }
 
     public static class ClassAndPosProb {
@@ -80,7 +95,8 @@ public class ExampleSet {
         }
         if (sameClass != null) {
             // Calculate prob by m-estimate.
-            double posProb; 
+            assert priorPosProb != -1;
+            double posProb;
             if (sameClass.equals(ExampleGetter.Y)) {// Pos class.
                 posProb = (eSet.size() + priorPosProb) / (eSet.size() + 1);
             } else { // Neg class
@@ -118,13 +134,8 @@ public class ExampleSet {
             }
         }
 
-        if (priorPosProb == -1) {
-            // Initialize prior probability of positive examples when
-            // first time run.
-            assert sum != 0;
-            priorPosProb = ((double) numOfPos) / sum;
-        }
         // M-estimate to calculate probability.
+        assert priorPosProb != -1;
         double posProb = (numOfPos + priorPosProb) / (sum + 1);
         return new ClassAndPosProb(maxClass, posProb);
     }
@@ -147,6 +158,7 @@ public class ExampleSet {
             }
         }
         // Set the prior prob of pos of subset the same to full set.
+        assert this.priorPosProb != -1;
         subExampleList.priorPosProb = this.priorPosProb;
         return subExampleList;
     }

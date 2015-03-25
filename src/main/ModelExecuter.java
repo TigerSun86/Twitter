@@ -2,15 +2,15 @@ package main;
 
 import ripperk.RIPPERk;
 import util.SysUtil;
-
+import common.AucCalculator;
 import common.Evaluator;
 import common.Evaluator.FMeasureResult;
 import common.Hypothesis;
 import common.Learner;
 import common.MappedAttrList;
+import common.ProbPredictor;
 import common.RawAttrList;
 import common.RawExampleList;
-
 import decisiontreelearning.DecisionTree.DecisionTreeTest;
 
 /**
@@ -40,21 +40,24 @@ public class ModelExecuter {
     public String runPairTest2 (final RawExampleList train,
             final RawExampleList testM1, final RawAttrList rawAttr) {
         final Learner learner = this.learner;
-        final Hypothesis h = learner.learn(train, rawAttr);
+        final ProbPredictor h = learner.learn(train, rawAttr);
         // System.out.println(h.toString());
         final FMeasureResult atrain =
-                Evaluator.evaluateFMeasure(h, train, ExampleExtractor.Y);
+                Evaluator.evaluateFMeasure(h, train, ExampleGetter.Y);
         final FMeasureResult atest =
-                Evaluator.evaluateFMeasure(h, testM1, ExampleExtractor.Y);
+                Evaluator.evaluateFMeasure(h, testM1, ExampleGetter.Y);
+        final double trainAuc = AucCalculator.calAuc(h, train);
+        final double testAuc = AucCalculator.calAuc(h, testM1);
+
         final StringBuilder sb = new StringBuilder();
-        sb.append(String.format("%.4f %.4f %.4f %.4f %.4f %d %d",
+        sb.append(String.format("%.4f %.4f %.4f %.4f %.4f %d %d %.4f",
                 atrain.accuracy, atrain.precision, atrain.recall,
                 atrain.falsePositive, atrain.fmeasure, atrain.numActPos,
-                atrain.numPrePos));
-        sb.append(String.format(" %.4f %.4f %.4f %.4f %.4f %d %d",
+                atrain.numPrePos, trainAuc));
+        sb.append(String.format(" %.4f %.4f %.4f %.4f %.4f %d %d %.4f",
                 atest.accuracy, atest.precision, atest.recall,
                 atest.falsePositive, atest.fmeasure, atest.numActPos,
-                atest.numPrePos));
+                atest.numPrePos, testAuc));
         return sb.toString();
     }
 
@@ -71,9 +74,9 @@ public class ModelExecuter {
         final Hypothesis h = learner.learn(train, rawAttr);
         // System.out.println(h.toString());
         final FMeasureResult atrain =
-                Evaluator.evaluateFMeasure(h, train, ExampleExtractor.Y);
+                Evaluator.evaluateFMeasure(h, train, ExampleGetter.Y);
         final FMeasureResult atest =
-                Evaluator.evaluateFMeasure(h, testM1, ExampleExtractor.Y);
+                Evaluator.evaluateFMeasure(h, testM1, ExampleGetter.Y);
         final StringBuilder sb = new StringBuilder();
         sb.append(String.format("%.4f %.4f %.4f %.4f %.4f %d %d",
                 atrain.accuracy, atrain.precision, atrain.recall,
@@ -100,9 +103,9 @@ public class ModelExecuter {
         final Learner learner = LEARNERS[0];
         final Hypothesis h = learner.learn(train, rawAttr);
         final FMeasureResult atrain =
-                Evaluator.evaluateFMeasure(h, train, ExampleExtractor.Y);
+                Evaluator.evaluateFMeasure(h, train, ExampleGetter.Y);
         final FMeasureResult atest =
-                Evaluator.evaluateFMeasure(h, testM1, ExampleExtractor.Y);
+                Evaluator.evaluateFMeasure(h, testM1, ExampleGetter.Y);
 
         // TrainAcc TestAcc-Actual classes of each example-Predicted classes
         final StringBuilder sb = new StringBuilder();

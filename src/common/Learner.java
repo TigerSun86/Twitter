@@ -9,5 +9,5 @@ package common;
  * @date Nov 27, 2014 4:50:32 PM 
  */
 public interface Learner {
-    public Hypothesis learn (RawExampleList dataSet, RawAttrList attrs) ;
+    public ProbPredictor learn (RawExampleList dataSet, RawAttrList attrs) ;
 }

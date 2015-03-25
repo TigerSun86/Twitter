@@ -11,9 +11,12 @@ package decisiontreelearning.Rule;
  */
 import java.util.ArrayList;
 
+import decisiontreelearning.DecisionTree.AttributeList;
+
 public class Rule {
     public final ArrayList<RuleCondition> preconds;
     public RuleCondition postcond;
+    public double posProb = -1;
 
     public Rule() {
         preconds = new ArrayList<RuleCondition>();
@@ -70,9 +73,31 @@ public class Rule {
         return preconds.contains(precond);
     }
 
+    public boolean match (ArrayList<String> values, AttributeList attrList) {
+        // If the rule r has no precondition, it mean no matter what
+        // value example has, it will be accepted by this rule.
+        boolean accepted = true;
+        for (RuleCondition precond : this.preconds) {
+            final String attrName = precond.name;
+            // Get value of the attribute from test example
+            final int attrIndex = attrList.indexOf(attrList.get(attrName));
+            final String value = values.get(attrIndex);
+            if (!value.equals(precond.value)) {
+                accepted = false; // Violated a precondition.
+                break; // Check next rule.
+            }
+        } // End of for (RuleCondition precond : r.preconds) {
+        return accepted;
+    }
+
+    public void setPosProb (double prob) {
+        this.posProb = prob;
+    }
+
     @Override
     public String toString () {
         final StringBuffer sb = new StringBuffer();
+        sb.append(String.format("%2.2f%% ", posProb));
         sb.append("IF ");
         for (RuleCondition p : preconds) {
             sb.append("(");
