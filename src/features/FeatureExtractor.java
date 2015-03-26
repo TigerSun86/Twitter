@@ -741,19 +741,19 @@ public class FeatureExtractor {
 
     // Initialize when need it.
     private static AnewMap ANEW_MAP = null;
-    private static long tweetIdForAnew = -1;
     // Make anew score reusable for f19,20,21
-    private static Anew anewScore = null;
+    private static HashMap<Long, Anew> anewScores = null;
 
     private static Anew getAnewScore (Status t) {
         if (ANEW_MAP == null) {
             ANEW_MAP = new AnewMap();
+            anewScores = new HashMap<Long, Anew>();
         }
-        if (t.getId() != tweetIdForAnew) {
-            tweetIdForAnew = t.getId();
-            anewScore = ANEW_MAP.score(t.getText());
+        if (!anewScores.containsKey(t.getId())) {
+            Anew anewScore = ANEW_MAP.score(t.getText());
+            anewScores.put(t.getId(), anewScore);
         }
-        return anewScore;
+        return anewScores.get(t.getId());
     }
 
     /**
@@ -796,19 +796,19 @@ public class FeatureExtractor {
     }
 
     private static MySentiStrength SENTI_STRENGTH = null;
-    private static long tweetIdForSenti = -1;
     // Make sentiment score reusable for f22,23
-    private static int[] sentiScore = null;
+    private static HashMap<Long, int[]> sentiScores = null;
 
     private static int[] getSentiScore (Status t) {
         if (SENTI_STRENGTH == null) {
             SENTI_STRENGTH = new MySentiStrength();
+            sentiScores = new HashMap<Long, int[]>();
         }
-        if (t.getId() != tweetIdForSenti) {
-            tweetIdForSenti = t.getId();
-            sentiScore = SENTI_STRENGTH.score(t.getText());
+        if (!sentiScores.containsKey(t.getId())) {
+            int[] sentiScore = SENTI_STRENGTH.score(t.getText());
+            sentiScores.put(t.getId(), sentiScore);
         }
-        return sentiScore;
+        return sentiScores.get(t.getId());
     }
 
     /**
