@@ -95,8 +95,11 @@ public class Main {
         System.out.println("****************");
         printHeader();
 
-        HashMap<Long, List<Double>> folToRetweetingLikelyhoods =
-                new HashMap<Long, List<Double>>();
+        List<HashMap<Long, List<Double>>> listOfFolToProb =
+                new ArrayList<HashMap<Long, List<Double>>>();
+        for (int learner = 0; learner < LEARNERS.length; learner++) {
+            listOfFolToProb.add(new HashMap<Long, List<Double>>());
+        }
         HashMap<Long, Double> folToAvgRt = new HashMap<Long, Double>();
         HashMap<Long, Integer> folToNumOfFs = new HashMap<Long, Integer>();
 
@@ -135,15 +138,19 @@ public class Main {
                             double p = Double.parseDouble(prob);
                             m2Probs.add(p);
                         }
-                        folToRetweetingLikelyhoods.put(folId, m2Probs);
+                        listOfFolToProb.get(learner).put(folId, m2Probs);
                     }
                 } // for (int l = 0; l < LEARNERS.length; l++) {
             } // if (exs != null) {
         } // for (Long folId : author.followersIds) {
         System.out.println("****************");
         if (isGlobal) {
-            showGlobalInfo(fols, folToRetweetingLikelyhoods, folToAvgRt,
-                    folToNumOfFs);
+            for (int learner = 0; learner < LEARNERS.length; learner++) {
+                System.out.println(L_NAMES[learner] + " information");
+                HashMap<Long, List<Double>> folToRtProb =
+                        listOfFolToProb.get(learner);
+                showGlobalInfo(fols, folToRtProb, folToAvgRt, folToNumOfFs);
+            }
         }
     }
 
@@ -186,7 +193,7 @@ public class Main {
     }
 
     private void showGlobalInfo (Long[] fols,
-            HashMap<Long, List<Double>> folToRetweetingLikelyhoods,
+            HashMap<Long, List<Double>> folToRtProb,
             HashMap<Long, Double> folToAvgRt,
             HashMap<Long, Integer> folToNumOfFs) {
         List<Double> likelihoodSums = new ArrayList<Double>();
@@ -219,8 +226,7 @@ public class Main {
             double nSum = 0;
             // Print each followers' retweet likelihood.
             for (long folId : fols) {
-                double likelihood =
-                        folToRetweetingLikelyhoods.get(folId).get(tidx);
+                double likelihood = folToRtProb.get(folId).get(tidx);
                 sum += likelihood;
                 aSum += likelihood * folToAvgRt.get(folId);
                 nSum += likelihood * folToNumOfFs.get(folId);
