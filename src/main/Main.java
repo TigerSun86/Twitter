@@ -187,7 +187,7 @@ public class Main {
 
     private void showGlobalInfo (Long[] fols,
             HashMap<Long, List<Double>> folToRetweetingLikelyhoods,
-            HashMap<Long, Double> folToInflu,
+            HashMap<Long, Double> folToAvgRt,
             HashMap<Long, Integer> folToNumOfFs) {
         List<Double> likelihoodSums = new ArrayList<Double>();
         List<Double> avgRtPred = new ArrayList<Double>();
@@ -199,10 +199,16 @@ public class Main {
             System.out.print(" " + folId);
         }
         System.out.println();
-        // Print each followers' influence.
-        System.out.print("Influence");
+        // Print each followers' AvgRt.
+        System.out.print("AvgRt");
         for (long folId : fols) {
-            System.out.printf(" %.2f", folToInflu.get(folId));
+            System.out.printf(" %.2f", folToAvgRt.get(folId));
+        }
+        System.out.println();
+        // Print each followers' num of followers.
+        System.out.print("NumOfFs");
+        for (long folId : fols) {
+            System.out.printf(" %d", folToNumOfFs.get(folId));
         }
         System.out.println();
         for (int tidx = 0; tidx < exGetter.auTweetsM2.size(); tidx++) {
@@ -216,7 +222,7 @@ public class Main {
                 double likelihood =
                         folToRetweetingLikelyhoods.get(folId).get(tidx);
                 sum += likelihood;
-                aSum += likelihood * folToInflu.get(folId);
+                aSum += likelihood * folToAvgRt.get(folId);
                 nSum += likelihood * folToNumOfFs.get(folId);
                 System.out.printf(" %.2f", likelihood);
             }
