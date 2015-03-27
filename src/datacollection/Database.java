@@ -762,4 +762,22 @@ public class Database {
         assert t != null;
         return t;
     }
+
+    public double getAvgRetweetedCount (long userId) {
+        // Get tweet in tweets DB.
+        final DBCollection coll = getExistingTweetsColl(userId);
+        if (coll == null) {
+            return 0;
+        }
+        final DBCursor cursor = coll.find();
+        double sum = 0;
+        long count = 0;
+        while (cursor.hasNext()) {
+            final DBObject doc = cursor.next();
+            final Status t = docToTweet(doc);
+            sum += t.getRetweetCount();
+            count++;
+        }
+        return sum / count;
+    }
 }

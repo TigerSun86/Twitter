@@ -66,6 +66,7 @@ public class ExampleGetter {
     public static Date TRAIN_START_DATE = null;
     public static Date TEST_START_DATE = null;
     public static Date TEST_END_DATE = null;
+    public static Date TESTM2_END_DATE = null;
     static {
         try {
             TRAIN_START_DATE =
@@ -77,6 +78,9 @@ public class ExampleGetter {
             TEST_END_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
                             .parse("Sat Mar 07 15:27:40 EST 2015");
+            TESTM2_END_DATE =
+                    new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
+                            .parse("Wed Mar 25 06:31:35 EST 2015");
         } catch (ParseException e) {
             e.printStackTrace();
         }
@@ -96,13 +100,16 @@ public class ExampleGetter {
 
     private final Database db;
     private final List<Status> auTweets;
+    public final List<Status> auTweetsM2;
 
-    public ExampleGetter(Database db, List<Status> auTweets) {
+    public ExampleGetter(Database db, List<Status> auTweets,
+            List<Status> auTweetsM2) {
         this.db = db;
         this.auTweets = auTweets;
+        this.auTweetsM2 = auTweetsM2;
     }
 
-    public Exs getExsOfPairTest (long folId) {
+    public Exs getExs (long folId, boolean isGlobal) {
         final UserInfo user = db.getUser(folId);
         if (user == null) {
             return null;
@@ -114,51 +121,63 @@ public class ExampleGetter {
         }
 
         final PosAndNeg pan = db.getPosAndNeg(folId, auTweets);
-        if (pan != null && pan.pos.size() >= LEAST_POS_NUM) {
-            // Sort them again because order might be changed by user retweets
-            // new tweet first.
-            Collections.sort(pan.pos, TWEET_SORTER);
-            Collections.sort(pan.neg, TWEET_SORTER);
-            RawExampleList all =
-                    getFeatures(pan.pos, pan.neg, user.userProfile, folTweets);
-            // Discard all neg examples before the first pos example.
-            RawExampleList tmp = new RawExampleList();
-            boolean firstPos = false;
-            for (RawExample e : all) {
-                if (e.t.equals(Y)) {
-                    firstPos = true;
-                    tmp.add(e);
-                } else { // Neg example.
-                    if (firstPos) {
-                        tmp.add(e);
-                    } // else discard negs before the first pos.
-                }
-            }
-            all = tmp;
-
-            // Map all attributes in range 0 to 1.
-            final MappedAttrList mAttr = new MappedAttrList(all, RAW_ATTR);
-            // Rescale (map) all data in range 0 to 1.
-            all = mAttr.mapExs(all, RAW_ATTR);
-
-            // Train and test will split into same pos rate.
-            final RawExampleList[] exs2 =
-                    TrainTestSplitter.split(all, RAW_ATTR,
-                            TrainTestSplitter.DEFAULT_RATIO);
-            final RawExampleList train = exs2[0];
-            final RawExampleList test = exs2[1];
-
-            String trainPosAndNeg = countPosAndNeg(train);
-            String testPosAndNeg = countPosAndNeg(test);
-            final String followerAndExsInfo =
-                    String.format("%s %d %s %s",
-                            user.userProfile.getScreenName(),
-                            user.userProfile.getId(), trainPosAndNeg,
-                            testPosAndNeg);
-            return new Exs(train, test, null, followerAndExsInfo);
-        } else {
+        if (pan == null || pan.pos.size() < LEAST_POS_NUM) {
             return null;
         }
+
+        // Sort them again because order might be changed by user retweets
+        // new tweet first.
+        Collections.sort(pan.pos, TWEET_SORTER);
+        Collections.sort(pan.neg, TWEET_SORTER);
+        RawExampleList all =
+                getFeatures(pan.pos, pan.neg, user.userProfile, folTweets);
+        // Discard all neg examples before the first pos example.
+        RawExampleList tmp = new RawExampleList();
+        boolean firstPos = false;
+        for (RawExample e : all) {
+            if (e.t.equals(Y)) {
+                firstPos = true;
+                tmp.add(e);
+            } else { // Neg example.
+                if (firstPos) {
+                    tmp.add(e);
+                } // else discard negs before the first pos.
+            }
+        }
+        all = tmp;
+
+        // Map all attributes in range 0 to 1.
+        final MappedAttrList mAttr = new MappedAttrList(all, RAW_ATTR);
+        // Rescale (map) all data in range 0 to 1.
+        all = mAttr.mapExs(all, RAW_ATTR);
+
+        // Train and test will split into same pos rate.
+        final RawExampleList[] exs2 =
+                TrainTestSplitter.split(all, RAW_ATTR,
+                        TrainTestSplitter.DEFAULT_RATIO);
+        final RawExampleList train = exs2[0];
+        final RawExampleList test = exs2[1];
+
+        String trainPosAndNeg = countPosAndNeg(train);
+        String testPosAndNeg = countPosAndNeg(test);
+        final String followerAndExsInfo =
+                String.format("%s %d %s %s", user.userProfile.getScreenName(),
+                        user.userProfile.getId(), trainPosAndNeg, testPosAndNeg);
+
+        RawExampleList testM2 = null;
+        if (isGlobal) {
+            assert auTweetsM2 != null;
+            PosAndNeg panM2 = db.getPosAndNeg(folId, auTweetsM2);
+            Collections.sort(panM2.pos, TWEET_SORTER);
+            Collections.sort(panM2.neg, TWEET_SORTER);
+            testM2 =
+                    getFeatures(panM2.pos, panM2.neg, user.userProfile,
+                            folTweets);
+            // Rescale (map) all data in range 0 to 1.
+            testM2 = mAttr.mapExs(testM2, RAW_ATTR);
+        }
+
+        return new Exs(train, test, testM2, followerAndExsInfo);
     }
 
     private static String countPosAndNeg (RawExampleList dataSet) {
@@ -174,7 +193,7 @@ public class ExampleGetter {
         }
         return np + " " + nn;
     }
-    
+
     @SuppressWarnings("unused")
     private Exs getExsOfPairTest2 (long folId) {
         final UserInfo user = db.getUser(folId);

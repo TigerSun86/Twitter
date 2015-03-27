@@ -37,6 +37,44 @@ public class ModelExecuter {
         this.learner = l;
     }
 
+    public String runTest (final RawExampleList train,
+            final RawExampleList testM1, final RawExampleList testM2,
+            final RawAttrList rawAttr, final boolean isGlobal) {
+        final Learner learner = this.learner;
+        final ProbPredictor h = learner.learn(train, rawAttr);
+        // System.out.println(h.toString());
+        final FMeasureResult atrain =
+                Evaluator.evaluateFMeasure(h, train, ExampleGetter.Y);
+        final FMeasureResult atest =
+                Evaluator.evaluateFMeasure(h, testM1, ExampleGetter.Y);
+        final double trainAuc = AucCalculator.calAuc(h, train);
+        final double testAuc = AucCalculator.calAuc(h, testM1);
+
+        final StringBuilder sb = new StringBuilder();
+        sb.append(String.format("%.4f %.4f %.4f %.4f %.4f %d %d %.4f",
+                atrain.accuracy, atrain.precision, atrain.recall,
+                atrain.falsePositive, atrain.fmeasure, atrain.numActPos,
+                atrain.numPrePos, trainAuc));
+        sb.append(String.format(" %.4f %.4f %.4f %.4f %.4f %d %d %.4f",
+                atest.accuracy, atest.precision, atest.recall,
+                atest.falsePositive, atest.fmeasure, atest.numActPos,
+                atest.numPrePos, testAuc));
+
+        if (isGlobal) {
+            assert testM2 != null;
+            sb.append("-");
+            for (int i = 0; i < testM2.size(); i++) { // predict.
+                if (i != 0) {
+                    sb.append(" ");
+                }
+                final double prob = h.predictPosProb(testM2.get(i).xList);
+                sb.append(String.format("%.5f", prob));
+            }
+        }
+
+        return sb.toString();
+    }
+
     public String runPairTest2 (final RawExampleList train,
             final RawExampleList testM1, final RawAttrList rawAttr) {
         final Learner learner = this.learner;
@@ -61,6 +99,7 @@ public class ModelExecuter {
         return sb.toString();
     }
 
+    /** @deprecated */
     public static String runPairTest (final RawExampleList trainIn,
             final RawExampleList testM1In, final RawAttrList rawAttr) {
         // Map all attributes in range 0 to 1.
@@ -89,6 +128,7 @@ public class ModelExecuter {
         return sb.toString();
     }
 
+    /** @deprecated */
     public static String runGlobalTest (final RawExampleList trainIn,
             final RawExampleList testM1In, final RawExampleList testM2In,
             final RawAttrList rawAttr) {

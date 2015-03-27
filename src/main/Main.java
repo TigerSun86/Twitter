@@ -7,7 +7,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import learners.SetSplitLearner;
 import learners.SimpleEasyEnsemble;
@@ -15,9 +14,11 @@ import main.ExampleGetter.Exs;
 import ripperk.RIPPERk;
 import twitter4j.Status;
 import util.SysUtil;
+
 import common.DataReader;
 import common.Learner;
 import common.RawAttrList;
+
 import datacollection.Database;
 import datacollection.UserInfo;
 import decisiontreelearning.DecisionTree.DecisionTreeTest;
@@ -32,12 +33,14 @@ import decisiontreelearning.DecisionTree.ID3;
  * @date Jan 9, 2015 2:33:10 PM
  */
 public class Main {
+    private static final boolean IS_GLOBAL = true;
     private static final RawAttrList RAW_ATTR = new RawAttrList(
             ModelExecuter.ATTR);
 
     private static final Learner[] LEARNERS =
             {
                     new DecisionTreeTest(DecisionTreeTest.RP_PRUNE),
+                    new DecisionTreeTest(DecisionTreeTest.NO_PRUNE),
                     new DecisionTreeTest(DecisionTreeTest.RP_PRUNE,
                             ID3.SplitCriteria.DKM),
                     new DecisionTreeTest(DecisionTreeTest.NO_PRUNE,
@@ -47,11 +50,102 @@ public class Main {
                     new SetSplitLearner(new DecisionTreeTest(
                             DecisionTreeTest.RP_PRUNE)), new RIPPERk(true, 0),
                     new RIPPERk(true, 1) };
-    private static final String[] L_NAMES = { "DecisionTree", "DKM",
-            "DKMnoprune", "Easy", "Split", "Ripper", "RipperOp" };
+    private static final String[] L_NAMES = { "Entropy", "EntropyNoprune",
+            "DKM", "DKMnoprune", "Easy", "Split", "Ripper", "RipperOp" };
+    // private static final Learner[] LEARNERS = { new AnnLearner2(3, 0.1, 0.1),
+    // new AnnLearner2(5, 0.1, 0.1), new AnnLearner2(10, 0.1, 0.1) };
+    // private static final String[] L_NAMES = { "Ann3", "Ann5", "Ann10" };
 
     private static final HashMap<Long, HashSet<Long>> VALID_USERS =
             getValidUsers();
+
+    // It will be initialized at first time usage.
+    /** @deprecated */
+    private ResultTable resultTable = null;
+
+    private final UserInfo author;
+    private final ExampleGetter exGetter;
+    private final Database db;
+    private final boolean isGlobal;
+
+    public Main(final Database db, final long authorId, final boolean isGlobal) {
+        this.author = db.getUser(authorId);
+        final List<Status> auTweets =
+                db.getOriginalTweetListInTimeRange(authorId,
+                        ExampleGetter.TRAIN_START_DATE,
+                        ExampleGetter.TEST_END_DATE);
+        Collections.sort(auTweets, ExampleGetter.TWEET_SORTER);
+        List<Status> auTweetsM2 = null;
+        if (isGlobal) {
+            auTweetsM2 =
+                    db.getOriginalTweetListInTimeRange(authorId,
+                            ExampleGetter.TEST_END_DATE,
+                            ExampleGetter.TESTM2_END_DATE);
+            Collections.sort(auTweetsM2, ExampleGetter.TWEET_SORTER);
+        }
+        this.exGetter = new ExampleGetter(db, auTweets, auTweetsM2);
+        this.db = db;
+        this.isGlobal = isGlobal;
+    }
+
+    private void test () {
+        assert author != null;
+        assert author.followersIds != null;
+
+        System.out.println("****************");
+        printHeader();
+
+        HashMap<Long, List<Double>> folToRetweetingLikelyhoods =
+                new HashMap<Long, List<Double>>();
+        HashMap<Long, Double> folToAvgRt = new HashMap<Long, Double>();
+        HashMap<Long, Integer> folToNumOfFs = new HashMap<Long, Integer>();
+
+        final Long[] fols = VALID_USERS.get(author.userId).toArray(new Long[0]);
+        for (long folId : fols) {
+            final long time1 = SysUtil.getCpuTime();
+            final Exs exs = exGetter.getExs(folId, true);
+            final long time2 = SysUtil.getCpuTime();
+
+            if (exs != null) {
+                double influence = db.getAvgRetweetedCount(folId);
+                folToAvgRt.put(folId, influence); // Average RT.
+                int numOfFs = db.getUser(folId).userProfile.getFollowersCount();
+                folToNumOfFs.put(folId, numOfFs); // Num of followers.
+
+                for (int learner = 0; learner < LEARNERS.length; learner++) {
+                    final long time3 = SysUtil.getCpuTime();
+                    final String s =
+                            new ModelExecuter(LEARNERS[learner]).runTest(
+                                    exs.train, exs.testM1, exs.testM2,
+                                    RAW_ATTR, isGlobal);
+                    final long time4 = SysUtil.getCpuTime();
+
+                    String[] ret = s.split("-");
+                    String testResult = ret[0];
+                    System.out.printf("%s %s %d %s %d %d %s%n",
+                            L_NAMES[learner],
+                            author.userProfile.getScreenName(),
+                            author.userProfile.getId(), exs.followerAndExsInfo,
+                            time2 - time1, time4 - time3, testResult);
+
+                    if (isGlobal) {
+                        final String[] predicts = ret[1].split(" ");
+                        List<Double> m2Probs = new ArrayList<Double>();
+                        for (String prob : predicts) {
+                            double p = Double.parseDouble(prob);
+                            m2Probs.add(p);
+                        }
+                        folToRetweetingLikelyhoods.put(folId, m2Probs);
+                    }
+                } // for (int l = 0; l < LEARNERS.length; l++) {
+            } // if (exs != null) {
+        } // for (Long folId : author.followersIds) {
+        System.out.println("****************");
+        if (isGlobal) {
+            showGlobalInfo(fols, folToRetweetingLikelyhoods, folToAvgRt,
+                    folToNumOfFs);
+        }
+    }
 
     private static HashMap<Long, HashSet<Long>> getValidUsers () {
         String fileName =
@@ -83,109 +177,69 @@ public class Main {
         return map;
     }
 
-    // It will be initialized at first time usage.
-    private ResultTable resultTable = null;
-
-    private final UserInfo author;
-    private final ExampleGetter exGetter;
-
-    public Main(final Database db, final long authorId) {
-        this.author = db.getUser(authorId);
-        final List<Status> auTweets =
-                db.getOriginalTweetListInTimeRange(authorId,
-                        ExampleGetter.TRAIN_START_DATE,
-                        ExampleGetter.TEST_END_DATE);
-        Collections.sort(auTweets, ExampleGetter.TWEET_SORTER);
-        this.exGetter = new ExampleGetter(db, auTweets);
-    }
-
-    private void pairTest () {
-        assert author != null;
-        assert author.followersIds != null;
-
-        System.out.println("****************");
+    private void printHeader () {
         System.out
                 .println("Learner AuthorName AuthorId FolName FolId #PosTrain "
                         + "#NegTrain #PosTestM1 #NegTestM1 FeatureTime TrainTime "
                         + "TrainAcc TrainPrecision TrainRecall TrainFP TrainFM TrainAct#Pos TrainPre#Pos TrainAuc "
                         + "TestAcc TestPrecision TestRecall TestFP TestFM TestAct#Pos TestPre#Pos TestAuc");
-        final Set<Long> fols = VALID_USERS.get(author.userId);
+    }
+
+    private void showGlobalInfo (Long[] fols,
+            HashMap<Long, List<Double>> folToRetweetingLikelyhoods,
+            HashMap<Long, Double> folToInflu,
+            HashMap<Long, Integer> folToNumOfFs) {
+        List<Double> likelihoodSums = new ArrayList<Double>();
+        List<Double> avgRtPred = new ArrayList<Double>();
+        List<Double> numOfFsPred = new ArrayList<Double>();
+
+        // Print each followers' id.
+        System.out.print("FolIdAndTid");
         for (long folId : fols) {
-            final long time1 = SysUtil.getCpuTime();
-            final Exs exs = exGetter.getExsOfPairTest(folId);
-            final long time2 = SysUtil.getCpuTime();
-
-            if (exs != null) {
-                for (int l = 0; l < LEARNERS.length; l++) {
-                    final long time3 = SysUtil.getCpuTime();
-                    final String s =
-                            new ModelExecuter(LEARNERS[l]).runPairTest2(
-                                    exs.train, exs.testM1, RAW_ATTR);
-                    final long time4 = SysUtil.getCpuTime();
-
-                    System.out.printf("%s %s %d %s %d %d %s%n", L_NAMES[l],
-                            author.userProfile.getScreenName(),
-                            author.userProfile.getId(), exs.followerAndExsInfo,
-                            time2 - time1, time4 - time3, s);
-                }
+            System.out.print(" " + folId);
+        }
+        System.out.println();
+        // Print each followers' influence.
+        System.out.print("Influence");
+        for (long folId : fols) {
+            System.out.printf(" %.2f", folToInflu.get(folId));
+        }
+        System.out.println();
+        for (int tidx = 0; tidx < exGetter.auTweetsM2.size(); tidx++) {
+            // Print author's tweet id.
+            System.out.print(exGetter.auTweetsM2.get(tidx).getId());
+            double sum = 0;
+            double aSum = 0;
+            double nSum = 0;
+            // Print each followers' retweet likelihood.
+            for (long folId : fols) {
+                double likelihood =
+                        folToRetweetingLikelyhoods.get(folId).get(tidx);
+                sum += likelihood;
+                aSum += likelihood * folToInflu.get(folId);
+                nSum += likelihood * folToNumOfFs.get(folId);
+                System.out.printf(" %.2f", likelihood);
             }
-        } // for (Long folId : author.followersIds) {
+            System.out.println();
+            likelihoodSums.add(sum);
+            avgRtPred.add(aSum);
+            numOfFsPred.add(nSum);
+        }
         System.out.println("****************");
-    }
-
-    @SuppressWarnings("unused")
-    private void globalTest () {
-        assert author != null;
-        assert author.followersIds != null;
-
-        System.out.println("****************");
+        // Print result of each tweet.
         System.out
-                .println("AuthorName AuthorId FolName FolId #PosTrain "
-                        + "#NegTrain #PosTestM1 #NegTestM1 #PosTestM2 #NegTestM2 FeatureTime TrainTime "
-                        + "TrainAcc TrainPrecision TrainRecall TrainFP TrainFM TrainAct#Pos TrainPre#Pos "
-                        + "TestAcc TestPrecision TestRecall TestFP TestFM TestAct#Pos TestPre#Pos");
-
-        int userCount = 0;
-        final Long[] fols = author.followersIds.toArray(new Long[0]);
-        for (int i = 0; i < fols.length; i++) {
-            final Long folId = fols[i];
-            final long time1 = SysUtil.getCpuTime();
-            final Exs exs = null;// exGetter.getExsOfGlobalTest(folId);
-            if (exs != null) {
-                final long time2 = SysUtil.getCpuTime();
-                final String s =
-                        ModelExecuter.runGlobalTest(exs.train, exs.testM1,
-                                exs.testM2, RAW_ATTR);
-                final long time3 = SysUtil.getCpuTime();
-
-                final String[] ret = s.split("-");
-
-                System.out.printf("%s %d %s %d %d %s%n",
-                        author.userProfile.getScreenName(),
-                        author.userProfile.getId(), exs.followerAndExsInfo,
-                        time2 - time1, time3 - time2, ret[0]);
-
-                final String[] actuals = ret[1].split(" ");
-                final String[] predicts = ret[2].split(" ");
-
-                if (this.resultTable == null) { // Initialize resultTable;
-                    this.resultTable = new ResultTable(actuals.length);
-                }
-
-                for (int t = 0; t < actuals.length; t++) {
-                    resultTable.a.get(t).set(userCount,
-                            (actuals[t].equals(ExampleGetter.Y)));
-                    resultTable.p.get(t).set(userCount,
-                            (predicts[t].equals(ExampleGetter.Y)));
-                }
-                userCount++;
-            }
-        } // for (Long folId : author.followersIds) {
+                .println("TweetId actual# likelihoodSum avgRtPred numOfFsPred");
+        for (int tidx = 0; tidx < exGetter.auTweetsM2.size(); tidx++) {
+            Status t = exGetter.auTweetsM2.get(tidx);
+            System.out.printf("%d %d %.2f %.2f %.2f%n", t.getId(),
+                    t.getRetweetCount(), likelihoodSums.get(tidx),
+                    avgRtPred.get(tidx), numOfFsPred.get(tidx));
+        }
         System.out.println("****************");
-
-        showFMeasure(userCount);
     }
 
+    /** @deprecated */
+    @SuppressWarnings("unused")
     private void showFMeasure (int userCount) {
         System.out.println("Tweet ErrorRate "
                 + "Accuracy Precision Recall FP FMeasure Actual#Pos Pre#Pos");
@@ -242,10 +296,12 @@ public class Main {
         }
     }
 
+    /** @deprecated */
     private static class ResultTable {
         public final ArrayList<BitSet> a = new ArrayList<BitSet>();
         public final ArrayList<BitSet> p = new ArrayList<BitSet>();
 
+        @SuppressWarnings("unused")
         public ResultTable(int numT) {
             for (int i = 0; i < numT; i++) {
                 a.add(new BitSet());
@@ -259,7 +315,7 @@ public class Main {
         System.out.println("Begin at: " + new Date().toString());
         final Database db = Database.getInstance();
         for (long authorId : VALID_USERS.keySet()) {
-            new Main(db, authorId).pairTest();
+            new Main(db, authorId, IS_GLOBAL).test();
 
         }
         System.out.println("End at: " + new Date().toString());
