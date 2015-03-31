@@ -8,21 +8,16 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 
-import learners.SetSplitLearner;
-import learners.SimpleEasyEnsemble;
+import learners.RandomForest;
+import learners.WekaDt;
 import main.ExampleGetter.Exs;
-import ripperk.RIPPERk;
 import twitter4j.Status;
 import util.SysUtil;
-
 import common.DataReader;
 import common.Learner;
 import common.RawAttrList;
-
 import datacollection.Database;
 import datacollection.UserInfo;
-import decisiontreelearning.DecisionTree.DecisionTreeTest;
-import decisiontreelearning.DecisionTree.ID3;
 
 /**
  * FileName: Main.java
@@ -37,24 +32,27 @@ public class Main {
     private static final RawAttrList RAW_ATTR = new RawAttrList(
             ModelExecuter.ATTR);
 
-    private static final Learner[] LEARNERS =
-            {
-                    new DecisionTreeTest(DecisionTreeTest.RP_PRUNE),
-                    new DecisionTreeTest(DecisionTreeTest.NO_PRUNE),
-                    new DecisionTreeTest(DecisionTreeTest.RP_PRUNE,
-                            ID3.SplitCriteria.DKM),
-                    new DecisionTreeTest(DecisionTreeTest.NO_PRUNE,
-                            ID3.SplitCriteria.DKM),
-                    new SimpleEasyEnsemble(5, new DecisionTreeTest(
-                            DecisionTreeTest.RP_PRUNE)),
-                    new SetSplitLearner(new DecisionTreeTest(
-                            DecisionTreeTest.RP_PRUNE)), new RIPPERk(true, 0),
-                    new RIPPERk(true, 1) };
-    private static final String[] L_NAMES = { "Entropy", "EntropyNoprune",
-            "DKM", "DKMnoprune", "Easy", "Split", "Ripper", "RipperOp" };
+    // private static final Learner[] LEARNERS =
+    // {
+    // new DecisionTreeTest(DecisionTreeTest.RP_PRUNE),
+    // new DecisionTreeTest(DecisionTreeTest.NO_PRUNE),
+    // new DecisionTreeTest(DecisionTreeTest.RP_PRUNE,
+    // ID3.SplitCriteria.DKM),
+    // new DecisionTreeTest(DecisionTreeTest.NO_PRUNE,
+    // ID3.SplitCriteria.DKM),
+    // new SimpleEasyEnsemble(5, new DecisionTreeTest(
+    // DecisionTreeTest.RP_PRUNE)),
+    // new SetSplitLearner(new DecisionTreeTest(
+    // DecisionTreeTest.RP_PRUNE)), new RIPPERk(true, 0),
+    // new RIPPERk(true, 1) };
+    // private static final String[] L_NAMES = { "Entropy", "EntropyNoprune",
+    // "DKM", "DKMnoprune", "Easy", "Split", "Ripper", "RipperOp" };
     // private static final Learner[] LEARNERS = { new AnnLearner2(3, 0.1, 0.1),
     // new AnnLearner2(5, 0.1, 0.1), new AnnLearner2(10, 0.1, 0.1) };
     // private static final String[] L_NAMES = { "Ann3", "Ann5", "Ann10" };
+    private static final Learner[] LEARNERS = { new WekaDt(),
+            new WekaDt(false), new RandomForest() };
+    private static final String[] L_NAMES = { "WekaDt", "WekaDtNoprune", "RandomForest" };
 
     private static final HashMap<Long, HashSet<Long>> VALID_USERS =
             getValidUsers();
@@ -145,12 +143,20 @@ public class Main {
         } // for (Long folId : author.followersIds) {
         System.out.println("****************");
         if (isGlobal) {
+            StringBuilder sb = new StringBuilder();
             for (int learner = 0; learner < LEARNERS.length; learner++) {
                 System.out.println(L_NAMES[learner] + " information");
                 HashMap<Long, List<Double>> folToRtProb =
                         listOfFolToProb.get(learner);
-                showGlobalInfo(fols, folToRtProb, folToAvgRt, folToNumOfFs);
+                sb.append(showGlobalInfo(fols, folToRtProb, folToAvgRt,
+                        folToNumOfFs, L_NAMES[learner],
+                        author.userProfile.getScreenName()));
             }
+            System.out.println("****************");
+            System.out
+                    .println("Leaner AuthorName TweetId Actual# LikelihoodSum AvgRtPred NumOfFsPred");
+            System.out.println(sb.toString());
+            System.out.println("****************");
         }
     }
 
@@ -192,10 +198,10 @@ public class Main {
                         + "TestAcc TestPrecision TestRecall TestFP TestFM TestAct#Pos TestPre#Pos TestAuc");
     }
 
-    private void showGlobalInfo (Long[] fols,
+    private String showGlobalInfo (Long[] fols,
             HashMap<Long, List<Double>> folToRtProb,
             HashMap<Long, Double> folToAvgRt,
-            HashMap<Long, Integer> folToNumOfFs) {
+            HashMap<Long, Integer> folToNumOfFs, String learner, String author) {
         List<Double> likelihoodSums = new ArrayList<Double>();
         List<Double> avgRtPred = new ArrayList<Double>();
         List<Double> numOfFsPred = new ArrayList<Double>();
@@ -237,17 +243,17 @@ public class Main {
             avgRtPred.add(aSum);
             numOfFsPred.add(nSum);
         }
-        System.out.println("****************");
+
         // Print result of each tweet.
-        System.out
-                .println("TweetId actual# likelihoodSum avgRtPred numOfFsPred");
+        StringBuilder sb = new StringBuilder();
         for (int tidx = 0; tidx < exGetter.auTweetsM2.size(); tidx++) {
             Status t = exGetter.auTweetsM2.get(tidx);
-            System.out.printf("%d %d %.2f %.2f %.2f%n", t.getId(),
-                    t.getRetweetCount(), likelihoodSums.get(tidx),
-                    avgRtPred.get(tidx), numOfFsPred.get(tidx));
+            sb.append(String.format("%s %s %d %d %.2f %.2f %.2f%n", learner,
+                    author, t.getId(), t.getRetweetCount(),
+                    likelihoodSums.get(tidx), avgRtPred.get(tidx),
+                    numOfFsPred.get(tidx)));
         }
-        System.out.println("****************");
+        return sb.toString();
     }
 
     /** @deprecated */
