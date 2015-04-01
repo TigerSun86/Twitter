@@ -109,6 +109,29 @@ public class ExampleGetter {
         this.auTweetsM2 = auTweetsM2;
     }
 
+    public Exs getExsForPredictNum () {
+        RawExampleList train = new RawExampleList();
+        for (Status t : auTweets) {
+            ArrayList<String> features =
+                    FeatureExtractor.getFeaturesOfPredictNum(t, null, null);
+            RawExample e = new RawExample();
+            e.xList = features;
+            e.t = Integer.toString(t.getRetweetCount());
+            train.add(e);
+        }
+        RawExampleList testM2 = new RawExampleList();
+        for (Status t : auTweetsM2) {
+            ArrayList<String> features =
+                    FeatureExtractor.getFeaturesOfPredictNum(t, null, null);
+            RawExample e = new RawExample();
+            e.xList = features;
+            e.t = Integer.toString(t.getRetweetCount());
+            testM2.add(e);
+        }
+        Exs ret = new Exs(train, null, testM2, "");
+        return ret;
+    }
+
     public Exs getExs (long folId, boolean isGlobal) {
         final UserInfo user = db.getUser(folId);
         if (user == null) {

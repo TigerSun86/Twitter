@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import main.ExampleGetter;
 import twitter4j.HashtagEntity;
 import twitter4j.MediaEntity;
 import twitter4j.Status;
@@ -17,6 +18,10 @@ import twitter4j.Trend;
 import twitter4j.URLEntity;
 import twitter4j.User;
 import twitter4j.UserMentionEntity;
+
+import common.RawAttr;
+import common.RawAttrList;
+
 import datacollection.Database;
 import features.AnewMap.Anew;
 
@@ -32,6 +37,100 @@ public class FeatureExtractor {
     private static final String F0 = "0";
     private static final String F1 = "1";
     private static final int MOUNT_IN_HOUR = 30 * 24;
+
+    private static final List<RawAttr> ATTRS = new ArrayList<RawAttr>();
+    static {
+        ATTRS.add(null); // No. 0, leave empty.
+        ATTRS.add(new RawAttr("1Retweet", true));
+        ATTRS.add(new RawAttr("2LastHashtag", true));
+        ATTRS.add(getDiscreteAttr("3Mentioned"));
+        ATTRS.add(getDiscreteAttr("4Picture"));
+        ATTRS.add(getDiscreteAttr("5Url"));
+        ATTRS.add(new RawAttr("6Hour", true));
+        ATTRS.add(new RawAttr("7Otweet", true));
+        ATTRS.add(new RawAttr("8LastMention", true));
+        ATTRS.add(new RawAttr("9LastDomain", true));
+        ATTRS.add(new RawAttr("10OtLDay", true));
+        ATTRS.add(new RawAttr("11OtStDay", true));
+        ATTRS.add(new RawAttr("12OtLHour", true));
+        ATTRS.add(new RawAttr("13OtStHour", true));
+        ATTRS.add(new RawAttr("14RtLDay", true));
+        ATTRS.add(new RawAttr("15RtStDay", true));
+        ATTRS.add(new RawAttr("16RtLHour", true));
+        ATTRS.add(new RawAttr("17RtStHour", true));
+        ATTRS.add(getDiscreteAttr("18RtWord"));
+        ATTRS.add(new RawAttr("19Valence", true));
+        ATTRS.add(new RawAttr("20Arousal", true));
+        ATTRS.add(new RawAttr("21Dominance", true));
+        ATTRS.add(new RawAttr("22PosSenti", true));
+        ATTRS.add(new RawAttr("23NegSenti", true));
+        ATTRS.add(new RawAttr("24Len", true));
+        ATTRS.add(new RawAttr("25LongestWord", true));
+        ATTRS.add(getDiscreteAttr("26Trend"));
+    }
+
+    private static RawAttr getDiscreteAttr (String name) {
+        RawAttr attr;
+        attr = new RawAttr(name, false);
+        attr.valueList.add(F0);
+        attr.valueList.add(F1);
+        return attr;
+    }
+
+    private static final RawAttr CLS_ATTR1 = new RawAttr("Class");
+    static {
+        CLS_ATTR1.valueList.add(ExampleGetter.Y);
+        CLS_ATTR1.valueList.add(ExampleGetter.N);
+    }
+    private static final RawAttr CLS_ATTR2 = new RawAttr("Class", true);
+
+    public static final RawAttrList ATTR_LIST1 = new RawAttrList();
+    static {
+        ATTR_LIST1.xList.add(ATTRS.get(1));
+        ATTR_LIST1.xList.add(ATTRS.get(2));
+        ATTR_LIST1.xList.add(ATTRS.get(3));
+        ATTR_LIST1.xList.add(ATTRS.get(4));
+        ATTR_LIST1.xList.add(ATTRS.get(5));
+        // ATTR_LIST1.xList.add(ATTRS.get(6));
+        ATTR_LIST1.xList.add(ATTRS.get(7));
+        ATTR_LIST1.xList.add(ATTRS.get(8));
+        ATTR_LIST1.xList.add(ATTRS.get(9));
+        ATTR_LIST1.xList.add(ATTRS.get(10));
+        ATTR_LIST1.xList.add(ATTRS.get(11));
+        ATTR_LIST1.xList.add(ATTRS.get(12));
+        ATTR_LIST1.xList.add(ATTRS.get(13));
+        ATTR_LIST1.xList.add(ATTRS.get(14));
+        ATTR_LIST1.xList.add(ATTRS.get(15));
+        ATTR_LIST1.xList.add(ATTRS.get(16));
+        ATTR_LIST1.xList.add(ATTRS.get(17));
+        ATTR_LIST1.xList.add(ATTRS.get(18));
+        ATTR_LIST1.xList.add(ATTRS.get(19));
+        ATTR_LIST1.xList.add(ATTRS.get(20));
+        ATTR_LIST1.xList.add(ATTRS.get(21));
+        ATTR_LIST1.xList.add(ATTRS.get(22));
+        ATTR_LIST1.xList.add(ATTRS.get(23));
+        ATTR_LIST1.xList.add(ATTRS.get(24));
+        ATTR_LIST1.xList.add(ATTRS.get(25));
+        ATTR_LIST1.xList.add(ATTRS.get(26));
+        ATTR_LIST1.t = CLS_ATTR1;
+    }
+
+    public static final RawAttrList ATTR_LIST_PREDICT_NUM = new RawAttrList();
+    static {
+        ATTR_LIST_PREDICT_NUM.xList.add(ATTRS.get(4));
+        ATTR_LIST_PREDICT_NUM.xList.add(ATTRS.get(5));
+        ATTR_LIST_PREDICT_NUM.xList.add(ATTRS.get(6));
+        ATTR_LIST_PREDICT_NUM.xList.add(ATTRS.get(18));
+        ATTR_LIST_PREDICT_NUM.xList.add(ATTRS.get(19));
+        ATTR_LIST_PREDICT_NUM.xList.add(ATTRS.get(20));
+        ATTR_LIST_PREDICT_NUM.xList.add(ATTRS.get(21));
+        ATTR_LIST_PREDICT_NUM.xList.add(ATTRS.get(22));
+        ATTR_LIST_PREDICT_NUM.xList.add(ATTRS.get(23));
+        ATTR_LIST_PREDICT_NUM.xList.add(ATTRS.get(24));
+        ATTR_LIST_PREDICT_NUM.xList.add(ATTRS.get(25));
+        ATTR_LIST_PREDICT_NUM.xList.add(ATTRS.get(26));
+        ATTR_LIST_PREDICT_NUM.t = CLS_ATTR2;
+    }
 
     /* 1Retweet. How many hours before t since last time f retweet something, at
      * most 1 month (0-720).
@@ -129,10 +228,36 @@ public class FeatureExtractor {
         GETTER_LIST.add(new F26()); // 26Trend
     }
 
+    private static final List<FeatureGetter> GETTER_LIST_OF_PREDICT_NUMBER =
+            new ArrayList<FeatureGetter>();
+    static {
+        GETTER_LIST_OF_PREDICT_NUMBER.add(new F4()); // 4Picture
+        GETTER_LIST_OF_PREDICT_NUMBER.add(new F5()); // 5Url
+        GETTER_LIST_OF_PREDICT_NUMBER.add(new F6()); // 6Hour
+        GETTER_LIST_OF_PREDICT_NUMBER.add(new F18()); // 18RtWord
+        GETTER_LIST_OF_PREDICT_NUMBER.add(new F19()); // 19Valence
+        GETTER_LIST_OF_PREDICT_NUMBER.add(new F20()); // 20Arousal
+        GETTER_LIST_OF_PREDICT_NUMBER.add(new F21()); // 21Dominance
+        GETTER_LIST_OF_PREDICT_NUMBER.add(new F22()); // 22PosSenti
+        GETTER_LIST_OF_PREDICT_NUMBER.add(new F23()); // 23NegSenti
+        GETTER_LIST_OF_PREDICT_NUMBER.add(new F24()); // 24Len
+        GETTER_LIST_OF_PREDICT_NUMBER.add(new F25()); // 25LongestWord
+        GETTER_LIST_OF_PREDICT_NUMBER.add(new F26()); // 26Trend
+    }
+
     public static ArrayList<String> getFeatures (Status t, User userProfile,
             List<Status> userTweets) {
         final ArrayList<String> fs = new ArrayList<String>();
         for (FeatureGetter f : GETTER_LIST) {
+            fs.add(f.getFeature(t, userProfile, userTweets));
+        }
+        return fs;
+    }
+
+    public static ArrayList<String> getFeaturesOfPredictNum (Status t,
+            User userProfile, List<Status> userTweets) {
+        final ArrayList<String> fs = new ArrayList<String>();
+        for (FeatureGetter f : GETTER_LIST_OF_PREDICT_NUMBER) {
             fs.add(f.getFeature(t, userProfile, userTweets));
         }
         return fs;
@@ -285,7 +410,6 @@ public class FeatureExtractor {
     /**
      * Hour in the week (the time t published). (0-168)
      */
-    @SuppressWarnings("unused")
     private static class F6 implements FeatureGetter {
         private static final HashMap<Integer, Integer> DAY_MAP =
                 new HashMap<Integer, Integer>();

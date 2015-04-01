@@ -8,16 +8,21 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 
+import learners.MeToWeka;
 import learners.RandomForest;
 import learners.WekaDt;
 import main.ExampleGetter.Exs;
 import twitter4j.Status;
+import util.MyMath;
 import util.SysUtil;
+import weka.core.Instance;
+import weka.core.Instances;
 import common.DataReader;
 import common.Learner;
 import common.RawAttrList;
 import datacollection.Database;
 import datacollection.UserInfo;
+import features.FeatureExtractor;
 
 /**
  * FileName: Main.java
@@ -52,7 +57,8 @@ public class Main {
     // private static final String[] L_NAMES = { "Ann3", "Ann5", "Ann10" };
     private static final Learner[] LEARNERS = { new WekaDt(),
             new WekaDt(false), new RandomForest() };
-    private static final String[] L_NAMES = { "WekaDt", "WekaDtNoprune", "RandomForest" };
+    private static final String[] L_NAMES = { "WekaDt", "WekaDtNoprune",
+            "RandomForest" };
 
     private static final HashMap<Long, HashSet<Long>> VALID_USERS =
             getValidUsers();
@@ -86,6 +92,38 @@ public class Main {
         this.isGlobal = isGlobal;
     }
 
+    private void testPredictNum () throws Exception {
+        assert author != null;
+        final Exs exs = exGetter.getExsForPredictNum();
+        if (!MeToWeka.hasSetAttribute()) {
+            MeToWeka.setAttributes(FeatureExtractor.ATTR_LIST_PREDICT_NUM);
+        }
+        Instances train = MeToWeka.convertInstances(exs.train);
+
+        weka.classifiers.functions.MultilayerPerceptron cls =
+                new weka.classifiers.functions.MultilayerPerceptron();
+        cls.buildClassifier(train);
+        System.out.println("****************");
+        System.out.println("AuthorName Predict Actual");
+
+        Instances test = MeToWeka.convertInstances(exs.testM2);
+        double[] ps = new double[test.numInstances()];
+        double[] as = new double[test.numInstances()];
+        for (int i = 0; i < test.numInstances(); i++) {
+            Instance inst = test.instance(i);
+            double result = cls.classifyInstance(inst);
+            double act = exGetter.auTweetsM2.get(i).getRetweetCount();
+            System.out.printf("%s %f %f%n", author.userProfile.getScreenName(),
+                    result, act);
+            ps[i] = result;
+            as[i] = act;
+        }
+        System.out.println("****************");
+        System.out.println("Pearson: " + MyMath.getPearsonCorrelation(ps, as));
+        System.out.println("****************");
+    }
+
+    @SuppressWarnings("unused")
     private void test () {
         assert author != null;
         assert author.followersIds != null;
@@ -328,12 +366,12 @@ public class Main {
         }
     }
 
-    public static void main (String[] args) {
+    public static void main (String[] args) throws Exception {
         // final OutputRedirection or = new OutputRedirection();
         System.out.println("Begin at: " + new Date().toString());
         final Database db = Database.getInstance();
         for (long authorId : VALID_USERS.keySet()) {
-            new Main(db, authorId, IS_GLOBAL).test();
+            new Main(db, authorId, IS_GLOBAL).testPredictNum();
 
         }
         System.out.println("End at: " + new Date().toString());
