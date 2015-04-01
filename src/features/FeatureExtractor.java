@@ -13,9 +13,11 @@ import java.util.concurrent.TimeUnit;
 import twitter4j.HashtagEntity;
 import twitter4j.MediaEntity;
 import twitter4j.Status;
+import twitter4j.Trend;
 import twitter4j.URLEntity;
 import twitter4j.User;
 import twitter4j.UserMentionEntity;
+import datacollection.Database;
 import features.AnewMap.Anew;
 
 /**
@@ -91,7 +93,11 @@ public class FeatureExtractor {
      * 
      * 23NegSenti. SentiStrength negative sentiment score.
      * 
-     * 24Len. Length of text. */
+     * 24Len. Length of text.
+     * 
+     * 25LongestWord. Length of longest word.
+     * 
+     * 26Trend. Contains trend word or not. */
     private static final List<FeatureGetter> GETTER_LIST =
             new ArrayList<FeatureGetter>();
     static {
@@ -119,6 +125,8 @@ public class FeatureExtractor {
         GETTER_LIST.add(new F22()); // 22PosSenti
         GETTER_LIST.add(new F23()); // 23NegSenti
         GETTER_LIST.add(new F24()); // 24Len
+        GETTER_LIST.add(new F25()); // 25LongestWord
+        GETTER_LIST.add(new F26()); // 26Trend
     }
 
     public static ArrayList<String> getFeatures (Status t, User userProfile,
@@ -849,5 +857,78 @@ public class FeatureExtractor {
             String feature = Integer.toString(t.getText().length());
             return feature;
         }
+    }
+
+    /**
+     * 25LongestWord. Length of longest word.
+     */
+    private static class F25 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            String[] words = t.getText().split(" ");
+            int max = 0;
+            for (String w : words) {
+                int len = wordLen(w);
+                if (max < len) {
+                    max = len;
+                }
+            }
+            String feature = Integer.toString(max);
+            return feature;
+        }
+
+        public int wordLen (String w) {
+            int len = 0;
+            for (char c : w.toCharArray()) {
+                if (Character.isLetter(c)) {
+                    len++;
+                } else if (Character.isDigit(c) || NOT_WORD_CHARS.contains(c)) {
+                    len = 0; // It's not a word if contains digit or url.
+                    break;
+                } // else just ignore others like ,.?
+            }
+            return len;
+        }
+
+        private static final HashSet<Character> NOT_WORD_CHARS =
+                new HashSet<Character>();
+        static {
+            NOT_WORD_CHARS.add('\\');
+            NOT_WORD_CHARS.add('/');
+            NOT_WORD_CHARS.add('@');
+            NOT_WORD_CHARS.add('#');
+        }
+    }
+
+    /**
+     * 26Trend. Contains trend word or not.
+     */
+    private static class F26 implements FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            String feature;
+            if (tIdToTrendResult.containsKey(t.getId())) {
+                feature = tIdToTrendResult.get(t.getId());
+            } else {
+                Database db = Database.getStaticInstance();
+                Trend[] trends = db.getTrends(t.getCreatedAt()).getTrends();
+                boolean contains = false;
+                for (Trend trend : trends) {
+                    if (t.getText().contains(trend.getName())) {
+                        contains = true;
+                        break;
+                    }
+                }
+                feature = (contains ? F1 : F0);
+                tIdToTrendResult.put(t.getId(), feature);
+            }
+
+            return feature;
+        }
+
+        private static HashMap<Long, String> tIdToTrendResult =
+                new HashMap<Long, String>();
     }
 }

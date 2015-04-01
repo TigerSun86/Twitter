@@ -21,5 +21,7 @@
 22PosSenti continuous
 23NegSenti continuous
 24Len continuous
+25LongestWord continuous
+26Trend 0 1
 
 Class Y N

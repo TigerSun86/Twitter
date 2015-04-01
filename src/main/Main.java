@@ -104,7 +104,7 @@ public class Main {
         final Long[] fols = VALID_USERS.get(author.userId).toArray(new Long[0]);
         for (long folId : fols) {
             final long time1 = SysUtil.getCpuTime();
-            final Exs exs = exGetter.getExs(folId, true);
+            final Exs exs = exGetter.getExs(folId, isGlobal);
             final long time2 = SysUtil.getCpuTime();
 
             if (exs != null) {

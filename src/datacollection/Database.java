@@ -92,6 +92,8 @@ public class Database {
     private DBCollection cbColl = null;
     private DBCollection streamUsersColl = null;
 
+    private static Database staticdb = null;
+
     private Database() {
     }
 
@@ -104,10 +106,15 @@ public class Database {
             e.printStackTrace();
         }
         if (db.mongoClient != null) {
+            staticdb = db;
             return db;
         } else {
             return null;
         }
+    }
+
+    public static Database getStaticInstance () {
+        return staticdb;
     }
 
     private List<String> getTweetsDbNames () {
