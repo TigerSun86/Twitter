@@ -1,11 +1,11 @@
 package main;
 
 import java.util.ArrayList;
-import java.util.BitSet;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 
 import learners.MeToWeka;
@@ -17,9 +17,11 @@ import util.MyMath;
 import util.SysUtil;
 import weka.core.Instance;
 import weka.core.Instances;
+
 import common.DataReader;
 import common.Learner;
 import common.RawAttrList;
+
 import datacollection.Database;
 import datacollection.UserInfo;
 import features.FeatureExtractor;
@@ -34,8 +36,6 @@ import features.FeatureExtractor;
  */
 public class Main {
     private static final boolean IS_GLOBAL = true;
-    private static final RawAttrList RAW_ATTR = new RawAttrList(
-            ModelExecuter.ATTR);
 
     // private static final Learner[] LEARNERS =
     // {
@@ -60,48 +60,66 @@ public class Main {
     private static final String[] L_NAMES = { "WekaDt", "WekaDtNoprune",
             "RandomForest" };
 
-    private static final HashMap<Long, HashSet<Long>> VALID_USERS =
+    public static final HashMap<Long, HashSet<Long>> VALID_USERS =
             getValidUsers();
 
-    // It will be initialized at first time usage.
-    /** @deprecated */
-    private ResultTable resultTable = null;
-
+    private final Database db;
     private final UserInfo author;
     private final ExampleGetter exGetter;
-    private final Database db;
     private final boolean isGlobal;
 
     public Main(final Database db, final long authorId, final boolean isGlobal) {
+        this.db = db;
         this.author = db.getUser(authorId);
         final List<Status> auTweets =
-                db.getOriginalTweetListInTimeRange(authorId,
-                        ExampleGetter.TRAIN_START_DATE,
+                getAuthorTweets(authorId, ExampleGetter.TRAIN_START_DATE,
                         ExampleGetter.TEST_END_DATE);
-        Collections.sort(auTweets, ExampleGetter.TWEET_SORTER);
+
         List<Status> auTweetsM2 = null;
         if (isGlobal) {
             auTweetsM2 =
-                    db.getOriginalTweetListInTimeRange(authorId,
-                            ExampleGetter.TEST_END_DATE,
+                    getAuthorTweets(authorId, ExampleGetter.TEST_END_DATE,
                             ExampleGetter.TESTM2_END_DATE);
-            Collections.sort(auTweetsM2, ExampleGetter.TWEET_SORTER);
         }
         this.exGetter = new ExampleGetter(db, auTweets, auTweetsM2);
-        this.db = db;
         this.isGlobal = isGlobal;
+        for (long folId : db.getTopFollowers(authorId, 0)) {
+            FeatureExtractor.GETTER_LIST_OF_PREDICT_NUMBER
+                    .add(new FeatureExtractor.Ffol(folId));
+        }
+    }
+
+    private List<Status> getAuthorTweets (long authorId, Date fromDate,
+            Date toDate) {
+        final List<Status> auTweets =
+                db.getOriginalTweetListInTimeRange(authorId, fromDate, toDate);
+        Iterator<Status> iter = auTweets.iterator();
+        while (iter.hasNext()) {
+            Status t = iter.next();
+            if (t.getRetweetCount() == 0) {
+                iter.remove();
+            }
+        }
+        Collections.sort(auTweets, ExampleGetter.TWEET_SORTER);
+        return auTweets;
     }
 
     private void testPredictNum () throws Exception {
         assert author != null;
         final Exs exs = exGetter.getExsForPredictNum();
         if (!MeToWeka.hasSetAttribute()) {
-            MeToWeka.setAttributes(FeatureExtractor.ATTR_LIST_PREDICT_NUM);
+            MeToWeka.setAttributes(FeatureExtractor.getAttrListOfPredictNum());
         }
         Instances train = MeToWeka.convertInstances(exs.train);
 
         weka.classifiers.functions.MultilayerPerceptron cls =
                 new weka.classifiers.functions.MultilayerPerceptron();
+        cls.setValidationThreshold(30);
+        cls.setTrainingTime(1000);
+        cls.setLearningRate(0.1);
+        cls.setMomentum(0.2);
+        // cls.setNormalizeAttributes(false);
+        // cls.setNormalizeNumericClass(false);
         cls.buildClassifier(train);
         System.out.println("****************");
         System.out.println("AuthorName Predict Actual");
@@ -112,14 +130,34 @@ public class Main {
         for (int i = 0; i < test.numInstances(); i++) {
             Instance inst = test.instance(i);
             double result = cls.classifyInstance(inst);
-            double act = exGetter.auTweetsM2.get(i).getRetweetCount();
-            System.out.printf("%s %f %f%n", author.userProfile.getScreenName(),
-                    result, act);
+            double act = Math.log(exGetter.auTweetsM2.get(i).getRetweetCount());
+            System.out.printf("%s %.3f %.2f%n",
+                    author.userProfile.getScreenName(), result, act);
             ps[i] = result;
             as[i] = act;
         }
         System.out.println("****************");
-        System.out.println("Pearson: " + MyMath.getPearsonCorrelation(ps, as));
+        System.out.println("Test Pearson: "
+                + MyMath.getPearsonCorrelation(ps, as));
+        System.out.println("****************");
+
+        System.out.println("****************");
+        System.out.println("AuthorName Predict Actual");
+
+        ps = new double[train.numInstances()];
+        as = new double[train.numInstances()];
+        for (int i = 0; i < train.numInstances(); i++) {
+            Instance inst = train.instance(i);
+            double result = cls.classifyInstance(inst);
+            double act = Math.log(exGetter.auTweets.get(i).getRetweetCount());
+//            System.out.printf("%s %.3f %.2f%n",
+//                    author.userProfile.getScreenName(), result, act);
+            ps[i] = result;
+            as[i] = act;
+        }
+        System.out.println("****************");
+        System.out.println("Train Pearson: "
+                + MyMath.getPearsonCorrelation(ps, as));
         System.out.println("****************");
     }
 
@@ -127,7 +165,7 @@ public class Main {
     private void test () {
         assert author != null;
         assert author.followersIds != null;
-
+        RawAttrList attrs = FeatureExtractor.getAttrListOfModel1();
         System.out.println("****************");
         printHeader();
 
@@ -155,8 +193,8 @@ public class Main {
                     final long time3 = SysUtil.getCpuTime();
                     final String s =
                             new ModelExecuter(LEARNERS[learner]).runTest(
-                                    exs.train, exs.testM1, exs.testM2,
-                                    RAW_ATTR, isGlobal);
+                                    exs.train, exs.testM1, exs.testM2, attrs,
+                                    isGlobal);
                     final long time4 = SysUtil.getCpuTime();
 
                     String[] ret = s.split("-");
@@ -294,83 +332,14 @@ public class Main {
         return sb.toString();
     }
 
-    /** @deprecated */
-    @SuppressWarnings("unused")
-    private void showFMeasure (int userCount) {
-        System.out.println("Tweet ErrorRate "
-                + "Accuracy Precision Recall FP FMeasure Actual#Pos Pre#Pos");
-        for (int t = 0; t < resultTable.a.size(); t++) {
-            final BitSet arow = resultTable.a.get(t);
-            final BitSet prow = resultTable.p.get(t);
-            int tp = 0;
-            int tn = 0;
-            int fp = 0;
-            int fn = 0;
-            for (int f = 0; f < userCount; f++) {
-                final boolean a = arow.get(f);
-                final boolean p = prow.get(f);
-                if (a && p) {
-                    tp++;
-                } else if (a && !p) {
-                    fn++;
-                } else if (!a && p) {
-                    fp++;
-                } else {// !a && !p
-                    tn++;
-                }
-            }
-            final int numActPos = tp + fn;
-            final int numPrePos = tp + fp;
-            final double errorRate =
-                    ((double) Math.abs(numActPos - numPrePos))
-                            / (tp + tn + fp + fn);
-            final double accuracy = ((double) tp + tn) / (tp + tn + fp + fn);
-            final double precision;
-            final double recall;
-            if (tp == 0) {
-                precision = 0;
-                recall = 0;
-            } else {
-                precision = ((double) tp) / (tp + fp);
-                recall = ((double) tp) / (tp + fn);
-            }
-            final double falsePositive;
-            if (fp == 0) {
-                falsePositive = 0;
-            } else {
-                falsePositive = ((double) fp) / (fp + tn);
-            }
-            final double fmeasure;
-            if (precision == 0 || recall == 0) {
-                fmeasure = 0;
-            } else {
-                fmeasure = (2 * precision * recall) / (precision + recall);
-            }
-            System.out.printf("t%d %.4f %.4f %.4f %.4f %.4f %.4f %d %d%n", t,
-                    errorRate, accuracy, precision, recall, falsePositive,
-                    fmeasure, numActPos, numPrePos);
-        }
-    }
-
-    /** @deprecated */
-    private static class ResultTable {
-        public final ArrayList<BitSet> a = new ArrayList<BitSet>();
-        public final ArrayList<BitSet> p = new ArrayList<BitSet>();
-
-        @SuppressWarnings("unused")
-        public ResultTable(int numT) {
-            for (int i = 0; i < numT; i++) {
-                a.add(new BitSet());
-                p.add(new BitSet());
-            }
-        }
-    }
-
     public static void main (String[] args) throws Exception {
         // final OutputRedirection or = new OutputRedirection();
         System.out.println("Begin at: " + new Date().toString());
         final Database db = Database.getInstance();
         for (long authorId : VALID_USERS.keySet()) {
+            if (authorId != 16958346L) {
+                continue;
+            }
             new Main(db, authorId, IS_GLOBAL).testPredictNum();
 
         }

@@ -2,12 +2,15 @@ package datacollection;
 
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
 
 import main.ExampleGetter;
+import main.Main;
 import main.ExampleGetter.PosAndNeg;
 import twitter4j.Status;
 import twitter4j.Trends;
@@ -98,6 +101,10 @@ public class Database {
     }
 
     public static Database getInstance () {
+        if (staticdb != null) {
+            return staticdb;
+        }
+
         final Database db = new Database();
         try {
             db.mongoClient = new MongoClient();
@@ -111,10 +118,6 @@ public class Database {
         } else {
             return null;
         }
-    }
-
-    public static Database getStaticInstance () {
-        return staticdb;
     }
 
     private List<String> getTweetsDbNames () {
@@ -786,5 +789,55 @@ public class Database {
             count++;
         }
         return sum / count;
+    }
+
+    public static HashMap<Long, HashSet<Long>> userToRetweetedTweets =
+            new HashMap<Long, HashSet<Long>>();
+
+    public boolean isRetweetedByUser (long tId, long userId) {
+        if (!userToRetweetedTweets.containsKey(userId)) {
+            HashSet<Long> rtSet = new HashSet<Long>();
+            List<Status> ts = this.getTweetList(userId);
+            for (Status t : ts) {
+                if (t.isRetweet()) {
+                    Long otId = t.getRetweetedStatus().getId();
+                    rtSet.add(otId);
+                }
+            }
+            userToRetweetedTweets.put(userId, rtSet);
+        }
+        return userToRetweetedTweets.get(userId).contains(tId);
+    }
+
+    private static class UserIdAndNFols implements Comparable<UserIdAndNFols> {
+        long id;
+        int n;
+
+        public UserIdAndNFols(long userId, int followersCount) {
+            this.id = userId;
+            this.n = followersCount;
+        }
+
+        @Override
+        public int compareTo (UserIdAndNFols o) {
+            return this.n - o.n;
+        }
+
+    }
+
+    public List<Long> getTopFollowers (long authorId, int topNum) {
+        List<UserIdAndNFols> fols = new ArrayList<UserIdAndNFols>();
+        for (long folId : Main.VALID_USERS.get(authorId)) {
+            UserInfo f = this.getUser(folId);
+            fols.add(new UserIdAndNFols(f.userId, f.userProfile
+                    .getFollowersCount()));
+        }
+        Collections.sort(fols, Collections.reverseOrder());
+        List<Long> topFs = new ArrayList<Long>();
+        for (int i = 0; i < Math.min(topNum, fols.size()); i++) {
+            topFs.add(fols.get(i).id);
+            // System.out.println(fols.get(i).id + "," + fols.get(i).n);
+        }
+        return topFs;
     }
 }

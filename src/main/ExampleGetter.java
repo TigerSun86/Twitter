@@ -99,7 +99,7 @@ public class ExampleGetter {
     public static final int LEAST_POS_NUM = 20;
 
     private final Database db;
-    private final List<Status> auTweets;
+    public final List<Status> auTweets;
     public final List<Status> auTweetsM2;
 
     public ExampleGetter(Database db, List<Status> auTweets,
@@ -116,7 +116,7 @@ public class ExampleGetter {
                     FeatureExtractor.getFeaturesOfPredictNum(t, null, null);
             RawExample e = new RawExample();
             e.xList = features;
-            e.t = Integer.toString(t.getRetweetCount());
+            e.t = Double.toString(Math.log(t.getRetweetCount()));
             train.add(e);
         }
         RawExampleList testM2 = new RawExampleList();
@@ -125,9 +125,15 @@ public class ExampleGetter {
                     FeatureExtractor.getFeaturesOfPredictNum(t, null, null);
             RawExample e = new RawExample();
             e.xList = features;
-            e.t = Integer.toString(t.getRetweetCount());
+            e.t = Double.toString(Math.log(t.getRetweetCount()));
             testM2.add(e);
         }
+        // Map all attributes in range 0 to 1.
+        RawAttrList attrs = FeatureExtractor.getAttrListOfPredictNum();
+        final MappedAttrList mAttr = new MappedAttrList(train, attrs);
+        // Rescale (map) all data in range 0 to 1.
+        //train = mAttr.mapExs(train, attrs);
+        //testM2 = mAttr.mapExs(testM2, attrs);
         Exs ret = new Exs(train, null, testM2, "");
         return ret;
     }
@@ -217,71 +223,6 @@ public class ExampleGetter {
         return np + " " + nn;
     }
 
-    @SuppressWarnings("unused")
-    private Exs getExsOfPairTest2 (long folId) {
-        final UserInfo user = db.getUser(folId);
-        if (user == null) {
-            // System.out.println("Cannot find user id " + folId);
-            return null;
-        }
-        final List<Status> folTweets = db.getTweetList(folId);
-        Collections.sort(folTweets, TWEET_SORTER);
-
-        if (folTweets.isEmpty()) {
-            return null; // No tweets for this follower.
-        }
-
-        final PosAndNeg pan = db.getPosAndNeg(folId, auTweets);
-        if (pan != null && pan.pos.size() >= LEAST_POS_NUM) {
-            // Sort them again because order might be changed by user retweets
-            // new tweet first.
-            Collections.sort(pan.pos, TWEET_SORTER);
-            Collections.sort(pan.neg, TWEET_SORTER);
-            final List<List<Status>> poss = splitByDate(pan.pos);
-            final List<List<Status>> negs = splitByDate(pan.neg);
-            RawExampleList train =
-                    getFeatures(poss.get(0), negs.get(0), user.userProfile,
-                            folTweets);
-            RawExampleList testM1 =
-                    getFeatures(poss.get(1), negs.get(1), user.userProfile,
-                            folTweets);
-
-            final String followerAndExsInfo =
-                    String.format("%s %d %d %d %d %d", user.userProfile
-                            .getScreenName(), user.userProfile.getId(), poss
-                            .get(0).size(), negs.get(0).size(), poss.get(1)
-                            .size(), negs.get(1).size());
-
-            // Map all attributes in range 0 to 1.
-            final MappedAttrList mAttr = new MappedAttrList(train, RAW_ATTR);
-            // Rescale (map) all data in range 0 to 1.
-            train = mAttr.mapExs(train, RAW_ATTR);
-            testM1 = mAttr.mapExs(testM1, RAW_ATTR);
-
-            return new Exs(train, testM1, null, followerAndExsInfo);
-        } else {
-            return null;
-        }
-    }
-
-    private static List<List<Status>> splitByDate (List<Status> exs) {
-        final List<Status> train = new ArrayList<Status>();
-        final List<Status> test = new ArrayList<Status>();
-        for (Status t : exs) {
-            if (t.getCreatedAt().after(TRAIN_START_DATE)) {
-                if (t.getCreatedAt().before(TEST_START_DATE)) {
-                    train.add(t);
-                } else if (t.getCreatedAt().before(TEST_END_DATE)) {
-                    test.add(t);
-                } // else discard.
-            }
-        }
-        final List<List<Status>> ret = new ArrayList<List<Status>>();
-        ret.add(train);
-        ret.add(test);
-        return ret;
-    }
-
     private static RawExampleList getFeatures (List<Status> pos,
             List<Status> neg, User userProfile, List<Status> userTweets) {
         final RawExampleList exs = new RawExampleList();
@@ -324,7 +265,8 @@ public class ExampleGetter {
     private static RawExample processOneTweet (Status t, User userProfile,
             List<Status> userTweets, boolean isPos) {
         final ArrayList<String> fs =
-                FeatureExtractor.getFeatures(t, userProfile, userTweets);
+                FeatureExtractor
+                        .getFeaturesOfModel1(t, userProfile, userTweets);
         final RawExample e = new RawExample();
         e.xList = fs;
         if (isPos) {
