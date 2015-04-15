@@ -102,9 +102,9 @@ public class FeatureExtractor {
      * 
      * 26Trend. Contains trend word or not.
      * 
-     * 27DayInWeek.
+     * 27DayInWeek. Monday is 0, Tuesday is 1....
      * 
-     * 28HourInDay. */
+     * 28HourInDay. 0am is 0, 1am is 1... */
     private static final List<FeatureGetter> GETTER_LIST =
             new ArrayList<FeatureGetter>();
     static {

@@ -1,10 +1,12 @@
 package util;
 
 import java.awt.geom.Point2D;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -32,6 +34,11 @@ public class MyMath {
     }
 
     public static int[] mOutofN (final int m, final int n) {
+        return mOutofN(m, n, new Random().nextLong());
+    }
+
+    public static int[]
+            mOutofN (final int m, final int n, final long randomSeed) {
         final int[] ret;
         if (m <= n) {
             ret = new int[m];
@@ -40,7 +47,7 @@ public class MyMath {
         }
 
         final HashSet<Integer> selected = new HashSet<Integer>();
-        final Random ran = new Random();
+        final Random ran = new Random(randomSeed);
         for (int i = 0; i < ret.length; i++) {
             while (true) {
                 final int r = ran.nextInt(n);
@@ -147,5 +154,82 @@ public class MyMath {
         double cov_x_y = sum_coproduct / scores1.length;
         result = cov_x_y / (pop_sd_x * pop_sd_y);
         return result;
+    }
+
+    public static double getRootMeanSquareError (double[] scores1,
+            double[] scores2) {
+        if (scores1.length == 0) {
+            return 0;
+        }
+        double result = 0;
+        for (int i = 0; i < scores1.length; i++) {
+            double delta = scores1[i] - scores2[i];
+            result += delta * delta;
+        }
+        result /= scores1.length;
+        result = Math.sqrt(result);
+        return result;
+    }
+
+    /**
+     * Return k subsets by splitting idxesIn randomly, each set will have same
+     * (as possible) amount of idxes.
+     * If k <=1, it will be only 1 subset with all idxes.
+     * If k > size of idxesIn, it will still return k subsets, each the first
+     * sets have 1 idx and other sets have no idx.
+     * */
+    public static ArrayList<HashSet<Integer>> splitToKSets (
+            List<Integer> idxesIn, int k, long randomSeed) {
+        ArrayList<HashSet<Integer>> ret = new ArrayList<HashSet<Integer>>();
+        if (k <= 1) { // Special case.
+            HashSet<Integer> set = new HashSet<Integer>();
+            set.addAll(idxesIn);
+            ret.add(set);
+            return ret;
+        }
+
+        Random ran = new Random(randomSeed);
+        ArrayList<Integer> idxes = new ArrayList<Integer>();
+        idxes.addAll(idxesIn);
+        int endIdx = idxes.size() - 1; // 0 to endIdx are all available.
+        for (int kremain = Math.max(1, k); kremain > 0; kremain--) {
+            int size = getSize(endIdx + 1, kremain);
+            HashSet<Integer> selected = new HashSet<Integer>();
+            while (selected.size() < size) {
+                int r = ran.nextInt(endIdx + 1);
+                int sel = idxes.get(r);
+                selected.add(sel);
+                swap(idxes, r, endIdx);
+                endIdx--;
+            }
+            ret.add(selected);
+        }
+        return ret;
+    }
+
+    private static int getSize (int idxRemain, int kRemain) {
+        int size;
+        if (idxRemain > 0) {
+            size = (int) Math.round(((double) idxRemain) / kRemain);
+            if (size == 0) {
+                // if idx =1 but k =3 will lead to size = 0, but the last idx
+                // should be used.
+                size = 1;
+            }
+        } else { // There is no idx remain.
+            size = 0;
+        }
+        return size;
+    }
+
+    private static void swap (ArrayList<Integer> idxes, int a, int b) {
+        if (a == b) {
+            return;
+        }
+        assert !(a < 0 || b < 0 || a >= idxes.size() || b >= idxes.size());
+        int tmp = idxes.get(a);
+        idxes.set(a, idxes.get(b));
+        idxes.set(b, tmp);
+        return;
     }
 }

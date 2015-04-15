@@ -7,10 +7,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map.Entry;
 
 import learners.MeToWeka;
-import learners.RandomForest;
-import learners.WekaDt;
+import learners.WAnn;
+import learners.WLr;
 import main.ExampleGetter.Exs;
 import twitter4j.Status;
 import util.MyMath;
@@ -20,7 +21,9 @@ import weka.core.Instances;
 
 import common.DataReader;
 import common.Learner;
+import common.ProbPredictor;
 import common.RawAttrList;
+import common.RawExample;
 
 import datacollection.Database;
 import datacollection.UserInfo;
@@ -52,13 +55,14 @@ public class Main {
     // new RIPPERk(true, 1) };
     // private static final String[] L_NAMES = { "Entropy", "EntropyNoprune",
     // "DKM", "DKMnoprune", "Easy", "Split", "Ripper", "RipperOp" };
-    // private static final Learner[] LEARNERS = { new AnnLearner2(3, 0.1, 0.1),
-    // new AnnLearner2(5, 0.1, 0.1), new AnnLearner2(10, 0.1, 0.1) };
-    // private static final String[] L_NAMES = { "Ann3", "Ann5", "Ann10" };
-    private static final Learner[] LEARNERS = { new WekaDt(),
-            new WekaDt(false), new RandomForest() };
-    private static final String[] L_NAMES = { "WekaDt", "WekaDtNoprune",
-            "RandomForest" };
+    private static final Learner[] LEARNERS = { new WAnn(10), new WAnn(20),
+            new WLr() };
+    private static final String[] L_NAMES = { "Ann10", "Ann20",
+            "LinearRegression" };
+    // private static final Learner[] LEARNERS = { new WekaDt(),
+    // new WekaDt(false), new RandomForest() };
+    // private static final String[] L_NAMES = { "WekaDt", "WekaDtNoprune",
+    // "RandomForest" };
 
     public static final HashMap<Long, HashSet<Long>> VALID_USERS =
             getValidUsers();
@@ -104,64 +108,106 @@ public class Main {
         return auTweets;
     }
 
-    private void testPredictNum () throws Exception {
+    private static final int[] ITERS =
+            { 1, 10, 50, 100, 500, 1000, 5000, 10000 };
+
+    private void testPredictNumWithDifIter () throws Exception {
         assert author != null;
         final Exs exs = exGetter.getExsForPredictNum();
         if (!MeToWeka.hasSetAttribute()) {
             MeToWeka.setAttributes(FeatureExtractor.getAttrListOfPredictNum());
         }
         Instances train = MeToWeka.convertInstances(exs.train);
-
-        weka.classifiers.functions.MultilayerPerceptron cls =
-                new weka.classifiers.functions.MultilayerPerceptron();
-        cls.setValidationThreshold(30);
-        cls.setTrainingTime(1000);
-        cls.setLearningRate(0.1);
-        cls.setMomentum(0.2);
-        // cls.setNormalizeAttributes(false);
-        // cls.setNormalizeNumericClass(false);
-        cls.buildClassifier(train);
-        System.out.println("****************");
-        System.out.println("AuthorName Predict Actual");
-
         Instances test = MeToWeka.convertInstances(exs.testM2);
-        double[] ps = new double[test.numInstances()];
-        double[] as = new double[test.numInstances()];
-        for (int i = 0; i < test.numInstances(); i++) {
-            Instance inst = test.instance(i);
-            double result = cls.classifyInstance(inst);
-            double act = Math.log(exGetter.auTweetsM2.get(i).getRetweetCount());
-            System.out.printf("%s %.3f %.2f%n",
-                    author.userProfile.getScreenName(), result, act);
-            ps[i] = result;
-            as[i] = act;
-        }
-        System.out.println("****************");
-        System.out.println("Test Pearson: "
-                + MyMath.getPearsonCorrelation(ps, as));
-        System.out.println("****************");
+        System.out.println("Iteration TrainPearson TestPearson");
+        for (int iter : ITERS) {
+            weka.classifiers.functions.MultilayerPerceptron cls =
+                    new weka.classifiers.functions.MultilayerPerceptron();
+            cls.setTrainingTime(iter);
+            cls.setValidationSetSize(30);
+            cls.setLearningRate(0.1);
+            cls.setMomentum(0.2);
+            cls.setHiddenLayers("10");
+            cls.setNormalizeAttributes(false);
+            cls.setNormalizeNumericClass(false);
+            cls.buildClassifier(train);
 
-        System.out.println("****************");
-        System.out.println("AuthorName Predict Actual");
+            System.out.print(iter);
 
-        ps = new double[train.numInstances()];
-        as = new double[train.numInstances()];
-        for (int i = 0; i < train.numInstances(); i++) {
-            Instance inst = train.instance(i);
-            double result = cls.classifyInstance(inst);
-            double act = Math.log(exGetter.auTweets.get(i).getRetweetCount());
-//            System.out.printf("%s %.3f %.2f%n",
-//                    author.userProfile.getScreenName(), result, act);
-            ps[i] = result;
-            as[i] = act;
+            double[] ps = new double[train.numInstances()];
+            double[] as = new double[train.numInstances()];
+            for (int i = 0; i < train.numInstances(); i++) {
+                Instance inst = train.instance(i);
+                double result = cls.classifyInstance(inst);
+                double act = inst.classValue();
+                ps[i] = result;
+                as[i] = act;
+            }
+            System.out.print(" " + MyMath.getPearsonCorrelation(ps, as));
+
+            ps = new double[test.numInstances()];
+            as = new double[test.numInstances()];
+            for (int i = 0; i < test.numInstances(); i++) {
+                Instance inst = test.instance(i);
+                double result = cls.classifyInstance(inst);
+                double act = inst.classValue();
+                ps[i] = result;
+                as[i] = act;
+            }
+
+            System.out.print(" " + MyMath.getPearsonCorrelation(ps, as));
+            System.out.println();
         }
-        System.out.println("****************");
-        System.out.println("Train Pearson: "
-                + MyMath.getPearsonCorrelation(ps, as));
-        System.out.println("****************");
     }
 
-    @SuppressWarnings("unused")
+    private void testPredictNum () throws Exception {
+        assert author != null;
+        for (int li = 0; li < LEARNERS.length; li++) {
+            final Exs exs = exGetter.getExsForPredictNum();
+            Learner learner = LEARNERS[li];
+            ProbPredictor cls =
+                    learner.learn(exs.train,
+                            FeatureExtractor.getAttrListOfPredictNum());
+
+            double trainP;
+            double testP;
+            double trainE;
+            double testE;
+            double[] ps = new double[exs.testM2.size()];
+            double[] as = new double[exs.testM2.size()];
+            for (int i = 0; i < exs.testM2.size(); i++) {
+                RawExample inst = exs.testM2.get(i);
+                double result = cls.predictPosProb(inst.xList);
+                double act = Double.parseDouble(inst.t);
+                // System.out.printf("%s %.3f %.3f%n",
+                // author.userProfile.getScreenName(), result, act);
+                ps[i] = result;
+                as[i] = act;
+            }
+            testP = MyMath.getPearsonCorrelation(ps, as);
+            testE = MyMath.getRootMeanSquareError(ps, as);
+
+            ps = new double[exs.train.size()];
+            as = new double[exs.train.size()];
+            for (int i = 0; i < exs.train.size(); i++) {
+                RawExample inst = exs.train.get(i);
+                double result = cls.predictPosProb(inst.xList);
+                double act = Double.parseDouble(inst.t);
+                // System.out.printf("%s %.3f %.3f%n",
+                // author.userProfile.getScreenName(), result, act);
+                ps[i] = result;
+                as[i] = act;
+            }
+            trainP = MyMath.getPearsonCorrelation(ps, as);
+            trainE = MyMath.getRootMeanSquareError(ps, as);
+            System.out.printf("%s %s %.3f %.3f %.3f %.3f%n",
+                    author.userProfile.getScreenName(), L_NAMES[li], trainP,
+                    testP, trainE, testE);
+        }
+
+    }
+
+    // @SuppressWarnings("unused")
     private void test () {
         assert author != null;
         assert author.followersIds != null;
@@ -178,6 +224,7 @@ public class Main {
         HashMap<Long, Integer> folToNumOfFs = new HashMap<Long, Integer>();
 
         final Long[] fols = VALID_USERS.get(author.userId).toArray(new Long[0]);
+        List<Long> checkedFols = new ArrayList<Long>();
         for (long folId : fols) {
             final long time1 = SysUtil.getCpuTime();
             final Exs exs = exGetter.getExs(folId, isGlobal);
@@ -213,25 +260,39 @@ public class Main {
                             m2Probs.add(p);
                         }
                         listOfFolToProb.get(learner).put(folId, m2Probs);
+                        checkedFols.add(folId);
                     }
                 } // for (int l = 0; l < LEARNERS.length; l++) {
             } // if (exs != null) {
         } // for (Long folId : author.followersIds) {
         System.out.println("****************");
         if (isGlobal) {
+            learnerToPearson = new HashMap<String, List<Double>>();
             StringBuilder sb = new StringBuilder();
             for (int learner = 0; learner < LEARNERS.length; learner++) {
                 System.out.println(L_NAMES[learner] + " information");
                 HashMap<Long, List<Double>> folToRtProb =
                         listOfFolToProb.get(learner);
-                sb.append(showGlobalInfo(fols, folToRtProb, folToAvgRt,
+                sb.append(showGlobalInfo(checkedFols, folToRtProb, folToAvgRt,
                         folToNumOfFs, L_NAMES[learner],
                         author.userProfile.getScreenName()));
             }
             System.out.println("****************");
             System.out
-                    .println("Leaner AuthorName TweetId Actual# LikelihoodSum AvgRtPred NumOfFsPred");
+                    .println("Learner AuthorName TweetId Actual# LikelihoodSum AvgRtPred NumOfFsPred");
             System.out.println(sb.toString());
+            System.out.println("****************");
+            System.out
+                    .println("Learner AuthorName LikelihoodSum AvgRtPred NumOfFsPred");
+
+            for (Entry<String, List<Double>> entry : learnerToPearson
+                    .entrySet()) {
+                System.out.printf("%s %s %.4f %.4f %.4f%n", entry.getKey(),
+                        author.userProfile.getScreenName(), entry.getValue()
+                                .get(0), entry.getValue().get(1), entry
+                                .getValue().get(2));
+            }
+            learnerToPearson = null;
             System.out.println("****************");
         }
     }
@@ -274,7 +335,7 @@ public class Main {
                         + "TestAcc TestPrecision TestRecall TestFP TestFM TestAct#Pos TestPre#Pos TestAuc");
     }
 
-    private String showGlobalInfo (Long[] fols,
+    private String showGlobalInfo (List<Long> checkedFols,
             HashMap<Long, List<Double>> folToRtProb,
             HashMap<Long, Double> folToAvgRt,
             HashMap<Long, Integer> folToNumOfFs, String learner, String author) {
@@ -284,19 +345,19 @@ public class Main {
 
         // Print each followers' id.
         System.out.print("FolIdAndTid");
-        for (long folId : fols) {
+        for (long folId : checkedFols) {
             System.out.print(" " + folId);
         }
         System.out.println();
         // Print each followers' AvgRt.
         System.out.print("AvgRt");
-        for (long folId : fols) {
+        for (long folId : checkedFols) {
             System.out.printf(" %.2f", folToAvgRt.get(folId));
         }
         System.out.println();
         // Print each followers' num of followers.
         System.out.print("NumOfFs");
-        for (long folId : fols) {
+        for (long folId : checkedFols) {
             System.out.printf(" %d", folToNumOfFs.get(folId));
         }
         System.out.println();
@@ -307,7 +368,7 @@ public class Main {
             double aSum = 0;
             double nSum = 0;
             // Print each followers' retweet likelihood.
-            for (long folId : fols) {
+            for (long folId : checkedFols) {
                 double likelihood = folToRtProb.get(folId).get(tidx);
                 sum += likelihood;
                 aSum += likelihood * folToAvgRt.get(folId);
@@ -329,16 +390,36 @@ public class Main {
                     likelihoodSums.get(tidx), avgRtPred.get(tidx),
                     numOfFsPred.get(tidx)));
         }
+        double[] act = new double[exGetter.auTweetsM2.size()];
+        double[] likesum = new double[exGetter.auTweetsM2.size()];
+        double[] rt = new double[exGetter.auTweetsM2.size()];
+        double[] fs = new double[exGetter.auTweetsM2.size()];
+        for (int i = 0; i < exGetter.auTweetsM2.size(); i++) {
+            act[i] = Math.log(exGetter.auTweetsM2.get(i).getRetweetCount());
+            likesum[i] = likelihoodSums.get(i);
+            rt[i] = avgRtPred.get(i);
+            fs[i] = numOfFsPred.get(i);
+        }
+
+        List<Double> pearsons = new ArrayList<Double>();
+        pearsons.add(MyMath.getPearsonCorrelation(likesum, act));
+        pearsons.add(MyMath.getPearsonCorrelation(rt, act));
+        pearsons.add(MyMath.getPearsonCorrelation(fs, act));
+        learnerToPearson.put(learner, pearsons);
         return sb.toString();
     }
 
+    private HashMap<String, List<Double>> learnerToPearson = null;
+
     public static void main (String[] args) throws Exception {
+        System.out
+                .println("AuthorName Learner TrainPearson TestPearson TrainError TestError");
         // final OutputRedirection or = new OutputRedirection();
         System.out.println("Begin at: " + new Date().toString());
         final Database db = Database.getInstance();
         for (long authorId : VALID_USERS.keySet()) {
             if (authorId != 16958346L) {
-                continue;
+                // continue;
             }
             new Main(db, authorId, IS_GLOBAL).testPredictNum();
 

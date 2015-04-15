@@ -2,11 +2,10 @@ package learners;
 
 import java.util.ArrayList;
 
-import main.ExampleGetter;
 import weka.classifiers.Classifier;
 import weka.core.Instance;
+
 import common.ProbPredictor;
-import common.RawExample;
 
 /**
  * FileName: WekaPredictor.java
@@ -25,10 +24,7 @@ public class WekaPredictor extends ProbPredictor {
 
     @Override
     public double predictPosProb (ArrayList<String> attrs) {
-        RawExample e = new RawExample();
-        e.xList = attrs;
-        e.t = ExampleGetter.Y; // Fake class for convert.
-        Instance inst = MeToWeka.convertInstance(e);
+        Instance inst = MeToWeka.getInstForPredict(attrs);
         inst.setDataset(MeToWeka.dataForConvert);
         try {
             double[] dist = cls.distributionForInstance(inst);

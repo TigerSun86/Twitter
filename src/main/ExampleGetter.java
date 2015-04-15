@@ -77,10 +77,10 @@ public class ExampleGetter {
                             .parse("Sat Feb 21 22:34:47 EST 2015");
             TEST_END_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-                            .parse("Sat Mar 07 15:27:40 EST 2015");
+                            .parse("Wed Mar 25 06:31:35 EST 2015");
             TESTM2_END_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-                            .parse("Wed Mar 25 06:31:35 EST 2015");
+                            .parse("Mon Apr 13 14:44:54 EDT 2015");
         } catch (ParseException e) {
             e.printStackTrace();
         }
@@ -132,8 +132,8 @@ public class ExampleGetter {
         RawAttrList attrs = FeatureExtractor.getAttrListOfPredictNum();
         final MappedAttrList mAttr = new MappedAttrList(train, attrs);
         // Rescale (map) all data in range 0 to 1.
-        //train = mAttr.mapExs(train, attrs);
-        //testM2 = mAttr.mapExs(testM2, attrs);
+        train = mAttr.mapExs(train, attrs);
+        testM2 = mAttr.mapExs(testM2, attrs);
         Exs ret = new Exs(train, null, testM2, "");
         return ret;
     }

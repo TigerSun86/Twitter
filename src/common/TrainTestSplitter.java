@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
 
 import util.MyMath;
@@ -18,22 +20,27 @@ import util.MyMath;
  */
 public class TrainTestSplitter {
     public static final double DEFAULT_RATIO = 2.0 / 3;
+    public static long randomSeed = 1;
 
     /* private static final String FILE =
      * "http://archive.ics.uci.edu/ml/machine-learning-databases/breast-cancer-wisconsin/wdbc.data"
      * ; */
+    @SuppressWarnings("unused")
     private static final String FILE =
             "http://my.fit.edu/~sunx2013/MachineLearning/car.txt";
+    @SuppressWarnings("unused")
     private static final String ATTR =
             "http://my.fit.edu/~sunx2013/MachineLearning/car-attr.txt";
 
     public static void main (String[] args) {
         // final String fName = deleteCommaAndPutClassBack(FILE);
         // generateTrainTest(FILE, ATTR);
-       // final DataSet set = new Iris();
-        //generateKFoldTrainTest(set.getDataFileUrl(), set.getAttrFileUrl(), 10);
+        // final DataSet set = new Iris();
+        // generateKFoldTrainTest(set.getDataFileUrl(), set.getAttrFileUrl(),
+        // 10);
     }
 
+    @SuppressWarnings("unused")
     private static String
             deleteIDAndCommaAndPutClassBack (final String fileName) {
         final RawExampleList exs = new RawExampleList();
@@ -79,6 +86,7 @@ public class TrainTestSplitter {
         return newName;
     }
 
+    @SuppressWarnings("unused")
     private static String deleteCommaAndPutClassBack (final String fileName) {
         final RawExampleList exs = new RawExampleList();
         final DataReader in = new DataReader(fileName);
@@ -123,6 +131,7 @@ public class TrainTestSplitter {
         return newName;
     }
 
+    @SuppressWarnings("unused")
     private static void generateTrainTest (final String fileName,
             final String attrFile) {
         final RawAttrList rawAttr = new RawAttrList(attrFile);
@@ -147,6 +156,7 @@ public class TrainTestSplitter {
         System.out.println(testName);
     }
 
+    @SuppressWarnings("unused")
     private static void generateKFoldTrainTest (final String fileName,
             final String attrFile, final int k) {
         final RawAttrList rawAttr = new RawAttrList(attrFile);
@@ -174,7 +184,8 @@ public class TrainTestSplitter {
 
             final String trainName =
                     resourcePath + name + "-train-" + test + ".txt";
-            final String testName = resourcePath + name + "-test-" + test + ".txt";
+            final String testName =
+                    resourcePath + name + "-test-" + test + ".txt";
             writeExamples(trainSet, trainName);
             System.out.println(trainName + " " + trainSet.size());
             writeExamples(testSet, testName);
@@ -208,7 +219,7 @@ public class TrainTestSplitter {
             selectedOfEachClass[i] =
                     MyMath.mOutofN(
                             (int) Math.round(numForEachClass[i] * ratioKeeping),
-                            numForEachClass[i]);
+                            numForEachClass[i], randomSeed);
             // Sort it ascendingly to make the picking later easier.
             Arrays.sort(selectedOfEachClass[i]);
         }
@@ -242,10 +253,34 @@ public class TrainTestSplitter {
      * This method guarantees returning k lists with same class ratio, and
      * won't change the original order of examples.
      * 
+     * If the class is continuous value, just split into k lists, while still
+     * won't change the original order of examples.
+     * 
      * @return: An array with k ExampleSets.
      */
     public static RawExampleList[] splitSetIntoKFold (RawExampleList exs,
             RawAttrList attrs, int k) {
+        if (attrs.t.isContinuous) { // For continuous class.
+            List<Integer> idxes = new ArrayList<Integer>();
+            for (int idx = 0; idx < exs.size(); idx++) {
+                idxes.add(idx);
+            }
+            List<HashSet<Integer>> splitted =
+                    MyMath.splitToKSets(idxes, k, randomSeed);
+            final RawExampleList[] exArray = new RawExampleList[k];
+            for (int ik = 0; ik < k; ik++) {
+                exArray[ik] = new RawExampleList();
+                HashSet<Integer> idxesInThisSet = splitted.get(ik);
+                for (int idx = 0; idx < exs.size(); idx++) {
+                    if (idxesInThisSet.contains(idx)) {
+                        exArray[ik].add(exs.get(idx));
+                    }
+                }
+            } // for (int ik = 0; ik < k; ik++)
+            return exArray;
+        }
+
+        // Else discrete class.
         final ArrayList<String> classList = attrs.t.valueList;
 
         // Count number of instances for each class.
@@ -278,7 +313,7 @@ public class TrainTestSplitter {
         }
 
         // Assign each example randomly to each fold.
-        final Random ran = new Random();
+        final Random ran = new Random(randomSeed);
         for (RawExample e : exs) {
             final int classIndexOfe = classList.indexOf(e.t);
             boolean isRunning = true;

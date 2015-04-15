@@ -826,6 +826,9 @@ public class Database {
     }
 
     public List<Long> getTopFollowers (long authorId, int topNum) {
+        if (topNum <= 0) {
+            return new ArrayList<Long>();
+        }
         List<UserIdAndNFols> fols = new ArrayList<UserIdAndNFols>();
         for (long folId : Main.VALID_USERS.get(authorId)) {
             UserInfo f = this.getUser(folId);

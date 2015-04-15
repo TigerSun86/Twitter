@@ -1,5 +1,7 @@
 package learners;
 
+import java.util.ArrayList;
+
 import weka.core.Attribute;
 import weka.core.FastVector;
 import weka.core.Instance;
@@ -83,6 +85,17 @@ public class MeToWeka {
         return inst;
     }
 
+    public static Instance getInstForPredict (ArrayList<String> e) {
+        double[] values = new double[dataForConvert.numAttributes()];
+        for (int i = 0; i < e.size(); i++) {
+            double value = convertValue(e.get(i), dataForConvert, i);
+            values[i] = value;
+        }
+        values[dataForConvert.numAttributes() - 1] = 0;
+        Instance inst = new Instance(1.0, values);
+        return inst;
+    }
+
     private static double convertValue (String oldValue, Instances dataset,
             int attrIdx) {
         double value;
@@ -93,4 +106,5 @@ public class MeToWeka {
         }
         return value;
     }
+
 }
