@@ -69,6 +69,7 @@ public class Main {
 
     private final Database db;
     private final UserInfo author;
+    private final FeatureExtractor featureGetters;
     private final ExampleGetter exGetter;
     private final boolean isGlobal;
 
@@ -85,12 +86,17 @@ public class Main {
                     getAuthorTweets(authorId, ExampleGetter.TEST_END_DATE,
                             ExampleGetter.TESTM2_END_DATE);
         }
-        this.exGetter = new ExampleGetter(db, auTweets, auTweetsM2);
-        this.isGlobal = isGlobal;
+
+        this.featureGetters = new FeatureExtractor();
         for (long folId : db.getTopFollowers(authorId, 0)) {
-            FeatureExtractor.GETTER_LIST_OF_PREDICT_NUMBER
+            this.featureGetters.getterListOfPreNum
                     .add(new FeatureExtractor.Ffol(folId));
         }
+
+        this.exGetter =
+                new ExampleGetter(db, auTweets, auTweetsM2, featureGetters);
+        this.isGlobal = isGlobal;
+
     }
 
     private List<Status> getAuthorTweets (long authorId, Date fromDate,
@@ -114,67 +120,83 @@ public class Main {
     private void testPredictNumWithDifIter () throws Exception {
         assert author != null;
         final Exs exs = exGetter.getExsForPredictNum();
-        if (!MeToWeka.hasSetAttribute()) {
-            MeToWeka.setAttributes(FeatureExtractor.getAttrListOfPredictNum());
-        }
-        Instances train = MeToWeka.convertInstances(exs.train);
-        Instances test = MeToWeka.convertInstances(exs.testM2);
-        System.out.println("Iteration TrainPearson TestPearson");
+        System.out.println("AuthorName Iteration TrainPearson TestPearson");
         for (int iter : ITERS) {
-            weka.classifiers.functions.MultilayerPerceptron cls =
-                    new weka.classifiers.functions.MultilayerPerceptron();
-            cls.setTrainingTime(iter);
-            cls.setValidationSetSize(30);
-            cls.setLearningRate(0.1);
-            cls.setMomentum(0.2);
-            cls.setHiddenLayers("10");
-            cls.setNormalizeAttributes(false);
-            cls.setNormalizeNumericClass(false);
-            cls.buildClassifier(train);
-
-            System.out.print(iter);
-
-            double[] ps = new double[train.numInstances()];
-            double[] as = new double[train.numInstances()];
-            for (int i = 0; i < train.numInstances(); i++) {
-                Instance inst = train.instance(i);
-                double result = cls.classifyInstance(inst);
-                double act = inst.classValue();
-                ps[i] = result;
-                as[i] = act;
-            }
-            System.out.print(" " + MyMath.getPearsonCorrelation(ps, as));
-
-            ps = new double[test.numInstances()];
-            as = new double[test.numInstances()];
-            for (int i = 0; i < test.numInstances(); i++) {
-                Instance inst = test.instance(i);
-                double result = cls.classifyInstance(inst);
-                double act = inst.classValue();
-                ps[i] = result;
-                as[i] = act;
-            }
-
-            System.out.print(" " + MyMath.getPearsonCorrelation(ps, as));
-            System.out.println();
-        }
-    }
-
-    private void testPredictNum () throws Exception {
-        assert author != null;
-        for (int li = 0; li < LEARNERS.length; li++) {
-            final Exs exs = exGetter.getExsForPredictNum();
-            Learner learner = LEARNERS[li];
+            WAnn learner = new WAnn(10);
+            learner.iter = iter;
             ProbPredictor cls =
                     learner.learn(exs.train,
-                            FeatureExtractor.getAttrListOfPredictNum());
+                            this.featureGetters.getAttrListOfPredictNum());
 
             double trainP;
             double testP;
             double trainE;
             double testE;
-            double[] ps = new double[exs.testM2.size()];
-            double[] as = new double[exs.testM2.size()];
+
+            double[] ps = new double[exs.train.size()];
+            double[] as = new double[exs.train.size()];
+            for (int i = 0; i < exs.train.size(); i++) {
+                RawExample inst = exs.train.get(i);
+                double result = cls.predictPosProb(inst.xList);
+                double act = Double.parseDouble(inst.t);
+                // System.out.printf("%s %.3f %.3f%n",
+                // author.userProfile.getScreenName(), result, act);
+                ps[i] = result;
+                as[i] = act;
+            }
+            trainP = MyMath.getPearsonCorrelation(ps, as);
+            trainE = MyMath.getRootMeanSquareError(ps, as);
+
+            ps = new double[exs.testM2.size()];
+            as = new double[exs.testM2.size()];
+            for (int i = 0; i < exs.testM2.size(); i++) {
+                RawExample inst = exs.testM2.get(i);
+                double result = cls.predictPosProb(inst.xList);
+                double act = Double.parseDouble(inst.t);
+                // System.out.printf("%s %.3f %.3f%n",
+                // author.userProfile.getScreenName(), result, act);
+                ps[i] = result;
+                as[i] = act;
+            }
+            testP = MyMath.getPearsonCorrelation(ps, as);
+            testE = MyMath.getRootMeanSquareError(ps, as);
+            System.out.printf("%s %5d %.3f %.3f %.3f %.3f%n",
+                    author.userProfile.getScreenName(), iter, trainP, testP,
+                    trainE, testE);
+        }
+    }
+
+    private void testPredictNum () throws Exception {
+        assert author != null;
+        // System.out
+        // .println("AuthorName Learner TrainPearson TestPearson TrainError TestError");
+        for (int li = 0; li < LEARNERS.length; li++) {
+            final Exs exs = exGetter.getExsForPredictNum();
+            Learner learner = LEARNERS[li];
+            ProbPredictor cls =
+                    learner.learn(exs.train,
+                            this.featureGetters.getAttrListOfPredictNum());
+
+            double trainP;
+            double testP;
+            double trainE;
+            double testE;
+            double[] ps = new double[exs.train.size()];
+            double[] as = new double[exs.train.size()];
+            for (int i = 0; i < exs.train.size(); i++) {
+                RawExample inst = exs.train.get(i);
+                double result = cls.predictPosProb(inst.xList);
+                double act = Double.parseDouble(inst.t);
+                // System.out.printf("%s %.3f %.3f%n",
+                // author.userProfile.getScreenName(), result, act);
+                ps[i] = result;
+                as[i] = act;
+            }
+            trainP = MyMath.getPearsonCorrelation(ps, as);
+            trainE = MyMath.getRootMeanSquareError(ps, as);
+
+            ps = new double[exs.testM2.size()];
+            as = new double[exs.testM2.size()];
             for (int i = 0; i < exs.testM2.size(); i++) {
                 RawExample inst = exs.testM2.get(i);
                 double result = cls.predictPosProb(inst.xList);
@@ -187,19 +209,6 @@ public class Main {
             testP = MyMath.getPearsonCorrelation(ps, as);
             testE = MyMath.getRootMeanSquareError(ps, as);
 
-            ps = new double[exs.train.size()];
-            as = new double[exs.train.size()];
-            for (int i = 0; i < exs.train.size(); i++) {
-                RawExample inst = exs.train.get(i);
-                double result = cls.predictPosProb(inst.xList);
-                double act = Double.parseDouble(inst.t);
-                // System.out.printf("%s %.3f %.3f%n",
-                // author.userProfile.getScreenName(), result, act);
-                ps[i] = result;
-                as[i] = act;
-            }
-            trainP = MyMath.getPearsonCorrelation(ps, as);
-            trainE = MyMath.getRootMeanSquareError(ps, as);
             System.out.printf("%s %s %.3f %.3f %.3f %.3f%n",
                     author.userProfile.getScreenName(), L_NAMES[li], trainP,
                     testP, trainE, testE);
@@ -211,7 +220,7 @@ public class Main {
     private void test () {
         assert author != null;
         assert author.followersIds != null;
-        RawAttrList attrs = FeatureExtractor.getAttrListOfModel1();
+        RawAttrList attrs = featureGetters.getAttrListOfModel1();
         System.out.println("****************");
         printHeader();
 
@@ -412,8 +421,7 @@ public class Main {
     private HashMap<String, List<Double>> learnerToPearson = null;
 
     public static void main (String[] args) throws Exception {
-        System.out
-                .println("AuthorName Learner TrainPearson TestPearson TrainError TestError");
+
         // final OutputRedirection or = new OutputRedirection();
         System.out.println("Begin at: " + new Date().toString());
         final Database db = Database.getInstance();

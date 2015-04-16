@@ -12,11 +12,13 @@ import java.util.concurrent.TimeUnit;
 
 import twitter4j.Status;
 import twitter4j.User;
+
 import common.MappedAttrList;
 import common.RawAttrList;
 import common.RawExample;
 import common.RawExampleList;
 import common.TrainTestSplitter;
+
 import datacollection.Database;
 import datacollection.UserInfo;
 import features.FeatureExtractor;
@@ -101,19 +103,21 @@ public class ExampleGetter {
     private final Database db;
     public final List<Status> auTweets;
     public final List<Status> auTweetsM2;
+    private final FeatureExtractor featureGetters;
 
     public ExampleGetter(Database db, List<Status> auTweets,
-            List<Status> auTweetsM2) {
+            List<Status> auTweetsM2, FeatureExtractor featureGetters) {
         this.db = db;
         this.auTweets = auTweets;
         this.auTweetsM2 = auTweetsM2;
+        this.featureGetters = featureGetters;
     }
 
     public Exs getExsForPredictNum () {
         RawExampleList train = new RawExampleList();
         for (Status t : auTweets) {
             ArrayList<String> features =
-                    FeatureExtractor.getFeaturesOfPredictNum(t, null, null);
+                    featureGetters.getFeaturesOfPredictNum(t, null, null);
             RawExample e = new RawExample();
             e.xList = features;
             e.t = Double.toString(Math.log(t.getRetweetCount()));
@@ -122,14 +126,14 @@ public class ExampleGetter {
         RawExampleList testM2 = new RawExampleList();
         for (Status t : auTweetsM2) {
             ArrayList<String> features =
-                    FeatureExtractor.getFeaturesOfPredictNum(t, null, null);
+                    featureGetters.getFeaturesOfPredictNum(t, null, null);
             RawExample e = new RawExample();
             e.xList = features;
             e.t = Double.toString(Math.log(t.getRetweetCount()));
             testM2.add(e);
         }
         // Map all attributes in range 0 to 1.
-        RawAttrList attrs = FeatureExtractor.getAttrListOfPredictNum();
+        RawAttrList attrs = featureGetters.getAttrListOfPredictNum();
         final MappedAttrList mAttr = new MappedAttrList(train, attrs);
         // Rescale (map) all data in range 0 to 1.
         train = mAttr.mapExs(train, attrs);
@@ -223,8 +227,8 @@ public class ExampleGetter {
         return np + " " + nn;
     }
 
-    private static RawExampleList getFeatures (List<Status> pos,
-            List<Status> neg, User userProfile, List<Status> userTweets) {
+    private RawExampleList getFeatures (List<Status> pos, List<Status> neg,
+            User userProfile, List<Status> userTweets) {
         final RawExampleList exs = new RawExampleList();
 
         // Start from the oldest tweet to the latest tweet.
@@ -262,11 +266,10 @@ public class ExampleGetter {
         return exs;
     }
 
-    private static RawExample processOneTweet (Status t, User userProfile,
+    private RawExample processOneTweet (Status t, User userProfile,
             List<Status> userTweets, boolean isPos) {
         final ArrayList<String> fs =
-                FeatureExtractor
-                        .getFeaturesOfModel1(t, userProfile, userTweets);
+                featureGetters.getFeaturesOfModel1(t, userProfile, userTweets);
         final RawExample e = new RawExample();
         e.xList = fs;
         if (isPos) {

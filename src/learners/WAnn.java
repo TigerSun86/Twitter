@@ -8,36 +8,37 @@ import common.RawAttrList;
 import common.RawExampleList;
 
 /**
- * FileName:     WAnn.java
- * @Description: 
+ * FileName: WAnn.java
+ * @Description:
  *
  * @author Xunhu(Tiger) Sun
  *         email: sunx2013@my.fit.edu
- * @date Apr 3, 2015 12:34:56 AM 
+ * @date Apr 3, 2015 12:34:56 AM
  */
-public class WAnn implements Learner{
+public class WAnn implements Learner {
     private int node = 10;
-    public WAnn(int node){
+    public int iter = 1000;
+
+    public WAnn(int node) {
         this.node = node;
     }
+
     @Override
     public ProbPredictor learn (RawExampleList dataSet, RawAttrList attrs) {
-        if (!MeToWeka.hasSetAttribute()) {
-            MeToWeka.setAttributes(attrs);
-        }
-        Instances train = MeToWeka.convertInstances(dataSet);
+        MeToWeka w = new MeToWeka(attrs);
+        Instances train = w.convertInstances(dataSet);
         try {
             weka.classifiers.functions.MultilayerPerceptron cls =
                     new weka.classifiers.functions.MultilayerPerceptron();
-            cls.setTrainingTime(1000);
+            cls.setTrainingTime(iter);
             cls.setValidationSetSize(30);
             cls.setLearningRate(0.1);
             cls.setMomentum(0.2);
-            cls.setHiddenLayers(""+node);
-            // cls.setNormalizeAttributes(false);
-            // cls.setNormalizeNumericClass(false);
+            cls.setHiddenLayers("" + node);
+            cls.setNormalizeAttributes(false);
+            cls.setNormalizeNumericClass(false);
             cls.buildClassifier(train);
-            return new WekaPredictor(cls);
+            return new WekaPredictor(cls, w);
         } catch (Exception e) {
             e.printStackTrace();
         }

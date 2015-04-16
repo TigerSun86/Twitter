@@ -18,8 +18,10 @@ import twitter4j.Trend;
 import twitter4j.URLEntity;
 import twitter4j.User;
 import twitter4j.UserMentionEntity;
+
 import common.RawAttr;
 import common.RawAttrList;
+
 import datacollection.Database;
 import features.AnewMap.Anew;
 
@@ -35,6 +37,11 @@ public class FeatureExtractor {
     private static final String F0 = "0";
     private static final String F1 = "1";
     private static final int MOUNT_IN_HOUR = 30 * 24;
+
+    public FeatureExtractor() {
+        initGetter();
+        initPreNum();
+    }
 
     /* 1Retweet. How many hours before t since last time f retweet something, at
      * most 1 month (0-720).
@@ -105,54 +112,56 @@ public class FeatureExtractor {
      * 27DayInWeek. Monday is 0, Tuesday is 1....
      * 
      * 28HourInDay. 0am is 0, 1am is 1... */
-    private static final List<FeatureGetter> GETTER_LIST =
+    private final List<FeatureGetter> getterList =
             new ArrayList<FeatureGetter>();
-    static {
-        GETTER_LIST.add(new F1()); // 1Retweet
-        GETTER_LIST.add(new F2()); // 2LastHashtag
-        GETTER_LIST.add(new F3()); // 3Mentioned
-        GETTER_LIST.add(new F4()); // 4Picture
-        GETTER_LIST.add(new F5()); // 5Url
-        // GETTER_LIST.add(new F6()); // 6Hour
-        GETTER_LIST.add(new F7()); // 7Otweet
-        GETTER_LIST.add(new F8()); // 8LastMention
-        GETTER_LIST.add(new F9()); // 9LastDomain
-        GETTER_LIST.add(new F10()); // 10OtLDay
-        GETTER_LIST.add(new F11()); // 11OtStDay
-        GETTER_LIST.add(new F12()); // 12OtLHour
-        GETTER_LIST.add(new F13()); // 13OtStHour
-        GETTER_LIST.add(new F14()); // 14RtLDay
-        GETTER_LIST.add(new F15()); // 15RtStDay
-        GETTER_LIST.add(new F16()); // 16RtLHour
-        GETTER_LIST.add(new F17()); // 17RtStHour
-        GETTER_LIST.add(new F18()); // 18RtWord
-        GETTER_LIST.add(new F19()); // 19Valence
-        GETTER_LIST.add(new F20()); // 20Arousal
-        GETTER_LIST.add(new F21()); // 21Dominance
-        GETTER_LIST.add(new F22()); // 22PosSenti
-        GETTER_LIST.add(new F23()); // 23NegSenti
-        GETTER_LIST.add(new F24()); // 24Len
-        GETTER_LIST.add(new F25()); // 25LongestWord
-        GETTER_LIST.add(new F26()); // 26Trend
+
+    private void initGetter () {
+        getterList.add(new F1()); // 1Retweet
+        getterList.add(new F2()); // 2LastHashtag
+        getterList.add(new F3()); // 3Mentioned
+        getterList.add(new F4()); // 4Picture
+        getterList.add(new F5()); // 5Url
+        // getterList.add(new F6()); // 6Hour
+        getterList.add(new F7()); // 7Otweet
+        getterList.add(new F8()); // 8LastMention
+        getterList.add(new F9()); // 9LastDomain
+        getterList.add(new F10()); // 10OtLDay
+        getterList.add(new F11()); // 11OtStDay
+        getterList.add(new F12()); // 12OtLHour
+        getterList.add(new F13()); // 13OtStHour
+        getterList.add(new F14()); // 14RtLDay
+        getterList.add(new F15()); // 15RtStDay
+        getterList.add(new F16()); // 16RtLHour
+        getterList.add(new F17()); // 17RtStHour
+        getterList.add(new F18()); // 18RtWord
+        getterList.add(new F19()); // 19Valence
+        getterList.add(new F20()); // 20Arousal
+        getterList.add(new F21()); // 21Dominance
+        getterList.add(new F22()); // 22PosSenti
+        getterList.add(new F23()); // 23NegSenti
+        getterList.add(new F24()); // 24Len
+        getterList.add(new F25()); // 25LongestWord
+        getterList.add(new F26()); // 26Trend
     }
 
-    public static final List<FeatureGetter> GETTER_LIST_OF_PREDICT_NUMBER =
+    public final List<FeatureGetter> getterListOfPreNum =
             new ArrayList<FeatureGetter>();
-    static {
-        GETTER_LIST_OF_PREDICT_NUMBER.add(new F4()); // 4Picture
-        GETTER_LIST_OF_PREDICT_NUMBER.add(new F5()); // 5Url
-        // GETTER_LIST_OF_PREDICT_NUMBER.add(new F6()); // 6Hour
-        GETTER_LIST_OF_PREDICT_NUMBER.add(new F18()); // 18RtWord
-        GETTER_LIST_OF_PREDICT_NUMBER.add(new F19()); // 19Valence
-        GETTER_LIST_OF_PREDICT_NUMBER.add(new F20()); // 20Arousal
-        GETTER_LIST_OF_PREDICT_NUMBER.add(new F21()); // 21Dominance
-        GETTER_LIST_OF_PREDICT_NUMBER.add(new F22()); // 22PosSenti
-        GETTER_LIST_OF_PREDICT_NUMBER.add(new F23()); // 23NegSenti
-        GETTER_LIST_OF_PREDICT_NUMBER.add(new F24()); // 24Len
-        GETTER_LIST_OF_PREDICT_NUMBER.add(new F25()); // 25LongestWord
-        GETTER_LIST_OF_PREDICT_NUMBER.add(new F26()); // 26Trend
-        GETTER_LIST_OF_PREDICT_NUMBER.add(new F27()); // 27DayInWeek
-        GETTER_LIST_OF_PREDICT_NUMBER.add(new F28()); // 28HourInDay
+
+    private void initPreNum () {
+        getterListOfPreNum.add(new F4()); // 4Picture
+        getterListOfPreNum.add(new F5()); // 5Url
+        // getterListOfPreNum.add(new F6()); // 6Hour
+        getterListOfPreNum.add(new F18()); // 18RtWord
+        getterListOfPreNum.add(new F19()); // 19Valence
+        getterListOfPreNum.add(new F20()); // 20Arousal
+        getterListOfPreNum.add(new F21()); // 21Dominance
+        getterListOfPreNum.add(new F22()); // 22PosSenti
+        getterListOfPreNum.add(new F23()); // 23NegSenti
+        getterListOfPreNum.add(new F24()); // 24Len
+        getterListOfPreNum.add(new F25()); // 25LongestWord
+        getterListOfPreNum.add(new F26()); // 26Trend
+        getterListOfPreNum.add(new F27()); // 27DayInWeek
+        getterListOfPreNum.add(new F28()); // 28HourInDay
     }
 
     private static RawAttr getDiscreteAttr (String name) {
@@ -170,37 +179,37 @@ public class FeatureExtractor {
     }
     private static final RawAttr CLS_ATTR2 = new RawAttr("Class", true);
 
-    public static RawAttrList getAttrListOfModel1 () {
+    public RawAttrList getAttrListOfModel1 () {
         final RawAttrList attrList = new RawAttrList();
-        for (FeatureGetter g : GETTER_LIST) {
+        for (FeatureGetter g : getterList) {
             attrList.xList.add(g.getAttr());
         }
         attrList.t = CLS_ATTR1;
         return attrList;
     }
 
-    public static RawAttrList getAttrListOfPredictNum () {
+    public RawAttrList getAttrListOfPredictNum () {
         final RawAttrList attrList = new RawAttrList();
-        for (FeatureGetter g : GETTER_LIST_OF_PREDICT_NUMBER) {
+        for (FeatureGetter g : getterListOfPreNum) {
             attrList.xList.add(g.getAttr());
         }
         attrList.t = CLS_ATTR2;
         return attrList;
     }
 
-    public static ArrayList<String> getFeaturesOfModel1 (Status t,
+    public ArrayList<String> getFeaturesOfModel1 (Status t,
             User userProfile, List<Status> userTweets) {
         final ArrayList<String> fs = new ArrayList<String>();
-        for (FeatureGetter f : GETTER_LIST) {
+        for (FeatureGetter f : getterList) {
             fs.add(f.getFeature(t, userProfile, userTweets));
         }
         return fs;
     }
 
-    public static ArrayList<String> getFeaturesOfPredictNum (Status t,
+    public ArrayList<String> getFeaturesOfPredictNum (Status t,
             User userProfile, List<Status> userTweets) {
         final ArrayList<String> fs = new ArrayList<String>();
-        for (FeatureGetter f : GETTER_LIST_OF_PREDICT_NUMBER) {
+        for (FeatureGetter f : getterListOfPreNum) {
             fs.add(f.getFeature(t, userProfile, userTweets));
         }
         return fs;

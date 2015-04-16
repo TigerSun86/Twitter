@@ -24,17 +24,13 @@ public class MeToWeka {
     private static FastVector attributes = null;
     public static Instances dataForConvert = null;
 
-    public static boolean hasSetAttribute () {
-        return attributes != null;
-    }
-
-    public static void setAttributes (RawAttrList attrs) {
+    public MeToWeka(RawAttrList attrs) {
         attributes = convertAttributes(attrs);
         dataForConvert = new Instances("Test-dataset", attributes, 0);
         dataForConvert.setClassIndex(dataForConvert.numAttributes() - 1);
     }
 
-    public static FastVector convertAttributes (RawAttrList attrs) {
+    private static FastVector convertAttributes (RawAttrList attrs) {
         FastVector newAttrs = new FastVector();
         for (RawAttr attr : attrs.xList) {
             Attribute newAttr = convertAttribute(attr);
@@ -60,7 +56,7 @@ public class MeToWeka {
         return newAttr;
     }
 
-    public static Instances convertInstances (RawExampleList exs) {
+    public Instances convertInstances (RawExampleList exs) {
         Instances dataset =
                 new Instances("Test-dataset", attributes, exs.size());
         dataset.setClassIndex(dataset.numAttributes() - 1);
@@ -71,7 +67,7 @@ public class MeToWeka {
         return dataset;
     }
 
-    public static Instance convertInstance (RawExample e) {
+    public Instance convertInstance (RawExample e) {
         double[] values = new double[dataForConvert.numAttributes()];
         for (int i = 0; i < e.xList.size(); i++) {
             double value = convertValue(e.xList.get(i), dataForConvert, i);
@@ -85,7 +81,7 @@ public class MeToWeka {
         return inst;
     }
 
-    public static Instance getInstForPredict (ArrayList<String> e) {
+    public Instance getInstForPredict (ArrayList<String> e) {
         double[] values = new double[dataForConvert.numAttributes()];
         for (int i = 0; i < e.size(); i++) {
             double value = convertValue(e.get(i), dataForConvert, i);
@@ -93,6 +89,7 @@ public class MeToWeka {
         }
         values[dataForConvert.numAttributes() - 1] = 0;
         Instance inst = new Instance(1.0, values);
+        inst.setDataset(dataForConvert);
         return inst;
     }
 

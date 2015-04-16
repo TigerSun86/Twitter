@@ -17,15 +17,16 @@ import common.ProbPredictor;
  */
 public class WekaPredictor extends ProbPredictor {
     private final Classifier cls;
+    private final MeToWeka weka;
 
-    public WekaPredictor(Classifier cls2) {
+    public WekaPredictor(Classifier cls2, MeToWeka w) {
         this.cls = cls2;
+        this.weka = w;
     }
 
     @Override
     public double predictPosProb (ArrayList<String> attrs) {
-        Instance inst = MeToWeka.getInstForPredict(attrs);
-        inst.setDataset(MeToWeka.dataForConvert);
+        Instance inst = weka.getInstForPredict(attrs);
         try {
             double[] dist = cls.distributionForInstance(inst);
             return dist[0];

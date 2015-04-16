@@ -1,7 +1,6 @@
 package learners;
 
 import weka.core.Instances;
-
 import common.Learner;
 import common.ProbPredictor;
 import common.RawAttrList;
@@ -18,15 +17,13 @@ import common.RawExampleList;
 public class RandomForest implements Learner {
     @Override
     public ProbPredictor learn (RawExampleList dataSet, RawAttrList attrs) {
-        if (!MeToWeka.hasSetAttribute()) {
-            MeToWeka.setAttributes(attrs);
-        }
-        Instances train = MeToWeka.convertInstances(dataSet);
+        MeToWeka w = new MeToWeka(attrs);
+        Instances train = w.convertInstances(dataSet);
         try {
             weka.classifiers.trees.RandomForest cls =
                     new weka.classifiers.trees.RandomForest();
             cls.buildClassifier(train);
-            return new WekaPredictor(cls);
+            return new WekaPredictor(cls, w);
         } catch (Exception e) {
             e.printStackTrace();
         }
