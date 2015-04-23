@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Random;
 
 import learners.MeToWeka;
 import learners.WAnn;
@@ -16,17 +17,17 @@ import main.ExampleGetter.Exs;
 import twitter4j.Status;
 import util.MyMath;
 import util.SysUtil;
-import weka.core.Instance;
+import weka.classifiers.Classifier;
+import weka.classifiers.Evaluation;
 import weka.core.Instances;
-
 import common.DataReader;
 import common.Learner;
 import common.ProbPredictor;
 import common.RawAttrList;
 import common.RawExample;
-
 import datacollection.Database;
 import datacollection.UserInfo;
+import features.AttrSel;
 import features.FeatureExtractor;
 
 /**
@@ -55,10 +56,9 @@ public class Main {
     // new RIPPERk(true, 1) };
     // private static final String[] L_NAMES = { "Entropy", "EntropyNoprune",
     // "DKM", "DKMnoprune", "Easy", "Split", "Ripper", "RipperOp" };
-    private static final Learner[] LEARNERS = { new WAnn(10), new WAnn(20),
-            new WLr() };
-    private static final String[] L_NAMES = { "Ann10", "Ann20",
-            "LinearRegression" };
+    private static final Learner[] LEARNERS = { new WLr(), new WAnn(10),
+            new WAnn(20) };
+    private static final String[] L_NAMES = { "LR", "Ann10", "Ann20", };
     // private static final Learner[] LEARNERS = { new WekaDt(),
     // new WekaDt(false), new RandomForest() };
     // private static final String[] L_NAMES = { "WekaDt", "WekaDtNoprune",
@@ -88,7 +88,7 @@ public class Main {
         }
 
         this.featureGetters = new FeatureExtractor();
-        for (long folId : db.getTopFollowers(authorId, 0)) {
+        for (long folId : db.getTopFollowers(authorId, 10)) {
             this.featureGetters.getterListOfPreNum
                     .add(new FeatureExtractor.Ffol(folId));
         }
@@ -421,18 +421,55 @@ public class Main {
     private HashMap<String, List<Double>> learnerToPearson = null;
 
     public static void main (String[] args) throws Exception {
-
-        // final OutputRedirection or = new OutputRedirection();
         System.out.println("Begin at: " + new Date().toString());
+        System.out.print("AuthorName, Learner, ");
+        System.out
+                .print("Train Correlation coefficient, Train Mean absolute error, Train Root mean squared error, Train Relative absolute error, Train Root relative squared error, ");
+        System.out
+                .println("Test Correlation coefficient, Test Mean absolute error, Test Root mean squared error, Test Relative absolute error, Test Root relative squared error");
+
         final Database db = Database.getInstance();
         for (long authorId : VALID_USERS.keySet()) {
             if (authorId != 16958346L) {
                 // continue;
             }
-            new Main(db, authorId, IS_GLOBAL).testPredictNum();
+            new Main(db, authorId, IS_GLOBAL).testAttrSel();
 
         }
         System.out.println("End at: " + new Date().toString());
-        // or.close();
+    }
+
+    private void testAttrSel () throws Exception {
+
+        final Exs exs = exGetter.getExsForPredictNum();
+        MeToWeka w =
+                new MeToWeka(this.featureGetters.getAttrListOfPredictNum());
+        Instances train = w.convertInstances(exs.train);
+        AttrSel attrSel = new AttrSel();
+        attrSel.selectAttr(train,
+                new weka.classifiers.functions.LinearRegression());
+        Instances selTrain = attrSel.reduceInstDi(train);
+        Instances selTest =
+                attrSel.reduceInstDi(w.convertInstances(exs.testM2));
+        attrSel.showSelAttr();
+
+        Classifier cls = new weka.classifiers.functions.LinearRegression();
+        cls.buildClassifier(selTrain);
+
+        Evaluation e;
+        e = new Evaluation(selTrain);
+        e.evaluateModel(cls, selTrain);
+        System.out.printf("%s, %s, %.4f, %.4f, %.4f, %.4f%%, %.4f%%, ",
+                author.userProfile.getScreenName(), "LR",
+                e.correlationCoefficient(), e.meanAbsoluteError(),
+                e.rootMeanSquaredError(), e.relativeAbsoluteError(),
+                e.rootRelativeSquaredError());
+        e = new Evaluation(selTrain);
+        e.evaluateModel(cls, selTest);
+        System.out.printf("%.4f, %.4f, %.4f, %.4f%%, %.4f%%%n",
+                e.correlationCoefficient(), e.meanAbsoluteError(),
+                e.rootMeanSquaredError(), e.relativeAbsoluteError(),
+                e.rootRelativeSquaredError());
+
     }
 }
