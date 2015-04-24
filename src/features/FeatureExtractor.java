@@ -197,8 +197,8 @@ public class FeatureExtractor {
         return attrList;
     }
 
-    public ArrayList<String> getFeaturesOfModel1 (Status t,
-            User userProfile, List<Status> userTweets) {
+    public ArrayList<String> getFeaturesOfModel1 (Status t, User userProfile,
+            List<Status> userTweets) {
         final ArrayList<String> fs = new ArrayList<String>();
         for (FeatureGetter f : getterList) {
             fs.add(f.getFeature(t, userProfile, userTweets));
@@ -215,19 +215,24 @@ public class FeatureExtractor {
         return fs;
     }
 
-    private static interface FeatureGetter {
+    public static abstract class FeatureGetter {
         // User tweets should be ordered by oldest to latest.
-        public String getFeature (Status t, User userProfile,
+        public abstract String getFeature (Status t, User userProfile,
                 List<Status> userTweets);
 
-        public RawAttr getAttr ();
+        public abstract RawAttr getAttr ();
+
+        @Override
+        public String toString () {
+            return this.getAttr().name;
+        }
     }
 
     /**
      * How many hours before t since last time f retweet something,
      * at most 1 month.
      */
-    private static class F1 implements FeatureGetter {
+    private static class F1 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -265,7 +270,7 @@ public class FeatureExtractor {
      * How many hours before t since last time f published something
      * containing the hashtag in t, at most 1 month.
      */
-    private static class F2 implements FeatureGetter {
+    private static class F2 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -319,7 +324,7 @@ public class FeatureExtractor {
     /**
      * Whether f is mentioned in the tweet.
      */
-    private static class F3 implements FeatureGetter {
+    private static class F3 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -345,7 +350,7 @@ public class FeatureExtractor {
     /**
      * Whether t has picture.
      */
-    private static class F4 implements FeatureGetter {
+    private static class F4 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -367,7 +372,7 @@ public class FeatureExtractor {
     /**
      * Whether t has url.
      */
-    private static class F5 implements FeatureGetter {
+    private static class F5 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -390,7 +395,7 @@ public class FeatureExtractor {
      * Hour in the week (the time t published). (0-168)
      */
     @SuppressWarnings("unused")
-    private static class F6 implements FeatureGetter {
+    private static class F6 extends FeatureGetter {
         private static final HashMap<Integer, Integer> DAY_MAP =
                 new HashMap<Integer, Integer>();
         static {
@@ -426,7 +431,7 @@ public class FeatureExtractor {
      * How many hours before t since last time f published an original tweet, at
      * most 1 month (0-720).
      */
-    private static class F7 implements FeatureGetter {
+    private static class F7 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -462,7 +467,7 @@ public class FeatureExtractor {
      * How many hours before t since last time f published something containing
      * the mentioned user name in t, at most 1 month (0-720).
      */
-    private static class F8 implements FeatureGetter {
+    private static class F8 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -544,7 +549,7 @@ public class FeatureExtractor {
      * How many hours before t since last time f published something containing
      * the domain of url in t, at most 1 month (0-720).
      */
-    private static class F9 implements FeatureGetter {
+    private static class F9 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -677,7 +682,7 @@ public class FeatureExtractor {
      * If the user do not have information at the last week, just use average
      * probability.
      */
-    private static class F10 implements FeatureGetter {
+    private static class F10 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -707,7 +712,7 @@ public class FeatureExtractor {
      * SdLd(m) = sqrt of (Ld(m,w1) - AvgLd(m))^2 + (Ld(m,w2) - AvgLd(m))^2 +
      * (Ld(m,w3) - AvgLd(m))^2 / weekCount
      */
-    private static class F11 implements FeatureGetter {
+    private static class F11 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -733,7 +738,7 @@ public class FeatureExtractor {
      * If the user do not have information at the last week, just use average
      * probability.
      */
-    private static class F12 implements FeatureGetter {
+    private static class F12 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -763,7 +768,7 @@ public class FeatureExtractor {
      * SdLh(18,m) = sqrt of (Lh(18,m,w1) - AvgLh(18,m))^2+ (Lh(18,m,w2) -
      * AvgLh(18,m))^2 + (Lh(18,m,w1) - AvgLh(18,m))^2 / weekCount
      */
-    private static class F13 implements FeatureGetter {
+    private static class F13 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -789,7 +794,7 @@ public class FeatureExtractor {
      * If the user do not have information at the last week, just use average
      * probability.
      */
-    private static class F14 implements FeatureGetter {
+    private static class F14 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -818,7 +823,7 @@ public class FeatureExtractor {
      * SdLd(m) = sqrt of (Ld(m,w1) - AvgLd(m))^2 + (Ld(m,w2) - AvgLd(m))^2 +
      * (Ld(m,w3) - AvgLd(m))^2 / weekCount
      */
-    private static class F15 implements FeatureGetter {
+    private static class F15 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -844,7 +849,7 @@ public class FeatureExtractor {
      * If the user do not have information at the last week, just use average
      * probability.
      */
-    private static class F16 implements FeatureGetter {
+    private static class F16 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -873,7 +878,7 @@ public class FeatureExtractor {
      * SdLh(18,m) = sqrt of (Lh(18,m,w1) - AvgLh(18,m))^2+ (Lh(18,m,w2) -
      * AvgLh(18,m))^2 + (Lh(18,m,w1) - AvgLh(18,m))^2 / weekCount
      */
-    private static class F17 implements FeatureGetter {
+    private static class F17 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -898,7 +903,7 @@ public class FeatureExtractor {
      * "retweet this please" or "plz rt", it could have a higher chance
      * than not saying that.
      */
-    private static class F18 implements FeatureGetter {
+    private static class F18 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -936,7 +941,7 @@ public class FeatureExtractor {
     /**
      * 19Valence. ANEW_MAP score valence (pleasure vs displeasure).
      */
-    private static class F19 implements FeatureGetter {
+    private static class F19 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -954,7 +959,7 @@ public class FeatureExtractor {
     /**
      * 20Arousal. ANEW score arousal (excitement vs calmness).
      */
-    private static class F20 implements FeatureGetter {
+    private static class F20 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -972,7 +977,7 @@ public class FeatureExtractor {
     /**
      * 21Dominance. ANEW score dominance (weakness vs strength).
      */
-    private static class F21 implements FeatureGetter {
+    private static class F21 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -1006,7 +1011,7 @@ public class FeatureExtractor {
     /**
      * 22PosSenti. SentiStrength positive sentiment score.
      */
-    private static class F22 implements FeatureGetter {
+    private static class F22 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -1025,7 +1030,7 @@ public class FeatureExtractor {
     /**
      * 23NegSenti. SentiStrength negative sentiment score.
      */
-    private static class F23 implements FeatureGetter {
+    private static class F23 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -1044,7 +1049,7 @@ public class FeatureExtractor {
     /**
      * 24Len. Length of text.
      */
-    private static class F24 implements FeatureGetter {
+    private static class F24 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -1061,14 +1066,13 @@ public class FeatureExtractor {
     /**
      * 25LongestWord. Length of longest word.
      */
-    private static class F25 implements FeatureGetter {
+    private static class F25 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
-            String[] words = t.getText().split(" ");
             int max = 0;
-            for (String w : words) {
-                int len = wordLen(w);
+            for (String w : WordFeature.splitIntoWords(t.getText())) {
+                int len = w.length();
                 if (max < len) {
                     max = len;
                 }
@@ -1081,34 +1085,12 @@ public class FeatureExtractor {
         public RawAttr getAttr () {
             return new RawAttr("25LongestWord", true);
         }
-
-        private int wordLen (String w) {
-            int len = 0;
-            for (char c : w.toCharArray()) {
-                if (Character.isLetter(c)) {
-                    len++;
-                } else if (Character.isDigit(c) || NOT_WORD_CHARS.contains(c)) {
-                    len = 0; // It's not a word if contains digit or url.
-                    break;
-                } // else just ignore others like ,.?
-            }
-            return len;
-        }
-
-        private static final HashSet<Character> NOT_WORD_CHARS =
-                new HashSet<Character>();
-        static {
-            NOT_WORD_CHARS.add('\\');
-            NOT_WORD_CHARS.add('/');
-            NOT_WORD_CHARS.add('@');
-            NOT_WORD_CHARS.add('#');
-        }
     }
 
     /**
      * 26Trend. Contains trend word or not.
      */
-    private static class F26 implements FeatureGetter {
+    private static class F26 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -1144,7 +1126,7 @@ public class FeatureExtractor {
     /**
      * 27DayInWeek.
      */
-    private static class F27 implements FeatureGetter {
+    private static class F27 extends FeatureGetter {
         private static final HashMap<Integer, Integer> DAY_MAP =
                 new HashMap<Integer, Integer>();
         static {
@@ -1177,7 +1159,7 @@ public class FeatureExtractor {
     /**
      * 28HourInDay.
      */
-    private static class F28 implements FeatureGetter {
+    private static class F28 extends FeatureGetter {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
@@ -1198,7 +1180,7 @@ public class FeatureExtractor {
     /**
      * Ffol.
      */
-    public static class Ffol implements FeatureGetter {
+    public static class Ffol extends FeatureGetter {
         long folId;
 
         public Ffol(long folId) {
@@ -1217,7 +1199,44 @@ public class FeatureExtractor {
 
         @Override
         public RawAttr getAttr () {
-            return new RawAttr(Long.toString(folId), true);
+            return new RawAttr(Long.toString(folId), false);
+        }
+    }
+
+    /**
+     * Fword.
+     */
+    public static class Fword extends FeatureGetter {
+        String word;
+
+        public Fword(String word) {
+            this.word = word;
+        }
+
+        private static HashMap<Long, List<String>> tidToWords =
+                new HashMap<Long, List<String>>();
+
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            if (!tidToWords.containsKey(t.getId())) {
+                tidToWords.put(t.getId(),
+                        WordFeature.splitIntoWords(t.getText()));
+            }
+            List<String> words = tidToWords.get(t.getId());
+            int count = 0;
+            for (String w : words) {
+                if (word.equals(w)) {
+                    count++;
+                }
+            }
+            final String feature = "" + count;
+            return feature;
+        }
+
+        @Override
+        public RawAttr getAttr () {
+            return new RawAttr(WordFeature.FEATURE_PRIFIX + word, true);
         }
     }
 }

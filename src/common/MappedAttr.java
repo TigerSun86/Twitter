@@ -10,9 +10,9 @@ package common;
  * @date Apr 22, 2014 11:11:05 AM
  */
 public class MappedAttr implements Mappable {
-    public static final double HIGH_VALUE = 0.9;
+    public static final double HIGH_VALUE = 1;
     public static final double MID_VALUE = 0.5;
-    public static final double LOW_VALUE = 0.1;
+    public static final double LOW_VALUE = 0;
     
     private final String name;
     private final double valueMax;
