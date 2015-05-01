@@ -1,6 +1,7 @@
 package datacollection;
 
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 
 import twitter4j.User;
@@ -32,6 +33,24 @@ public class UserInfo {
         // screen name: UNEP, name: UN Environment
         KEY_AUTHORS.add(38146999L);
 
+    }
+    public static final HashMap<Long, String> KA_ID2SCREENNAME;
+    static {
+        KA_ID2SCREENNAME = new HashMap<Long, String>();
+        // screen name: Greenpeace, name: Greenpeace
+        KA_ID2SCREENNAME.put(3459051L, "Greenpeace");
+        // screen name: UNFCCC, name: UNFCCC
+        KA_ID2SCREENNAME.put(17463923L, "UNFCCC");
+        // screen name: climateprogress, name: Climate Progress
+        KA_ID2SCREENNAME.put(28657802L, "climateprogress");
+        // screen name: ClimateReality, name: Climate Reality
+        KA_ID2SCREENNAME.put(16958346L, "ClimateReality");
+        // screen name: ClimateDesk, name: Climate Desk
+        KA_ID2SCREENNAME.put(120181944L, "ClimateDesk");
+        // screen name: EarthVitalSigns, name: NASA Climate
+        KA_ID2SCREENNAME.put(15461733L, "EarthVitalSigns");
+        // screen name: UNEP, name: UN Environment
+        KA_ID2SCREENNAME.put(38146999L, "UNEP");
     }
 
     public final long userId; // For database search.

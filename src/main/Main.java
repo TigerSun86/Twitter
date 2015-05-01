@@ -428,7 +428,6 @@ public class Main {
     private HashMap<String, List<Double>> learnerToPearson = null;
 
     private void testAttrSel () throws Exception {
-
         final Exs exs = exGetter.getExsForPredictNum();
         MeToWeka w =
                 new MeToWeka(this.featureGetters.getAttrListOfPredictNum());
@@ -467,8 +466,8 @@ public class Main {
 
     private void testWordFeature () throws Exception {
         for (Mode mode : WordFeature.Mode.values()) {
-            new WordFeature().setWordFeature(this.featureGetters,
-                    exGetter.auTweets, mode);
+            new WordFeature().setFeature(this.featureGetters,
+                    exGetter.auTweets, WordFeature.Type.WORD, mode);
             final Exs exs = exGetter.getExsForPredictNum();
             MeToWeka w =
                     new MeToWeka(this.featureGetters.getAttrListOfPredictNum());
@@ -509,7 +508,7 @@ public class Main {
                 .println("Test Correlation coefficient, Test Mean absolute error, Test Root mean squared error, Test Relative absolute error, Test Root relative squared error");
 
         final Database db = Database.getInstance();
-        for (long authorId : VALID_USERS.keySet()) {
+        for (long authorId : UserInfo.KEY_AUTHORS) {
             if (authorId != 16958346L) {
                 // continue;
             }
