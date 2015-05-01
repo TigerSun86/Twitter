@@ -24,6 +24,9 @@ import common.RawAttrList;
 
 import datacollection.Database;
 import features.AnewMap.Anew;
+import features.WordFeature.HashMethods;
+import features.WordFeature.MentionMethods;
+import features.WordFeature.WordMethods;
 
 /**
  * FileName: FeatureExtractor.java
@@ -1204,12 +1207,12 @@ public class FeatureExtractor {
     }
 
     /**
-     * Fword.
+     * FTopWord.
      */
-    public static class Fword extends FeatureGetter {
+    public static class FTopWord extends FeatureGetter {
         String word;
 
-        public Fword(String word) {
+        public FTopWord(String word) {
             this.word = word;
         }
 
@@ -1236,7 +1239,67 @@ public class FeatureExtractor {
 
         @Override
         public RawAttr getAttr () {
-            return new RawAttr(WordFeature.FEATURE_PRIFIX + word, true);
+            return new RawAttr(WordMethods.FEATURE_PRIFIX + word, true);
+        }
+    }
+
+    /**
+     * FTopHash.
+     */
+    public static class FTopHash extends FeatureGetter {
+        String word;
+
+        public FTopHash(String word) {
+            this.word = word;
+        }
+
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            HashtagEntity[] hashes = t.getHashtagEntities();
+            int count = 0;
+            for (HashtagEntity h : hashes) {
+                if (word.equalsIgnoreCase(h.getText())) {
+                    count++;
+                }
+            }
+            final String feature = "" + count;
+            return feature;
+        }
+
+        @Override
+        public RawAttr getAttr () {
+            return new RawAttr(HashMethods.FEATURE_PRIFIX + word, true);
+        }
+    }
+
+    /**
+     * FTopMention.
+     */
+    public static class FTopMention extends FeatureGetter {
+        String word;
+
+        public FTopMention(String word) {
+            this.word = word;
+        }
+
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            UserMentionEntity[] mentions = t.getUserMentionEntities();
+            int count = 0;
+            for (UserMentionEntity m : mentions) {
+                if (word.equalsIgnoreCase(m.getScreenName())) {
+                    count++;
+                }
+            }
+            final String feature = "" + count;
+            return feature;
+        }
+
+        @Override
+        public RawAttr getAttr () {
+            return new RawAttr(MentionMethods.FEATURE_PRIFIX + word, true);
         }
     }
 }
