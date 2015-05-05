@@ -11,6 +11,7 @@ import java.util.List;
 import main.ExampleGetter;
 import twitter4j.HashtagEntity;
 import twitter4j.Status;
+import twitter4j.URLEntity;
 import twitter4j.UserMentionEntity;
 import weka.core.Stopwords;
 
@@ -18,10 +19,11 @@ import common.RawAttr;
 
 import datacollection.Database;
 import datacollection.UserInfo;
+import features.FeatureExtractor.FTopDomain;
 import features.FeatureExtractor.FTopHash;
 import features.FeatureExtractor.FTopMention;
-import features.FeatureExtractor.FeatureGetter;
 import features.FeatureExtractor.FTopWord;
+import features.FeatureExtractor.FeatureGetter;
 
 /**
  * FileName: WordFeature.java
@@ -40,7 +42,7 @@ public class WordFeature {
     }
 
     public enum Type {
-        WORD, HASH, MENTION
+        WORD, HASH, MENTION, DOMAIN
     }
 
     public void setFeature (FeatureExtractor featureGetters,
@@ -50,8 +52,10 @@ public class WordFeature {
             methods = new WordMethods();
         } else if (type.equals(Type.HASH)) {
             methods = new HashMethods();
-        } else {// if(type.equals(Type.MENTION))
+        } else if (type.equals(Type.MENTION)) {
             methods = new MentionMethods();
+        } else { // if(type.equals(Type.DOMAIN))
+            methods = new DomainMethods();
         }
 
         // First remove all specified type features.
@@ -196,6 +200,43 @@ public class WordFeature {
         }
     }
 
+    static class DomainMethods extends EntityMethods {
+        static final String FEATURE_PRIFIX = "TOPDOMAIN_";
+
+        @Override
+        public String getPrefix () {
+            return FEATURE_PRIFIX;
+        }
+
+        @Override
+        public void analyseTweets (List<Status> tweets) {
+            // Convert tweets to hashtags.
+            List<List<String>> wordsInTweets = new ArrayList<List<String>>();
+            List<Integer> numOfRts = new ArrayList<Integer>();
+            for (Status t : tweets) {
+                URLEntity[] urls = t.getURLEntities();
+                List<String> words = new ArrayList<String>();
+                for (URLEntity url : urls) {
+                    String domain = DomainGetter.getDomain(url.getURL());
+                    if (!domain.isEmpty()) {
+                        words.add(domain);
+                    }
+                }
+                if (!words.isEmpty()) {
+                    wordsInTweets.add(words);
+                    numOfRts.add(t.getRetweetCount());
+                }
+            }
+            this.entitiesInTweets = wordsInTweets;
+            this.numOfRts = numOfRts;
+        }
+
+        @Override
+        public FeatureGetter getFeatureInstance (String entityName) {
+            return new FTopDomain(entityName);
+        }
+    }
+
     public List<String> getTopEntities (List<List<String>> wordsInTweets,
             List<Integer> numOfRts, Mode mode) {
         // Count document frequence.
@@ -273,7 +314,7 @@ public class WordFeature {
         List<String> topWords = new ArrayList<String>();
         for (int i = 0; i < Math.min(TOP_WORDS, was.size()); i++) {
             topWords.add(was.get(i).w);
-            //System.out.println(was.get(i).toString());
+            // System.out.println(was.get(i).toString());
         }
         return topWords;
     }
@@ -377,7 +418,7 @@ public class WordFeature {
 
     public static void main (String[] args) {
         WordFeature a = new WordFeature();
-        EntityMethods methods = new MentionMethods();
+        EntityMethods methods = new DomainMethods();
         for (long id : UserInfo.KEY_AUTHORS) {
             final List<Status> auTweets =
                     a.getAuthorTweets(id, ExampleGetter.TRAIN_START_DATE,

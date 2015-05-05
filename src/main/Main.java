@@ -467,7 +467,7 @@ public class Main {
     private void testWordFeature () throws Exception {
         for (Mode mode : WordFeature.Mode.values()) {
             new WordFeature().setFeature(this.featureGetters,
-                    exGetter.auTweets, WordFeature.Type.WORD, mode);
+                    exGetter.auTweets, WordFeature.Type.DOMAIN, mode);
             final Exs exs = exGetter.getExsForPredictNum();
             MeToWeka w =
                     new MeToWeka(this.featureGetters.getAttrListOfPredictNum());

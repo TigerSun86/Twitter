@@ -18,12 +18,11 @@ import twitter4j.Trend;
 import twitter4j.URLEntity;
 import twitter4j.User;
 import twitter4j.UserMentionEntity;
-
 import common.RawAttr;
 import common.RawAttrList;
-
 import datacollection.Database;
 import features.AnewMap.Anew;
+import features.WordFeature.DomainMethods;
 import features.WordFeature.HashMethods;
 import features.WordFeature.MentionMethods;
 import features.WordFeature.WordMethods;
@@ -1300,6 +1299,37 @@ public class FeatureExtractor {
         @Override
         public RawAttr getAttr () {
             return new RawAttr(MentionMethods.FEATURE_PRIFIX + word, true);
+        }
+    }
+
+    /**
+     * FTopDomain.
+     */
+    public static class FTopDomain extends FeatureGetter {
+        String word;
+
+        public FTopDomain(String word) {
+            this.word = word;
+        }
+
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            URLEntity[] urls = t.getURLEntities();
+            int count = 0;
+            for (URLEntity url : urls) {
+                String domain = DomainGetter.getDomain(url.getURL());
+                if (!domain.isEmpty() && word.equalsIgnoreCase(domain)) {
+                    count++;
+                }
+            }
+            final String feature = "" + count;
+            return feature;
+        }
+
+        @Override
+        public RawAttr getAttr () {
+            return new RawAttr(DomainMethods.FEATURE_PRIFIX + word, true);
         }
     }
 }
