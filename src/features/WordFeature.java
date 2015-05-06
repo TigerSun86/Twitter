@@ -13,8 +13,10 @@ import twitter4j.HashtagEntity;
 import twitter4j.Status;
 import twitter4j.URLEntity;
 import twitter4j.UserMentionEntity;
+import util.MyMath;
 import weka.core.Stopwords;
 
+import com.google.common.primitives.Doubles;
 import common.RawAttr;
 
 import datacollection.Database;
@@ -36,9 +38,10 @@ import features.FeatureExtractor.FeatureGetter;
 public class WordFeature {
     private static final int TOP_WORDS = 10;
     private static final boolean DISCARD_STOP_WORD = true;
+    private static final int DF_THRESHOLD = 10;
 
     public enum Mode {
-        NO, SUM, AVG, IDF, ENTROPY, DF
+        NO, SUM, AVG, IDF, ENTROPY, DF, SUMTHR10, SUMTHR20, SUMDEV, DEV, DFDEV, DEVHIGH
     }
 
     public enum Type {
@@ -244,7 +247,10 @@ public class WordFeature {
                 new HashMap<String, Integer>();
         final ArrayList<String> idxToWord = new ArrayList<String>();
         final ArrayList<Integer> idxToDf = new ArrayList<Integer>();
-        for (List<String> words : wordsInTweets) {
+        final ArrayList<List<Integer>> idxToSubNumOfRts =
+                new ArrayList<List<Integer>>();
+        for (int ti = 0; ti < wordsInTweets.size(); ti++) {
+            List<String> words = wordsInTweets.get(ti);
             final HashSet<String> wordsInThisArt = new HashSet<String>();
             for (String word : words) {
                 Integer idx = wordToIdx.get(word);
@@ -252,26 +258,50 @@ public class WordFeature {
                     wordToIdx.put(word, wordToIdx.size());
                     idxToWord.add(word);
                     idxToDf.add(1);
+                    List<Integer> nrt = new ArrayList<Integer>();
+                    nrt.add(numOfRts.get(ti));
+                    idxToSubNumOfRts.add(nrt);
                     wordsInThisArt.add(word);
                 } else {
                     if (!wordsInThisArt.contains(word)) {
                         // A word has occurred in other article before, but
                         // hasn't occurred in this one.
                         idxToDf.set(idx, idxToDf.get(idx) + 1);
+                        idxToSubNumOfRts.get(idx).add(numOfRts.get(ti));
                         wordsInThisArt.add(word);
                     }
                 }
             }
         }
+
+        double dev = MyMath.getStdDev(Doubles.toArray(numOfRts));
         // Get score for each word.
         double[] idxToScore = new double[wordToIdx.size()];
-        if (mode == Mode.DF) {
+        if (mode == Mode.DEV) {
+            for (int idx = 0; idx < idxToWord.size(); idx++) {
+                double wordDev =
+                        MyMath.getStdDev(Doubles.toArray(idxToSubNumOfRts
+                                .get(idx)));
+                if (idxToDf.get(idx) >= 10) {
+                    idxToScore[idx] = dev - wordDev;
+                } else { // Invalid word if it appear too few times.
+                    idxToScore[idx] = -1;
+                }
+            }
+        } else if (mode == Mode.DEVHIGH) {
+            for (int idx = 0; idx < idxToWord.size(); idx++) {
+                double wordDev =
+                        MyMath.getStdDev(Doubles.toArray(idxToSubNumOfRts
+                                .get(idx)));
+                idxToScore[idx] = wordDev;
+            }
+        } else if (mode == Mode.DF || mode == Mode.DFDEV) {
             for (int idx = 0; idx < idxToWord.size(); idx++) {
                 double df = idxToDf.get(idx);
                 idxToScore[idx] = df;
             }
         } else {
-            // MODE_SUM
+            // Mode.SUM and Mode.SUMTHR10
             for (int i = 0; i < numOfRts.size(); i++) {
                 double numOfRt = numOfRts.get(i);
                 numOfRt = Math.log(numOfRt);
@@ -280,10 +310,10 @@ public class WordFeature {
                     int wordIdx = wordToIdx.get(word);
                     // Sum up numOfRt in all tweets for this word.
                     idxToScore[wordIdx] += numOfRt;
-
                 }
             }
-            if (mode != Mode.SUM) {
+            if (mode != Mode.SUM && mode != Mode.SUMTHR10
+                    && mode != Mode.SUMTHR20 && mode != Mode.SUMDEV) {
                 double logD = Math.log(numOfRts.size());
                 for (int idx = 0; idx < idxToWord.size(); idx++) {
                     double df = idxToDf.get(idx);
@@ -313,8 +343,41 @@ public class WordFeature {
 
         List<String> topWords = new ArrayList<String>();
         for (int i = 0; i < Math.min(TOP_WORDS, was.size()); i++) {
-            topWords.add(was.get(i).w);
-            // System.out.println(was.get(i).toString());
+            String word = was.get(i).w;
+            boolean goodWord = true;
+            if (mode == Mode.SUMTHR10) {
+                goodWord = idxToDf.get(wordToIdx.get(word)) >= 10;
+            } else if (mode == Mode.SUMTHR20) {
+                goodWord = idxToDf.get(wordToIdx.get(word)) >= 20;
+            } else if (mode == Mode.SUMDEV) {
+                goodWord = idxToDf.get(wordToIdx.get(word)) >= 10;
+                if (goodWord) {
+                    double wordDev =
+                            MyMath.getStdDev(Doubles.toArray(idxToSubNumOfRts
+                                    .get(wordToIdx.get(word))));
+                    goodWord = wordDev <= dev;
+                }
+            } else if (mode == Mode.DEV) {
+                // Only the word with std dev lower than overall std dev is a
+                // good word. And if the word appears less than 10 times, it is
+                // not a good word either.
+                goodWord = was.get(i).s >= 0;
+            } else if (mode == Mode.DFDEV) {
+                goodWord = idxToDf.get(wordToIdx.get(word)) >= 10;
+                if (goodWord) {
+                    double wordDev =
+                            MyMath.getStdDev(Doubles.toArray(idxToSubNumOfRts
+                                    .get(wordToIdx.get(word))));
+                    goodWord = wordDev <= dev;
+                }
+            } else if (mode == Mode.DEVHIGH) {
+                goodWord = idxToDf.get(wordToIdx.get(word)) >= 10;
+            }
+
+            if (goodWord) {
+                topWords.add(was.get(i).w);
+                //System.out.println(was.get(i).toString());
+            }
         }
         return topWords;
     }
@@ -420,6 +483,9 @@ public class WordFeature {
         WordFeature a = new WordFeature();
         EntityMethods methods = new DomainMethods();
         for (long id : UserInfo.KEY_AUTHORS) {
+            if (id != 16958346L) {
+                // continue;
+            }
             final List<Status> auTweets =
                     a.getAuthorTweets(id, ExampleGetter.TRAIN_START_DATE,
                             ExampleGetter.TEST_END_DATE);
