@@ -13,11 +13,13 @@ import learners.MeToWeka;
 import learners.WAnn;
 import learners.WLr;
 import main.ExampleGetter.Exs;
+import main.ExampleGetter.ExsForWeka;
 import twitter4j.Status;
 import util.MyMath;
 import util.SysUtil;
 import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
+import weka.core.Instance;
 import weka.core.Instances;
 
 import common.DataReader;
@@ -466,16 +468,12 @@ public class Main {
 
     private void testWordFeature () throws Exception {
         for (Mode mode : WordFeature.Mode.values()) {
-            if(mode != WordFeature.Mode.DEVHIGH && mode != WordFeature.Mode.DFDEV){
-                continue;
-            }
             new WordFeature().setFeature(this.featureGetters,
-                    exGetter.auTweets, WordFeature.Type.MENTION, mode);
-            final Exs exs = exGetter.getExsForPredictNum();
-            MeToWeka w =
-                    new MeToWeka(this.featureGetters.getAttrListOfPredictNum());
-            Instances train = w.convertInstances(exs.train);
-            Instances test = w.convertInstances(exs.testM2);
+                    exGetter.auTweets, WordFeature.Type.WORD, mode);
+
+            final ExsForWeka exs = exGetter.getExsInWekaForPredictNum();
+            Instances train = exs.train;
+            Instances test = exs.test;
             for (int li = 0; li < W_LEARNERS.length; li++) {
                 WLearner learner = W_LEARNERS[li];
                 Classifier cls = learner.buildClassifier(train);
@@ -512,8 +510,8 @@ public class Main {
 
         final Database db = Database.getInstance();
         for (long authorId : UserInfo.KEY_AUTHORS) {
-            if (authorId != 16958346L) {
-                // continue;
+            if (authorId != 3459051L) {
+                continue;
             }
             new Main(db, authorId, IS_GLOBAL).testWordFeature();
 

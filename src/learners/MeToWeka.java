@@ -21,8 +21,8 @@ import common.RawExampleList;
  * @date Mar 30, 2015 8:35:39 PM
  */
 public class MeToWeka {
-    private static FastVector attributes = null;
-    public static Instances dataForConvert = null;
+    public FastVector attributes = null;
+    public Instances dataForConvert = null;
 
     public MeToWeka(RawAttrList attrs) {
         attributes = convertAttributes(attrs);

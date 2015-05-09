@@ -10,15 +10,17 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import learners.MeToWeka;
 import twitter4j.Status;
 import twitter4j.User;
-
+import weka.core.Instances;
+import weka.filters.Filter;
+import weka.filters.unsupervised.attribute.Normalize;
 import common.MappedAttrList;
 import common.RawAttrList;
 import common.RawExample;
 import common.RawExampleList;
 import common.TrainTestSplitter;
-
 import datacollection.Database;
 import datacollection.UserInfo;
 import features.FeatureExtractor;
@@ -62,6 +64,16 @@ public class ExampleGetter {
             this.testM1 = testM1;
             this.testM2 = testM2;
             this.followerAndExsInfo = followerAndExsInfo;
+        }
+    }
+
+    public static class ExsForWeka {
+        public final Instances train;
+        public final Instances test;
+
+        public ExsForWeka(Instances train, Instances test) {
+            this.train = train;
+            this.test = test;
         }
     }
 
@@ -111,6 +123,47 @@ public class ExampleGetter {
         this.auTweets = auTweets;
         this.auTweetsM2 = auTweetsM2;
         this.featureGetters = featureGetters;
+    }
+
+    private static final boolean NEED_NORMALIZE = true;
+
+    public ExsForWeka getExsInWekaForPredictNum () {
+        MeToWeka w =
+                new MeToWeka(this.featureGetters.getAttrListOfPredictNum());
+        Instances train = new Instances("Train", w.attributes, auTweets.size());
+        train.setClassIndex(train.numAttributes() - 1);
+        Instances test = new Instances("Test", w.attributes, auTweetsM2.size());
+        test.setClassIndex(test.numAttributes() - 1);
+        for (Status t : auTweets) {
+            ArrayList<String> features =
+                    featureGetters.getFeaturesOfPredictNum(t, null, null);
+            RawExample e = new RawExample();
+            e.xList = features;
+            e.t = Double.toString(Math.log(t.getRetweetCount()));
+            train.add(w.convertInstance(e));
+        }
+        for (Status t : auTweetsM2) {
+            ArrayList<String> features =
+                    featureGetters.getFeaturesOfPredictNum(t, null, null);
+            RawExample e = new RawExample();
+            e.xList = features;
+            e.t = Double.toString(Math.log(t.getRetweetCount()));
+            test.add(w.convertInstance(e));
+        }
+
+        if (NEED_NORMALIZE) {
+            try { // Normalize training data
+                Normalize norm = new Normalize();
+                norm.setInputFormat(train);
+                train = Filter.useFilter(train, norm);
+                test = Filter.useFilter(test, norm);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        ExsForWeka ret = new ExsForWeka(train, test);
+        return ret;
     }
 
     public Exs getExsForPredictNum () {
