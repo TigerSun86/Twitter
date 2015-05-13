@@ -38,7 +38,6 @@ import features.FeatureExtractor.FeatureGetter;
 public class WordFeature {
     private static final int TOP_WORDS = 10;
     private static final boolean DISCARD_STOP_WORD = true;
-    private static final int DF_THRESHOLD = 10;
 
     public enum Mode {
         NO, SUM, AVG, IDF, ENTROPY, DF, SUMTHR10, SUMTHR20, SUMDEV, DEV, DFDEV, DEVHIGH

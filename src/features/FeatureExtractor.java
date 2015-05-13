@@ -18,6 +18,13 @@ import twitter4j.Trend;
 import twitter4j.URLEntity;
 import twitter4j.User;
 import twitter4j.UserMentionEntity;
+import weka.clusterers.Clusterer;
+import weka.core.Attribute;
+import weka.core.FastVector;
+import weka.core.Instance;
+import weka.core.Instances;
+import weka.filters.Filter;
+import weka.filters.unsupervised.attribute.StringToWordVector;
 import common.RawAttr;
 import common.RawAttrList;
 import datacollection.Database;
@@ -1201,7 +1208,7 @@ public class FeatureExtractor {
 
         @Override
         public RawAttr getAttr () {
-            return new RawAttr(Long.toString(folId), false);
+            return getDiscreteAttr(Long.toString(folId));
         }
     }
 
@@ -1230,15 +1237,16 @@ public class FeatureExtractor {
             for (String w : words) {
                 if (word.equals(w)) {
                     count++;
+                    break;
                 }
             }
-            final String feature = "" + count;
+            final String feature = (count == 0 ? F0 : F1);
             return feature;
         }
 
         @Override
         public RawAttr getAttr () {
-            return new RawAttr(WordMethods.FEATURE_PRIFIX + word, true);
+            return getDiscreteAttr(WordMethods.FEATURE_PRIFIX + word);
         }
     }
 
@@ -1260,15 +1268,16 @@ public class FeatureExtractor {
             for (HashtagEntity h : hashes) {
                 if (word.equalsIgnoreCase(h.getText())) {
                     count++;
+                    break;
                 }
             }
-            final String feature = "" + count;
+            final String feature = (count == 0 ? F0 : F1);
             return feature;
         }
 
         @Override
         public RawAttr getAttr () {
-            return new RawAttr(HashMethods.FEATURE_PRIFIX + word, true);
+            return getDiscreteAttr(HashMethods.FEATURE_PRIFIX + word);
         }
     }
 
@@ -1290,15 +1299,16 @@ public class FeatureExtractor {
             for (UserMentionEntity m : mentions) {
                 if (word.equalsIgnoreCase(m.getScreenName())) {
                     count++;
+                    break;
                 }
             }
-            final String feature = "" + count;
+            final String feature = (count == 0 ? F0 : F1);
             return feature;
         }
 
         @Override
         public RawAttr getAttr () {
-            return new RawAttr(MentionMethods.FEATURE_PRIFIX + word, true);
+            return getDiscreteAttr(MentionMethods.FEATURE_PRIFIX + word);
         }
     }
 
@@ -1321,15 +1331,80 @@ public class FeatureExtractor {
                 String domain = DomainGetter.getDomain(url.getURL());
                 if (!domain.isEmpty() && word.equalsIgnoreCase(domain)) {
                     count++;
+                    break;
                 }
             }
-            final String feature = "" + count;
+            final String feature = (count == 0 ? F0 : F1);
             return feature;
         }
 
         @Override
         public RawAttr getAttr () {
-            return new RawAttr(DomainMethods.FEATURE_PRIFIX + word, true);
+            return getDiscreteAttr(DomainMethods.FEATURE_PRIFIX + word);
+        }
+    }
+
+    /**
+     * FTweetCluster.
+     */
+    public static class FTweetCluster extends FeatureGetter {
+        private static final double THRESHOLD = 0.2;
+        private final HashMap<Long, double[]> tweetsCache =
+                new HashMap<Long, double[]>();
+
+        int clusterId;
+        Clusterer clusterer;
+        StringToWordVector str2vec;
+
+        public FTweetCluster(int clusterId, Clusterer clusterer,
+                StringToWordVector str2vec) {
+            this.clusterId = clusterId;
+            this.clusterer = clusterer;
+            this.str2vec = str2vec;
+        }
+
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            try {
+                double[] clusterProbs = tweetsCache.get(t.getId());
+                if (clusterProbs == null) {
+                    Instance vec = getWordVector(t);
+                    clusterProbs = clusterer.distributionForInstance(vec);
+                    tweetsCache.put(t.getId(), clusterProbs);
+                }
+                final String feature =
+                        (clusterProbs[clusterId] >= THRESHOLD ? F1 : F0);
+                return feature;
+            } catch (Exception e) {
+                e.printStackTrace();
+                System.exit(0);
+            }
+            return null;
+        }
+
+        @Override
+        public RawAttr getAttr () {
+            return getDiscreteAttr("TweetCluster" + clusterId);
+        }
+
+        private Instance getWordVector (Status t) throws Exception {
+            Attribute strAttr =
+                    new Attribute("tweet content", (FastVector) null);
+            FastVector attributes = new FastVector();
+            attributes.addElement(strAttr);
+            Instances data = new Instances("Test-dataset", attributes, 1);
+
+            String s = ClusterFeature.getTextOfTweet(t);
+
+            double[] values = new double[data.numAttributes()];
+            values[0] = data.attribute(0).addStringValue(s);
+            Instance inst = new Instance(1.0, values);
+            data.add(inst);
+
+            Instances dataFiltered = Filter.useFilter(data, str2vec);
+
+            return dataFiltered.instance(0);
         }
     }
 }

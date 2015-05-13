@@ -19,7 +19,6 @@ import util.MyMath;
 import util.SysUtil;
 import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
-import weka.core.Instance;
 import weka.core.Instances;
 
 import common.DataReader;
@@ -32,6 +31,7 @@ import common.WLearner;
 import datacollection.Database;
 import datacollection.UserInfo;
 import features.AttrSel;
+import features.ClusterFeature;
 import features.FeatureExtractor;
 import features.WordFeature;
 import features.WordFeature.Mode;
@@ -468,6 +468,7 @@ public class Main {
 
     private void testWordFeature () throws Exception {
         for (Mode mode : WordFeature.Mode.values()) {
+            if(mode != WordFeature.Mode.NO){continue;}
             new WordFeature().setFeature(this.featureGetters,
                     exGetter.auTweets, WordFeature.Type.WORD, mode);
 
@@ -500,6 +501,32 @@ public class Main {
         }
     }
 
+    private void testClusterFeature () throws Exception {
+        new ClusterFeature().setFeature(this.featureGetters, exGetter.auTweets);
+        final ExsForWeka exs = exGetter.getExsInWekaForPredictNum();
+        Instances train = exs.train;
+        Instances test = exs.test;
+        for (int li = 0; li < W_LEARNERS.length; li++) {
+            WLearner learner = W_LEARNERS[li];
+            Classifier cls = learner.buildClassifier(train);
+
+            Evaluation e;
+            e = new Evaluation(train);
+            e.evaluateModel(cls, train);
+            System.out.printf("%s, %s, %.4f, %.4f, %.4f, %.4f%%, %.4f%%, ",
+                    author.userProfile.getScreenName(), W_L_NAMES[li],
+                    e.correlationCoefficient(), e.meanAbsoluteError(),
+                    e.rootMeanSquaredError(), e.relativeAbsoluteError(),
+                    e.rootRelativeSquaredError());
+            e = new Evaluation(train);
+            e.evaluateModel(cls, test);
+            System.out.printf("%.4f, %.4f, %.4f, %.4f%%, %.4f%%%n",
+                    e.correlationCoefficient(), e.meanAbsoluteError(),
+                    e.rootMeanSquaredError(), e.relativeAbsoluteError(),
+                    e.rootRelativeSquaredError());
+        } // for (int li = 0; li < W_LEARNERS.length; li++) {
+    }
+
     public static void main (String[] args) throws Exception {
         System.out.println("Begin at: " + new Date().toString());
         System.out.print("AuthorName, Learner, WordFeatureMode, ");
@@ -511,7 +538,7 @@ public class Main {
         final Database db = Database.getInstance();
         for (long authorId : UserInfo.KEY_AUTHORS) {
             if (authorId != 3459051L) {
-                continue;
+                // continue;
             }
             new Main(db, authorId, IS_GLOBAL).testWordFeature();
 
