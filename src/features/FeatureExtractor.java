@@ -25,8 +25,10 @@ import weka.core.Instance;
 import weka.core.Instances;
 import weka.filters.Filter;
 import weka.filters.unsupervised.attribute.StringToWordVector;
+
 import common.RawAttr;
 import common.RawAttrList;
+
 import datacollection.Database;
 import features.AnewMap.Anew;
 import features.WordFeature.DomainMethods;
@@ -1080,7 +1082,7 @@ public class FeatureExtractor {
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
             int max = 0;
-            for (String w : WordFeature.splitIntoWords(t.getText())) {
+            for (String w : WordFeature.splitIntoWords(t, false, false)) {
                 int len = w.length();
                 if (max < len) {
                     max = len;
@@ -1230,7 +1232,7 @@ public class FeatureExtractor {
                 List<Status> userTweets) {
             if (!tidToWords.containsKey(t.getId())) {
                 tidToWords.put(t.getId(),
-                        WordFeature.splitIntoWords(t.getText()));
+                        WordFeature.splitIntoWords(t, true, true));
             }
             List<String> words = tidToWords.get(t.getId());
             int count = 0;
@@ -1395,7 +1397,7 @@ public class FeatureExtractor {
             attributes.addElement(strAttr);
             Instances data = new Instances("Test-dataset", attributes, 1);
 
-            String s = ClusterFeature.getTextOfTweet(t);
+            String s = WordFeature.getTextOfTweet(t);
 
             double[] values = new double[data.numAttributes()];
             values[0] = data.attribute(0).addStringValue(s);

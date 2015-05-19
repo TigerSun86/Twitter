@@ -10,11 +10,16 @@ import java.util.List;
 
 import main.ExampleGetter;
 import twitter4j.HashtagEntity;
+import twitter4j.MediaEntity;
 import twitter4j.Status;
 import twitter4j.URLEntity;
 import twitter4j.UserMentionEntity;
 import util.MyMath;
 import weka.core.Stopwords;
+import weka.core.stemmers.IteratedLovinsStemmer;
+import weka.core.stemmers.Stemmer;
+import weka.core.tokenizers.AlphabeticTokenizer;
+import weka.core.tokenizers.Tokenizer;
 
 import com.google.common.primitives.Doubles;
 import common.RawAttr;
@@ -37,7 +42,8 @@ import features.FeatureExtractor.FeatureGetter;
  */
 public class WordFeature {
     private static final int TOP_WORDS = 10;
-    private static final boolean DISCARD_STOP_WORD = true;
+    private static final Tokenizer TOKENIZER = new AlphabeticTokenizer();
+    private static final Stemmer STEMMER = new IteratedLovinsStemmer();
 
     public enum Mode {
         NO, SUM, AVG, IDF, ENTROPY, DF, SUMTHR10, SUMTHR20, SUMDEV, DEV, DFDEV, DEVHIGH
@@ -118,7 +124,7 @@ public class WordFeature {
             List<List<String>> wordsInTweets = new ArrayList<List<String>>();
             List<Integer> numOfRts = new ArrayList<Integer>();
             for (Status t : tweets) {
-                List<String> words = splitIntoWords(t.getText());
+                List<String> words = splitIntoWords(t, true, true);
                 if (!words.isEmpty()) {
                     wordsInTweets.add(words);
                     numOfRts.add(t.getRetweetCount());
@@ -375,7 +381,7 @@ public class WordFeature {
 
             if (goodWord) {
                 topWords.add(was.get(i).w);
-                //System.out.println(was.get(i).toString());
+                // System.out.println(was.get(i).toString());
             }
         }
         return topWords;
@@ -414,50 +420,47 @@ public class WordFeature {
         }
     }
 
-    public static List<String> splitIntoWords (String s) {
+    public static List<String> splitIntoWords (Status t,
+            boolean discardStopWords, boolean needStemming) {
         List<String> words = new ArrayList<String>();
-        for (String word : s.split("\\p{Blank}")) {
-            String filtered = filterWord(word);
-            if (!filtered.isEmpty()) {
-                if (DISCARD_STOP_WORD && Stopwords.isStopword(filtered)) {
-                    continue;// Check stop word before and after stemmed.
-                }
-                // It will be converted to lower case in the stemmer.
-                String stemmed = Stemmer.stem(filtered);
-                if (DISCARD_STOP_WORD && Stopwords.isStopword(stemmed)) {
-                    continue;// Skip this word.
-                }
-                words.add(stemmed);
+
+        String s = getTextOfTweet(t);
+        // Get tokenizer
+        TOKENIZER.tokenize(s);
+        // Iterate through tokens, perform stemming, and remove stopwords
+        // (if required)
+        while (TOKENIZER.hasMoreElements()) {
+            String word = ((String) TOKENIZER.nextElement()).intern();
+            word = word.toLowerCase();
+            if (discardStopWords && Stopwords.isStopword(word)) {
+                continue;// Check stop word before and after stemmed.
             }
+            if (needStemming) {
+                word = STEMMER.stem(word);
+            }
+            if (discardStopWords && Stopwords.isStopword(word)) {
+                continue;// Check stop word before and after stemmed.
+            }
+            words.add(word);
         }
         return words;
     }
 
-    private static String filterWord (String w) {
-        StringBuilder sb = new StringBuilder();
-        for (char c : w.toCharArray()) {
-            if (Character.isLetter(c)) {
-                sb.append(c);
-            } else if (c == '\'') {
-                // If w is "John's" just return "John".
-                break;
-            } else if (Character.isDigit(c) || NOT_WORD_CHARS.contains(c)) {
-                // It's not a word if it's a url or hashtag, or just a number.
-                // So return empty string to discard w.
-                sb = new StringBuilder();
-                break;
-            } // else just ignore others like ,.?
+    public static String getTextOfTweet (Status t) {
+        String s = t.getText();
+        for (URLEntity entity : t.getURLEntities()) {
+            s = s.replace(entity.getText(), "");
         }
-        return sb.toString();
-    }
-
-    private static final HashSet<Character> NOT_WORD_CHARS =
-            new HashSet<Character>();
-    static {
-        NOT_WORD_CHARS.add('\\');
-        NOT_WORD_CHARS.add('/');
-        NOT_WORD_CHARS.add('@');
-        NOT_WORD_CHARS.add('#');
+        for (HashtagEntity entity : t.getHashtagEntities()) {
+            s = s.replace("#" + entity.getText(), "");
+        }
+        for (UserMentionEntity entity : t.getUserMentionEntities()) {
+            s = s.replace("@" + entity.getText(), "");
+        }
+        for (MediaEntity entity : t.getMediaEntities()) {
+            s = s.replace(entity.getText(), "");
+        }
+        return s;
     }
 
     // For test.

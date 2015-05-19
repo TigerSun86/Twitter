@@ -11,11 +11,7 @@ import jminhep.cluster.DataHolder;
 import jminhep.cluster.DataPoint;
 import jminhep.cluster.Partition;
 import main.ExampleGetter;
-import twitter4j.HashtagEntity;
-import twitter4j.MediaEntity;
 import twitter4j.Status;
-import twitter4j.URLEntity;
-import twitter4j.UserMentionEntity;
 import util.SysUtil;
 import weka.clusterers.ClusterEvaluation;
 import weka.clusterers.EM;
@@ -69,7 +65,7 @@ public class ClusterFeature {
                 new Instances("Test-dataset", attributes, tweets.size());
         HashSet<String> textExisting = new HashSet<String>();
         for (Status t : tweets) {
-            String s = getTextOfTweet(t);
+            String s = WordFeature.getTextOfTweet(t);
             if (!textExisting.contains(s)) {
                 textExisting.add(s);
                 double[] values = new double[data.numAttributes()];
@@ -90,7 +86,7 @@ public class ClusterFeature {
         Instances dataFiltered = Filter.useFilter(data, filter);
         return dataFiltered;
     }
-    
+
     // For test
     void testEM (List<Status> tweets) throws Exception {
         Instances dataFiltered = tweets2Vectors(tweets);
@@ -153,23 +149,6 @@ public class ClusterFeature {
         System.out.println("time used: " + (SysUtil.getCpuTime() - time));
     }
 
-    public static String getTextOfTweet (Status t) {
-        String s = t.getText();
-        for (URLEntity entity : t.getURLEntities()) {
-            s = s.replace(entity.getText(), "");
-        }
-        for (HashtagEntity entity : t.getHashtagEntities()) {
-            s = s.replace("#" + entity.getText(), "");
-        }
-        for (UserMentionEntity entity : t.getUserMentionEntities()) {
-            s = s.replace("@" + entity.getText(), "");
-        }
-        for (MediaEntity entity : t.getMediaEntities()) {
-            s = s.replace(entity.getText(), "");
-        }
-        return s;
-    }
-
     // For test.
     final Database db = Database.getInstance();
 
@@ -192,7 +171,7 @@ public class ClusterFeature {
         ClusterFeature a = new ClusterFeature();
         for (long id : UserInfo.KEY_AUTHORS) {
             if (id != 16958346L) {
-                //continue;
+                // continue;
             }
             final List<Status> tweets =
                     a.getAuthorTweets(id, ExampleGetter.TRAIN_START_DATE,

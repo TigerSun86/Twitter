@@ -19,7 +19,7 @@ import common.WLearner;
  */
 public class WAnn implements Learner, WLearner {
     private int node = 10;
-    public int iter = 1000;
+    public int iter = 5000;
 
     public WAnn(int node) {
         this.node = node;
