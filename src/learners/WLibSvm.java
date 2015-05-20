@@ -1,7 +1,9 @@
 package learners;
 
 import weka.classifiers.Classifier;
+import weka.classifiers.functions.LibSVM;
 import weka.core.Instances;
+import weka.core.SelectedTag;
 
 import common.Learner;
 import common.ProbPredictor;
@@ -10,23 +12,18 @@ import common.RawExampleList;
 import common.WLearner;
 
 /**
- * FileName: WAnn.java
+ * FileName: WLibSvm.java
  * @Description:
  *
  * @author Xunhu(Tiger) Sun
  *         email: sunx2013@my.fit.edu
- * @date Apr 3, 2015 12:34:56 AM
+ * @date May 19, 2015 10:59:56 PM
  */
-public class WAnn implements Learner, WLearner {
-    private int node = -1;
-    public int iter = 5000;
+public class WLibSvm implements Learner, WLearner {
+    private final int type;
 
-    public WAnn(int node) {
-        this.node = node;
-    }
-
-    public WAnn() {
-        this.node = -1;
+    public WLibSvm(int type) {
+        this.type = type;
     }
 
     @Override
@@ -40,17 +37,14 @@ public class WAnn implements Learner, WLearner {
     @Override
     public Classifier buildClassifier (Instances data) {
         try {
-            weka.classifiers.functions.MultilayerPerceptron cls =
-                    new weka.classifiers.functions.MultilayerPerceptron();
-            cls.setTrainingTime(iter);
-            cls.setValidationSetSize(30);
-            cls.setLearningRate(0.1);
-            cls.setMomentum(0.2);
-            if (node > 0) {
-                cls.setHiddenLayers("" + node);
+            LibSVM cls = new LibSVM();
+            int stype;
+            if (type == 0) {
+                stype = LibSVM.SVMTYPE_EPSILON_SVR;
+            } else {
+                stype = LibSVM.SVMTYPE_NU_SVR;
             }
-            cls.setNormalizeAttributes(false);
-            cls.setNormalizeNumericClass(false);
+            cls.setSVMType(new SelectedTag(stype, LibSVM.TAGS_SVMTYPE));
             cls.buildClassifier(data);
             return cls;
         } catch (Exception e) {

@@ -53,7 +53,7 @@ public class WordFeature {
         WORD, HASH, MENTION, DOMAIN
     }
 
-    public void setFeature (FeatureExtractor featureGetters,
+    public static void setFeature (FeatureExtractor featureGetters,
             List<Status> tweets, Type type, Mode mode) {
         EntityMethods methods;
         if (type.equals(Type.WORD)) {
@@ -245,7 +245,7 @@ public class WordFeature {
         }
     }
 
-    public List<String> getTopEntities (List<List<String>> wordsInTweets,
+    public static List<String> getTopEntities (List<List<String>> wordsInTweets,
             List<Integer> numOfRts, Mode mode) {
         // Count document frequence.
         final HashMap<String, Integer> wordToIdx =
@@ -387,7 +387,7 @@ public class WordFeature {
         return topWords;
     }
 
-    private double getEntropy (double prob) {
+    private static double getEntropy (double prob) {
         if (prob == 0 || prob == 1) {
             return 0;
         }
@@ -498,7 +498,7 @@ public class WordFeature {
                 }
                 System.out.println(m);
                 methods.analyseTweets(auTweets);
-                a.getTopEntities(methods.getEntitiesInTweets(),
+                WordFeature.getTopEntities(methods.getEntitiesInTweets(),
                         methods.getNumOfRts(), m);
                 System.out.println();
             }

@@ -11,6 +11,7 @@ import java.util.Map.Entry;
 
 import learners.MeToWeka;
 import learners.WAnn;
+import learners.WLibSvm;
 import learners.WLr;
 import main.ExampleGetter.Exs;
 import main.ExampleGetter.ExsForWeka;
@@ -463,12 +464,59 @@ public class Main {
     }
 
     private static final WLearner[] W_LEARNERS = { new WLr(), new WAnn(10),
-            new WAnn(20) };
-    private static final String[] W_L_NAMES = { "LR", "Ann10", "Ann20", };
+            new WAnn(), new WLibSvm(0), new WLibSvm(1) };
+    private static final String[] W_L_NAMES = { "LR", "Ann10", "AnnA",
+            "epsilonSVR", "nuSVR" };
+
+    private void testAllWordFeatures () throws Exception {
+        for (Mode mode : WordFeature.Mode.values()) {
+            if (mode != WordFeature.Mode.NO && mode != WordFeature.Mode.SUM
+                    && mode != WordFeature.Mode.SUMTHR10) {
+                continue;
+            }
+            WordFeature.setFeature(this.featureGetters, exGetter.auTweets,
+                    WordFeature.Type.WORD, mode);
+            WordFeature.setFeature(this.featureGetters, exGetter.auTweets,
+                    WordFeature.Type.HASH, mode);
+            WordFeature.setFeature(this.featureGetters, exGetter.auTweets,
+                    WordFeature.Type.MENTION, mode);
+            WordFeature.setFeature(this.featureGetters, exGetter.auTweets,
+                    WordFeature.Type.DOMAIN, mode);
+
+            final ExsForWeka exs = exGetter.getExsInWekaForPredictNum();
+            Instances train = exs.train;
+            Instances test = exs.test;
+            for (int li = 0; li < W_LEARNERS.length; li++) {
+                WLearner learner = W_LEARNERS[li];
+                Classifier cls = learner.buildClassifier(train);
+
+                Evaluation e;
+                e = new Evaluation(train);
+                e.evaluateModel(cls, train);
+                System.out
+                        .printf("%s, %s, %s, %.4f, %.4f, %.4f, %.4f%%, %.4f%%, ",
+                                author.userProfile.getScreenName(),
+                                W_L_NAMES[li], mode,
+                                e.correlationCoefficient(),
+                                e.meanAbsoluteError(),
+                                e.rootMeanSquaredError(),
+                                e.relativeAbsoluteError(),
+                                e.rootRelativeSquaredError());
+                e = new Evaluation(train);
+                e.evaluateModel(cls, test);
+                System.out.printf("%.4f, %.4f, %.4f, %.4f%%, %.4f%%%n",
+                        e.correlationCoefficient(), e.meanAbsoluteError(),
+                        e.rootMeanSquaredError(), e.relativeAbsoluteError(),
+                        e.rootRelativeSquaredError());
+            } // for (int li = 0; li < W_LEARNERS.length; li++) {
+        }
+    }
 
     private void testWordFeature () throws Exception {
         for (Mode mode : WordFeature.Mode.values()) {
-            if(mode != WordFeature.Mode.NO){continue;}
+            if (mode != WordFeature.Mode.NO) {
+                continue;
+            }
             new WordFeature().setFeature(this.featureGetters,
                     exGetter.auTweets, WordFeature.Type.WORD, mode);
 
@@ -540,7 +588,7 @@ public class Main {
             if (authorId != 3459051L) {
                 // continue;
             }
-            new Main(db, authorId, IS_GLOBAL).testWordFeature();
+            new Main(db, authorId, IS_GLOBAL).testAllWordFeatures();
 
         }
         System.out.println("End at: " + new Date().toString());
