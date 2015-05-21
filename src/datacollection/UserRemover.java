@@ -20,7 +20,7 @@ public class UserRemover {
         new UserRemover().remove();
     }
 
-    private static final long THRESHOLD = 1;
+    private static final long THRESHOLD = 2;
 
     private void remove () {
         long count = 0;

@@ -843,4 +843,61 @@ public class Database {
         }
         return topFs;
     }
+
+    private void transferUsers () {
+        List<Long> allUsers = getAllUsers();
+        List<Long> userToTran = new ArrayList<Long>();
+        for (long id : allUsers) {
+            boolean inMainDb = false;
+            final DB tweetDb = mongoClient.getDB(DB_TWEETS_NAME_PREFIX);
+            DBCollection coll = tweetDb.getCollection(COLL_NAME_PREFIX + id);
+            if (coll.count() > 0) {
+                inMainDb = true;
+            }
+            if (inMainDb && !isKeyUser(id)) {
+                userToTran.add(id);
+            }
+        }
+
+        System.out.println("There are " + userToTran.size()
+                + " users need to be transferred.");
+        int dbNameIdx = 4;
+        for (int i = 0; i < userToTran.size() / 5; i++) {
+            long id = userToTran.get(i);
+            final DBCollection oldColl = getExistingTweetsColl(id);
+            if (oldColl == null || oldColl.count() == 0) {
+                continue;
+            }
+            long numOfTweets = oldColl.count();
+            final DBCollection newColl =
+                    mongoClient.getDB(DB_TWEETS_NAME_PREFIX + dbNameIdx)
+                            .getCollection(COLL_NAME_PREFIX + id);
+            // Get all tweets
+            final DBCursor cursor = oldColl.find();
+            while (cursor.hasNext()) {
+                final DBObject doc = cursor.next();
+                newColl.insert(doc); // Store in new db.
+            }
+
+            // Remove from old db.
+            oldColl.drop();
+
+            System.out.printf("User %d has been moved %d tweets to %s.%n", id,
+                    numOfTweets, DB_TWEETS_NAME_PREFIX + dbNameIdx);
+            // Change db.
+            dbNameIdx++;
+            if (dbNameIdx > 7) {
+                dbNameIdx = 4;
+            }
+        }
+    }
+
+    private boolean isKeyUser (long id) {
+        // Don't remove key author and the first 1000 followers.
+        return UserInfo.KEY_AUTHORS.contains(id) || existStreamUser(id);
+    }
+
+    public static void main (String[] args) {
+        Database.getInstance().transferUsers();
+    }
 }
