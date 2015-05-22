@@ -62,7 +62,7 @@ public class ClusterFeature {
         FastVector attributes = new FastVector();
         attributes.addElement(strAttr);
         Instances data =
-                new Instances("Test-dataset", attributes, tweets.size());
+                new Instances("Test-dataset", attributes, 0);
         HashSet<String> textExisting = new HashSet<String>();
         for (Status t : tweets) {
             String s = WordFeature.getTextOfTweet(t);
