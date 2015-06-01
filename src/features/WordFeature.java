@@ -226,7 +226,7 @@ public class WordFeature {
                 List<String> words = new ArrayList<String>();
                 for (URLEntity url : urls) {
                     String domain = DomainGetter.getDomain(url.getURL());
-                    if (!domain.isEmpty()) {
+                    if (!domain.equals(DomainGetter.UNKNOWN_DOMAIN)) {
                         words.add(domain);
                     }
                 }
@@ -245,8 +245,9 @@ public class WordFeature {
         }
     }
 
-    public static List<String> getTopEntities (List<List<String>> wordsInTweets,
-            List<Integer> numOfRts, Mode mode) {
+    public static List<String>
+            getTopEntities (List<List<String>> wordsInTweets,
+                    List<Integer> numOfRts, Mode mode) {
         // Count document frequence.
         final HashMap<String, Integer> wordToIdx =
                 new HashMap<String, Integer>();
@@ -433,13 +434,10 @@ public class WordFeature {
             String word = ((String) TOKENIZER.nextElement()).intern();
             word = word.toLowerCase();
             if (discardStopWords && Stopwords.isStopword(word)) {
-                continue;// Check stop word before and after stemmed.
+                continue;// Check stop word before stemmed.
             }
             if (needStemming) {
                 word = STEMMER.stem(word);
-            }
-            if (discardStopWords && Stopwords.isStopword(word)) {
-                continue;// Check stop word before and after stemmed.
             }
             words.add(word);
         }

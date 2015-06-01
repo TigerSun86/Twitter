@@ -1331,7 +1331,8 @@ public class FeatureExtractor {
             int count = 0;
             for (URLEntity url : urls) {
                 String domain = DomainGetter.getDomain(url.getURL());
-                if (!domain.isEmpty() && word.equalsIgnoreCase(domain)) {
+                if (!domain.equals(DomainGetter.UNKNOWN_DOMAIN)
+                        && word.equalsIgnoreCase(domain)) {
                     count++;
                     break;
                 }
