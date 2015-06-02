@@ -225,7 +225,8 @@ public class WordFeature {
                 URLEntity[] urls = t.getURLEntities();
                 List<String> words = new ArrayList<String>();
                 for (URLEntity url : urls) {
-                    String domain = DomainGetter.getDomain(url.getURL());
+                    String domain =
+                            DomainGetter.getInstance().getDomain(url.getURL());
                     if (!domain.equals(DomainGetter.UNKNOWN_DOMAIN)) {
                         words.add(domain);
                     }

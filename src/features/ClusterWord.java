@@ -3,15 +3,15 @@ package features;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import main.ExampleGetter;
 import twitter4j.Status;
+import twitter4j.URLEntity;
 import util.SysUtil;
 import weka.clusterers.ClusterEvaluation;
 import weka.clusterers.HierarchicalClusterer;
@@ -39,20 +39,93 @@ import datacollection.UserInfo;
  */
 public class ClusterWord {
     private static final String WORD_SEPARATER = ",";
-    private static final int MIN_DF = 100;
     private static final boolean NEED_STEM = false;
 
+    private List<List<String>> docs = null;
     private List<String> wordList = null;
+    private int minDf = 100;
+
     private List<HashSet<String>> wordSetOfDocs = null;
     private HashMap<String, BitSet> word2DocIds = null;
     private HashMap<String, Double> probOfWord = null;
 
-    private void clusterWords (List<List<String>> docs) throws Exception {
-        long time = SysUtil.getCpuTime();
+    public ClusterWord(List<List<String>> docs) {
+        this.setDocs(docs);
+    }
+
+    public void setDocs (List<List<String>> docs) {
+        this.docs = docs;
+    }
+
+    public void setWordList (List<String> wordList) {
+        // Actually the content of the inputed wordList won't be changed
+        // because method filterWords will renew wordList.
+        this.wordList = wordList;
+    }
+
+    public void setMinDf (int minDf) {
+        this.minDf = minDf;
+    }
+
+    private void init () {
         initializeWords(docs);
         initWord2DocIds();
         filterWords();
+    }
 
+    private void initializeWords (List<List<String>> docs) {
+        wordSetOfDocs = new ArrayList<HashSet<String>>();
+        HashSet<String> wholeWordSet = new HashSet<String>();
+        for (List<String> doc : docs) {
+            HashSet<String> wordsOfDoc = new HashSet<String>();
+            for (String str : doc) {
+                wordsOfDoc.add(str);
+                wholeWordSet.add(str);
+            }
+            wordSetOfDocs.add(wordsOfDoc);
+        }
+
+        if (wordList == null) {
+            // wordList is not assigned, so use the word list of docs.
+            wordList = new ArrayList<String>();
+            wordList.addAll(wholeWordSet);
+        }
+
+        Collections.sort(wordList); // Sort alphabetically.
+    }
+
+    private void initWord2DocIds () {
+        word2DocIds = new HashMap<String, BitSet>();
+        for (String word : wordList) {
+            word2DocIds.put(word, new BitSet(wordSetOfDocs.size()));
+        }
+        for (int id = 0; id < wordSetOfDocs.size(); id++) {
+            HashSet<String> doc = wordSetOfDocs.get(id);
+            for (String word : doc) {
+                // There could be some words of doc do not existing in the
+                // wordList.
+                if (word2DocIds.containsKey(word)) {
+                    word2DocIds.get(word).set(id);
+                }
+            }
+        }
+    }
+
+    private void filterWords () {
+        for (String word : wordList) {
+            int df = word2DocIds.get(word).cardinality();
+            if (df < minDf) {
+                word2DocIds.remove(word);
+            }
+        }
+        wordList = new ArrayList<String>();
+        wordList.addAll(word2DocIds.keySet());
+        Collections.sort(wordList);
+    }
+
+    private void clusterWords () throws Exception {
+        long time = SysUtil.getCpuTime();
+        init();
         Attribute strAttr = new Attribute("Word", (FastVector) null);
         FastVector attributes = new FastVector();
         attributes.addElement(strAttr);
@@ -98,17 +171,7 @@ public class ClusterWord {
         System.out.println("time used: " + (SysUtil.getCpuTime() - time));
     }
 
-    private void test (List<Status> tweets) throws Exception {
-        List<List<String>> docs = new ArrayList<List<String>>();
-        for (Status t : tweets) {
-            List<String> doc = WordFeature.splitIntoWords(t, true, NEED_STEM);
-            docs.add(doc);
-        }
-        clusterWords(docs);
-    }
-
-    private void test2 () throws Exception {
-        List<String> pages = DomainGetter.getWebPages();
+    private static List<List<String>> webPage2Doc (List<String> pages) {
         Tokenizer tokenizer = new AlphabeticTokenizer();
         Stemmer stemmer = new IteratedLovinsStemmer();
         List<List<String>> docs = new ArrayList<List<String>>();
@@ -129,52 +192,18 @@ public class ClusterWord {
             }
             docs.add(doc);
         }
-        clusterWords(docs);
+        return docs;
     }
 
-    private void initializeWords (List<List<String>> docs) {
-        wordSetOfDocs = new ArrayList<HashSet<String>>();
-        HashSet<String> wholeWordSet = new HashSet<String>();
-        for (List<String> doc : docs) {
-            HashSet<String> wordsOfDoc = new HashSet<String>();
-            for (String str : doc) {
-                wordsOfDoc.add(str);
-                wholeWordSet.add(str);
-            }
-            wordSetOfDocs.add(wordsOfDoc);
-        }
-        wordList = new ArrayList<String>();
-        wordList.addAll(wholeWordSet);
-        Collections.sort(wordList); // Sort alphabetically.
-    }
-
-    private void initWord2DocIds () {
-        word2DocIds = new HashMap<String, BitSet>();
-        for (String word : wordList) {
-            word2DocIds.put(word, new BitSet(wordSetOfDocs.size()));
-        }
-        for (int id = 0; id < wordSetOfDocs.size(); id++) {
-            HashSet<String> doc = wordSetOfDocs.get(id);
-            for (String word : doc) {
-                // There could be some words of doc do not existing in the
-                // wordList.
-                if (word2DocIds.containsKey(word)) {
-                    word2DocIds.get(word).set(id);
-                }
+    private static List<String> getTweetWordList (List<Status> ts) {
+        Set<String> set = new HashSet<String>();
+        for (Status t : ts) {
+            List<String> doc = WordFeature.splitIntoWords(t, true, NEED_STEM);
+            for (String w : doc) {
+                set.add(w);
             }
         }
-    }
-
-    private void filterWords () {
-        for (String word : wordList) {
-            int df = word2DocIds.get(word).cardinality();
-            if (df < MIN_DF) {
-                word2DocIds.remove(word);
-            }
-        }
-        wordList = new ArrayList<String>();
-        wordList.addAll(word2DocIds.keySet());
-        Collections.sort(wordList);
+        return new ArrayList<String>(set);
     }
 
     private HashMap<String, Double> getDistanceTable () {
@@ -305,38 +334,52 @@ public class ClusterWord {
         }
     }
 
-    // For test.
-    final Database db = Database.getInstance();
+    private static void test (List<Status> tweets) throws Exception {
+        List<List<String>> docs = new ArrayList<List<String>>();
+        for (Status t : tweets) {
+            List<String> doc = WordFeature.splitIntoWords(t, true, NEED_STEM);
+            docs.add(doc);
+        }
+        new ClusterWord(docs).clusterWords();
+    }
 
-    private List<Status> getAuthorTweets (long authorId, Date fromDate,
-            Date toDate) {
-        final List<Status> auTweets =
-                db.getOriginalTweetListInTimeRange(authorId, fromDate, toDate);
-        Iterator<Status> iter = auTweets.iterator();
-        while (iter.hasNext()) {
-            Status t = iter.next();
-            if (t.getRetweetCount() == 0) {
-                iter.remove();
+    private static void test2 () throws Exception {
+        List<List<String>> docs = webPage2Doc(DomainGetter.getAllWebPages());
+        new ClusterWord(docs).clusterWords();
+    }
+
+    private static void test3 (List<Status> tweets) throws Exception {
+        DomainGetter domainGetter = DomainGetter.getInstance();
+        List<String> pages = new ArrayList<String>();
+        for (Status t : tweets) {
+            for (URLEntity url : t.getURLEntities()) {
+                String p = domainGetter.getWebPage(url.getText());
+                if (!p.isEmpty()) {
+                    pages.add(p);
+                }
             }
         }
-        Collections.sort(auTweets, ExampleGetter.TWEET_SORTER);
-        return auTweets;
+        System.out.println(pages.size() + " web pages.");
+        List<List<String>> docs = webPage2Doc(pages);
+        ClusterWord cluster = new ClusterWord(docs);
+        cluster.setWordList(getTweetWordList(tweets));
+        cluster.setMinDf(10);
+        cluster.clusterWords();
     }
 
     public static void main (String[] args) throws Exception {
-        new ClusterWord().test2();
-        System.exit(0);
-        ClusterWord a = new ClusterWord();
+        // ClusterWord.test2();
+        // System.exit(0);
         for (long id : UserInfo.KEY_AUTHORS) {
-            if (id != 28657802L) {
-                // continue;
+            if (id != 16958346L) {
+                continue;
             }
             final List<Status> tweets =
-                    a.getAuthorTweets(id, ExampleGetter.TRAIN_START_DATE,
+                    Database.getInstance().getAuthorTweets(id,
+                            ExampleGetter.TRAIN_START_DATE,
                             ExampleGetter.TEST_END_DATE);
             System.out.println(UserInfo.KA_ID2SCREENNAME.get(id));
-            a.test(tweets);
-
+            ClusterWord.test3(tweets);
             System.out.println("****");
         }
     }

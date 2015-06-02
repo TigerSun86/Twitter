@@ -1330,7 +1330,8 @@ public class FeatureExtractor {
             URLEntity[] urls = t.getURLEntities();
             int count = 0;
             for (URLEntity url : urls) {
-                String domain = DomainGetter.getDomain(url.getURL());
+                String domain =
+                        DomainGetter.getInstance().getDomain(url.getURL());
                 if (!domain.equals(DomainGetter.UNKNOWN_DOMAIN)
                         && word.equalsIgnoreCase(domain)) {
                     count++;

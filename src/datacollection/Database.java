@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 
@@ -707,6 +708,21 @@ public class Database {
         }
 
         return tweets;
+    }
+
+    public List<Status> getAuthorTweets (long authorId, Date fromDate,
+            Date toDate) {
+        final List<Status> auTweets =
+                getOriginalTweetListInTimeRange(authorId, fromDate, toDate);
+        Iterator<Status> iter = auTweets.iterator();
+        while (iter.hasNext()) {
+            Status t = iter.next();
+            if (t.getRetweetCount() == 0) {
+                iter.remove();
+            }
+        }
+        Collections.sort(auTweets, ExampleGetter.TWEET_SORTER);
+        return auTweets;
     }
 
     public PosAndNeg getPosAndNeg (long fId, List<Status> auTweets) {
