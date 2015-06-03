@@ -7,13 +7,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
-import java.util.Set;
 
 import main.ExampleGetter;
 import twitter4j.Status;
 import twitter4j.URLEntity;
 import util.SysUtil;
 import weka.clusterers.ClusterEvaluation;
+import weka.clusterers.Clusterer;
 import weka.clusterers.HierarchicalClusterer;
 import weka.core.Attribute;
 import weka.core.EditDistance;
@@ -38,23 +38,26 @@ import datacollection.UserInfo;
  * @date May 21, 2015 5:52:30 PM
  */
 public class ClusterWord {
+    public static final int MIN_DF = 100;
+    public static final int NUM_OF_CL = 10;
+    public static final boolean NEED_STEM = false;
+
     private static final String WORD_SEPARATER = ",";
-    private static final boolean NEED_STEM = false;
 
-    private List<List<String>> docs = null;
+    private int minDf = MIN_DF;
+    private int numOfCl = NUM_OF_CL;
+    private boolean needStem = NEED_STEM;
+    private boolean debug = false;
+
     private List<String> wordList = null;
-    private int minDf = 100;
-
+    private List<String> pages = null;
     private List<HashSet<String>> wordSetOfDocs = null;
     private HashMap<String, BitSet> word2DocIds = null;
     private HashMap<String, Double> probOfWord = null;
+    private Clusterer clusterer = null; // For test.
 
-    public ClusterWord(List<List<String>> docs) {
-        this.setDocs(docs);
-    }
-
-    public void setDocs (List<List<String>> docs) {
-        this.docs = docs;
+    public ClusterWord(List<String> pages) {
+        this.pages = pages;
     }
 
     public void setWordList (List<String> wordList) {
@@ -67,15 +70,67 @@ public class ClusterWord {
         this.minDf = minDf;
     }
 
+    public void setNumOfCl (int numOfCl) {
+        this.numOfCl = numOfCl;
+    }
+
+    public void setNeedStem (boolean needStem) {
+        this.needStem = needStem;
+    }
+
+    public HashMap<String, Integer> clusterWords () {
+        init();
+
+        Attribute strAttr = new Attribute("Word", (FastVector) null);
+        FastVector attributes = new FastVector();
+        attributes.addElement(strAttr);
+        Instances data = new Instances("Test-dataset", attributes, 0);
+        for (String word : this.wordList) {
+            double[] values = new double[data.numAttributes()];
+            values[0] = data.attribute(0).addStringValue(word);
+            Instance inst = new Instance(1.0, values);
+            data.add(inst);
+        }
+
+        HashMap<String, Double> distanceTable = getDistanceTable();
+        // System.out.println("Distance table done.");
+        MyWordDistance disFun = new MyWordDistance(distanceTable);
+
+        HashMap<String, Integer> word2Cl = null;
+        try {
+            // train clusterer
+            HierarchicalClusterer clusterer = new HierarchicalClusterer();
+            clusterer.setOptions(new String[] { "-L", "AVERAGE" });
+
+            clusterer.setNumClusters(this.numOfCl);
+            clusterer.setDistanceFunction(disFun);
+            clusterer.buildClusterer(data);
+
+            this.clusterer = clusterer; // For test.
+            // Clustering result.
+            word2Cl = new HashMap<String, Integer>();
+            for (int i = 0; i < data.numInstances(); i++) {
+                Instance inst = data.instance(i);
+                int cl = clusterer.clusterInstance(inst);
+                word2Cl.put(inst.toString(), cl);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return word2Cl;
+    }
+
     private void init () {
-        initializeWords(docs);
+        initializeWords();
         initWord2DocIds();
         filterWords();
     }
 
-    private void initializeWords (List<List<String>> docs) {
+    private void initializeWords () {
         wordSetOfDocs = new ArrayList<HashSet<String>>();
         HashSet<String> wholeWordSet = new HashSet<String>();
+
+        List<List<String>> docs = webPage2Doc(pages);
         for (List<String> doc : docs) {
             HashSet<String> wordsOfDoc = new HashSet<String>();
             for (String str : doc) {
@@ -123,55 +178,7 @@ public class ClusterWord {
         Collections.sort(wordList);
     }
 
-    private void clusterWords () throws Exception {
-        long time = SysUtil.getCpuTime();
-        init();
-        Attribute strAttr = new Attribute("Word", (FastVector) null);
-        FastVector attributes = new FastVector();
-        attributes.addElement(strAttr);
-        Instances data = new Instances("Test-dataset", attributes, 0);
-        for (String word : wordList) {
-            double[] values = new double[data.numAttributes()];
-            values[0] = data.attribute(0).addStringValue(word);
-            Instance inst = new Instance(1.0, values);
-            data.add(inst);
-        }
-        System.out.println(wordList.size() + " instances to clustered.");
-        HashMap<String, Double> distanceTable = getDistanceTable();
-        System.out.println("Distance table done.");
-        MyWordDistance disFun = new MyWordDistance(distanceTable);
-        // train clusterer
-        HierarchicalClusterer clusterer = new HierarchicalClusterer();
-        clusterer.setOptions(new String[] { "-L", "AVERAGE" });
-        clusterer.setNumClusters(10);
-        clusterer.setDistanceFunction(disFun);
-        clusterer.buildClusterer(data);
-
-        // evaluate clusterer
-        ClusterEvaluation eval = new ClusterEvaluation();
-        eval.setClusterer(clusterer);
-        eval.evaluateClusterer(data);
-
-        // print results
-        System.out.println(eval.clusterResultsToString());
-        List<List<String>> result = new ArrayList<List<String>>();
-        for (int cl = 0; cl < 10; cl++) {
-            result.add(new ArrayList<String>());
-        }
-        for (int i = 0; i < data.numInstances(); i++) {
-            Instance inst = data.instance(i);
-            int cl = clusterer.clusterInstance(inst);
-            result.get(cl).add(inst.toString());
-        }
-        for (int cl = 0; cl < 10; cl++) {
-            System.out.println("****");
-            System.out.println("Cluster " + cl);
-            System.out.println(result.get(cl).toString());
-        }
-        System.out.println("time used: " + (SysUtil.getCpuTime() - time));
-    }
-
-    private static List<List<String>> webPage2Doc (List<String> pages) {
+    private List<List<String>> webPage2Doc (List<String> pages) {
         Tokenizer tokenizer = new AlphabeticTokenizer();
         Stemmer stemmer = new IteratedLovinsStemmer();
         List<List<String>> docs = new ArrayList<List<String>>();
@@ -185,7 +192,7 @@ public class ClusterWord {
                 if (Stopwords.isStopword(word)) {
                     continue;// Check stop word before and after stemmed.
                 }
-                if (NEED_STEM) {
+                if (needStem) {
                     word = stemmer.stem(word);
                 }
                 doc.add(word);
@@ -193,17 +200,6 @@ public class ClusterWord {
             docs.add(doc);
         }
         return docs;
-    }
-
-    private static List<String> getTweetWordList (List<Status> ts) {
-        Set<String> set = new HashSet<String>();
-        for (Status t : ts) {
-            List<String> doc = WordFeature.splitIntoWords(t, true, NEED_STEM);
-            for (String w : doc) {
-                set.add(w);
-            }
-        }
-        return new ArrayList<String>(set);
     }
 
     private HashMap<String, Double> getDistanceTable () {
@@ -247,20 +243,25 @@ public class ClusterWord {
         for (Entry<String, Double> entry : miOfTwoWords.entrySet()) {
             distanceTableOfTwoWords.put(entry.getKey(), (1 / entry.getValue()));
         }
-        // Debug info.
-        int to = wordList.size();
-        int total = (to * to - to) / 2;
-        System.out.printf(
-                "%d word-pairs are valid, among total of %d (%.2f%%)%n",
-                linkcount, total, ((double) linkcount * 100.0) / total);
-        System.out
-                .printf("%d words have at least one link to others, among total of %d (%.2f%%)%n",
-                        wordUsed.size(), wordList.size(),
-                        ((double) wordUsed.size() * 100.0) / wordList.size());
+        if (debug) {
+            // Debug info.
+            int to = wordList.size();
+            int total = (to * to - to) / 2;
+            System.out.printf(
+                    "%d word-pairs are valid, among total of %d (%.2f%%)%n",
+                    linkcount, total, ((double) linkcount * 100.0) / total);
+            System.out
+                    .printf("%d words have at least one link to others, among total of %d (%.2f%%)%n",
+                            wordUsed.size(),
+                            wordList.size(),
+                            ((double) wordUsed.size() * 100.0)
+                                    / wordList.size());
+        }
+
         return distanceTableOfTwoWords;
     }
 
-    public static String getTwoWordsKey (String w1, String w2) {
+    private static String getTwoWordsKey (String w1, String w2) {
         if (w1.compareTo(w2) <= 0) {
             return w1 + WORD_SEPARATER + w2;
         } else {
@@ -334,18 +335,40 @@ public class ClusterWord {
         }
     }
 
-    private static void test (List<Status> tweets) throws Exception {
-        List<List<String>> docs = new ArrayList<List<String>>();
-        for (Status t : tweets) {
-            List<String> doc = WordFeature.splitIntoWords(t, true, NEED_STEM);
-            docs.add(doc);
+    // For test.
+    private void eval () throws Exception {
+        System.out.println(wordList.size() + " instances to clustered.");
+        Attribute strAttr = new Attribute("Word", (FastVector) null);
+        FastVector attributes = new FastVector();
+        attributes.addElement(strAttr);
+        Instances data = new Instances("Test-dataset", attributes, 0);
+        for (String word : wordList) {
+            double[] values = new double[data.numAttributes()];
+            values[0] = data.attribute(0).addStringValue(word);
+            Instance inst = new Instance(1.0, values);
+            data.add(inst);
         }
-        new ClusterWord(docs).clusterWords();
-    }
+        // evaluate clusterer
+        ClusterEvaluation eval = new ClusterEvaluation();
+        eval.setClusterer(clusterer);
+        eval.evaluateClusterer(data);
 
-    private static void test2 () throws Exception {
-        List<List<String>> docs = webPage2Doc(DomainGetter.getAllWebPages());
-        new ClusterWord(docs).clusterWords();
+        // print results
+        System.out.println(eval.clusterResultsToString());
+        List<List<String>> result = new ArrayList<List<String>>();
+        for (int cl = 0; cl < numOfCl; cl++) {
+            result.add(new ArrayList<String>());
+        }
+        for (int i = 0; i < data.numInstances(); i++) {
+            Instance inst = data.instance(i);
+            int cl = clusterer.clusterInstance(inst);
+            result.get(cl).add(inst.toString());
+        }
+        for (int cl = 0; cl < numOfCl; cl++) {
+            System.out.println("****");
+            System.out.println("Cluster " + cl);
+            System.out.println(result.get(cl).toString());
+        }
     }
 
     private static void test3 (List<Status> tweets) throws Exception {
@@ -360,11 +383,14 @@ public class ClusterWord {
             }
         }
         System.out.println(pages.size() + " web pages.");
-        List<List<String>> docs = webPage2Doc(pages);
-        ClusterWord cluster = new ClusterWord(docs);
-        cluster.setWordList(getTweetWordList(tweets));
-        cluster.setMinDf(10);
-        cluster.clusterWords();
+        ClusterWord cw = new ClusterWord(pages);
+        cw.setWordList(ClusterWordFeature.getTweetWordList(tweets, NEED_STEM));
+        cw.setMinDf(10);
+        cw.debug = true;
+        long time = SysUtil.getCpuTime();
+        cw.clusterWords();
+        System.out.println("Time used: " + (SysUtil.getCpuTime() - time));
+        cw.eval();
     }
 
     public static void main (String[] args) throws Exception {
@@ -383,4 +409,5 @@ public class ClusterWord {
             System.out.println("****");
         }
     }
+
 }

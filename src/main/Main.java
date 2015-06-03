@@ -33,7 +33,9 @@ import datacollection.Database;
 import datacollection.UserInfo;
 import features.AttrSel;
 import features.ClusterFeature;
+import features.ClusterWordFeature;
 import features.FeatureExtractor;
+import features.NewFeatureInserter;
 import features.WordFeature;
 import features.WordFeature.Mode;
 
@@ -550,7 +552,10 @@ public class Main {
     }
 
     private void testClusterFeature () throws Exception {
-        new ClusterFeature().setFeature(this.featureGetters, exGetter.auTweets);
+        ClusterWordFeature newFeature =
+                new ClusterWordFeature(exGetter.auTweets);
+        NewFeatureInserter.setFeature(this.featureGetters, newFeature);
+
         final ExsForWeka exs = exGetter.getExsInWekaForPredictNum();
         Instances train = exs.train;
         Instances test = exs.test;
@@ -577,7 +582,7 @@ public class Main {
 
     public static void main (String[] args) throws Exception {
         System.out.println("Begin at: " + new Date().toString());
-        System.out.print("AuthorName, Learner, WordFeatureMode, ");
+        System.out.print("AuthorName, Learner, ");
         System.out
                 .print("Train Correlation coefficient, Train Mean absolute error, Train Root mean squared error, Train Relative absolute error, Train Root relative squared error, ");
         System.out
@@ -588,7 +593,7 @@ public class Main {
             if (authorId != 3459051L) {
                 // continue;
             }
-            new Main(db, authorId, IS_GLOBAL).testAllWordFeatures();
+            new Main(db, authorId, IS_GLOBAL).testClusterFeature();
 
         }
         System.out.println("End at: " + new Date().toString());

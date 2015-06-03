@@ -39,7 +39,7 @@ public class DomainGetter {
     private static final String FILE_PATH =
             "file://localhost/C:/WorkSpace/Twitter/data/WebPages/";
     private static final String EXT = ".txt";
-    private static final String MAP_FILE_SEPA = " ";
+    private static final String MAP_FILE_SEPA = ",TIGER_SEPA,";
 
     private static final String SHORTEN_URL = "ShortenUrl";
     private static final String NEW_URL = "NewUrl";

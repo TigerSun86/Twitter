@@ -25,10 +25,8 @@ import weka.core.Instance;
 import weka.core.Instances;
 import weka.filters.Filter;
 import weka.filters.unsupervised.attribute.StringToWordVector;
-
 import common.RawAttr;
 import common.RawAttrList;
-
 import datacollection.Database;
 import features.AnewMap.Anew;
 import features.WordFeature.DomainMethods;
@@ -1353,7 +1351,7 @@ public class FeatureExtractor {
      */
     public static class FTweetCluster extends FeatureGetter {
         private static final double THRESHOLD = 0.2;
-        private final HashMap<Long, double[]> tweetsCache =
+        private static final HashMap<Long, double[]> tweetsCache =
                 new HashMap<Long, double[]>();
 
         int clusterId;
@@ -1389,7 +1387,7 @@ public class FeatureExtractor {
 
         @Override
         public RawAttr getAttr () {
-            return getDiscreteAttr("TweetCluster" + clusterId);
+            return getDiscreteAttr("TweetCluster_" + clusterId);
         }
 
         private Instance getWordVector (Status t) throws Exception {
@@ -1409,6 +1407,65 @@ public class FeatureExtractor {
             Instances dataFiltered = Filter.useFilter(data, str2vec);
 
             return dataFiltered.instance(0);
+        }
+    }
+
+    /**
+     * FWordCluster.
+     */
+    public static class FWordCluster extends FeatureGetter {
+        private static final HashMap<Long, Integer> totalCache =
+                new HashMap<Long, Integer>();
+        private static final HashMap<Long, int[]> clCache =
+                new HashMap<Long, int[]>();
+
+        int clusterId;
+        HashMap<String, Integer> word2Cl;
+
+        public FWordCluster(int clusterId, HashMap<String, Integer> word2Cl) {
+            this.clusterId = clusterId;
+            this.word2Cl = word2Cl;
+        }
+
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            int total;
+            int[] countForEachCl;
+            if (totalCache.containsKey(t.getId())) {
+                total = totalCache.get(t.getId());
+                countForEachCl = clCache.get(t.getId());
+            } else { // Haven't cached.
+                total = 0;
+                countForEachCl = new int[ClusterWordFeature.getNumOfCl()];
+                List<String> words =
+                        WordFeature.splitIntoWords(t, true,
+                                ClusterWordFeature.getNeedStem());
+                for (String w : words) {
+                    Integer cl = word2Cl.get(w);
+                    if (cl != null && cl >= 0 && cl < countForEachCl.length) {
+                        countForEachCl[cl]++; // It's a word can be clustered.
+                        total++;
+                    }
+                }
+                totalCache.put(t.getId(), total);
+                clCache.put(t.getId(), countForEachCl);
+            }
+
+            final String feature;
+            if (total == 0) {
+                feature = "0";
+            } else {
+                feature =
+                        String.valueOf(countForEachCl[clusterId]
+                                / ((double) total));
+            }
+            return feature;
+        }
+
+        @Override
+        public RawAttr getAttr () {
+            return new RawAttr(ClusterWordFeature.PREFIX + clusterId, true);
         }
     }
 }
