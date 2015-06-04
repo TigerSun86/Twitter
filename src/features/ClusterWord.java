@@ -6,7 +6,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map.Entry;
 
 import main.ExampleGetter;
 import twitter4j.Status;
@@ -38,23 +37,31 @@ import datacollection.UserInfo;
  * @date May 21, 2015 5:52:30 PM
  */
 public class ClusterWord {
-    public static final int MIN_DF = 100;
+    public static final int MIN_DF = 0;
     public static final int NUM_OF_CL = 10;
-    public static final boolean NEED_STEM = false;
+    public static final int MODE_LIFT = 0;
+    public static final int MODE_JACCARD = 1;
+
+    public static class ClusterWordSetting {
+        public int minDf = MIN_DF;
+        public int numOfCl = NUM_OF_CL;
+        public boolean needStem = false;
+        public int mode = MODE_LIFT;
+        public boolean mEstimate = true;
+    }
+
+    public ClusterWordSetting para = new ClusterWordSetting();
 
     private static final String WORD_SEPARATER = ",";
 
-    private int minDf = MIN_DF;
-    private int numOfCl = NUM_OF_CL;
-    private boolean needStem = NEED_STEM;
     private boolean debug = false;
+    private int countOfInvalidPair = 0; // For debug.
 
     private List<String> wordList = null;
     private List<String> pages = null;
     private List<HashSet<String>> wordSetOfDocs = null;
     private HashMap<String, BitSet> word2DocIds = null;
-    private HashMap<String, Double> probOfWord = null;
-    private Clusterer clusterer = null; // For test.
+    private Clusterer clusterer = null; // For debug.
 
     public ClusterWord(List<String> pages) {
         this.pages = pages;
@@ -64,18 +71,6 @@ public class ClusterWord {
         // Actually the content of the inputed wordList won't be changed
         // because method filterWords will renew wordList.
         this.wordList = wordList;
-    }
-
-    public void setMinDf (int minDf) {
-        this.minDf = minDf;
-    }
-
-    public void setNumOfCl (int numOfCl) {
-        this.numOfCl = numOfCl;
-    }
-
-    public void setNeedStem (boolean needStem) {
-        this.needStem = needStem;
     }
 
     public HashMap<String, Integer> clusterWords () {
@@ -102,7 +97,7 @@ public class ClusterWord {
             HierarchicalClusterer clusterer = new HierarchicalClusterer();
             clusterer.setOptions(new String[] { "-L", "AVERAGE" });
 
-            clusterer.setNumClusters(this.numOfCl);
+            clusterer.setNumClusters(this.para.numOfCl);
             clusterer.setDistanceFunction(disFun);
             clusterer.buildClusterer(data);
 
@@ -169,7 +164,7 @@ public class ClusterWord {
     private void filterWords () {
         for (String word : wordList) {
             int df = word2DocIds.get(word).cardinality();
-            if (df < minDf) {
+            if (df < this.para.minDf) {
                 word2DocIds.remove(word);
             }
         }
@@ -192,7 +187,7 @@ public class ClusterWord {
                 if (Stopwords.isStopword(word)) {
                     continue;// Check stop word before and after stemmed.
                 }
-                if (needStem) {
+                if (this.para.needStem) {
                     word = stemmer.stem(word);
                 }
                 doc.add(word);
@@ -202,60 +197,105 @@ public class ClusterWord {
         return docs;
     }
 
-    private HashMap<String, Double> getDistanceTable () {
-        probOfWord = new HashMap<String, Double>();
-        HashMap<String, Double> miOfTwoWords = new HashMap<String, Double>();
-        int linkcount = 0;
-        HashSet<String> wordUsed = new HashSet<String>();
-        for (int i = 0; i < wordList.size(); i++) {
-            String w1 = wordList.get(i);
-            double pw1 = probOfWord(w1);
-            for (int j = i; j < wordList.size(); j++) {
-                String w2 = wordList.get(j);
-                if (!w1.equals(w2)) {
-                    // The mutual information of a word itself should be
-                    // infinite, so the distance should be 0. It will be handled
-                    // in class MyWordDistance.
-                    double pw2 = probOfWord(w2);
-                    double pw1w2 = probOfTwoWords(w1, w2);
-                    double mi = pw1w2 / (pw1 * pw2);
-
-                    if (mi > 1.000001) {
-                        // If mi <= 1, (logMi <=0), the distance should be
-                        // infinite. Just don't add it so class MyWordDistance
-                        // will handle it.
-                        double logMi = Math.log(mi);
-                        miOfTwoWords.put(getTwoWordsKey(w1, w2), logMi);
-                    }
-
-                    // Debug info.
-                    if (pw1w2 > 0) {
-                        linkcount++;
-                        wordUsed.add(w1);
-                        wordUsed.add(w2);
-                    }
-                }
+    /**
+     * Lift(a,b) = p(a,b)/(p(a)p(b)) = N*df(a,b)/(df(a)*df(b))
+     * In m-estimate Lift(a,b) = (N+1)* (df(a,b)+m)/((df(a)+m )*(df(b)+m))
+     * Distance = 1/Lift(a,b)
+     */
+    private double distanceOfLift (String w1, String w2) {
+        BitSet seta = word2DocIds.get(w1);
+        BitSet setb = word2DocIds.get(w2);
+        BitSet intersection = (BitSet) seta.clone();
+        intersection.and(setb);
+        double dfab = intersection.cardinality();
+        if (dfab == 0) {
+            countOfInvalidPair++;
+        }
+        double dfa = seta.cardinality();
+        double dfb = setb.cardinality();
+        double dist;
+        double n = (double) wordSetOfDocs.size();
+        if (this.para.mEstimate) {
+            double m = 1 / n;
+            double lift = (n + 1) * (dfab + m) / ((dfa + m) * (dfb + m));
+            dist = 1 / lift;
+        } else {
+            if (dfab == 0) {
+                dist = Double.POSITIVE_INFINITY;
+            } else {
+                double lift = n * dfab / (dfa * dfb);
+                dist = 1 / lift;
             }
         }
+        return dist;
+    }
 
+    /**
+     * Jaccard(a,b) = df(a and b)/ df(a or b)
+     * In m-estimate Jaccard(a,b) = (df(a and b) + m)/ (df(a or b)+1)
+     * Distance = 1/Jaccard(a,b)
+     */
+    private double distanceOfJaccard (String w1, String w2) {
+        BitSet seta = word2DocIds.get(w1);
+        BitSet setb = word2DocIds.get(w2);
+        BitSet intersection = (BitSet) seta.clone();
+        intersection.and(setb);
+        double dfaandb = intersection.cardinality();
+        if (dfaandb == 0) {
+            countOfInvalidPair++;
+        }
+        BitSet union = (BitSet) seta.clone();
+        union.or(setb);
+        double dfaorb = union.cardinality();
+
+        double dist;
+        if (this.para.mEstimate) {
+            double n = (double) wordSetOfDocs.size();
+            double m = 1 / n;
+            double jaccard = (dfaandb + m) / (dfaorb + 1);
+            dist = 1 / jaccard;
+        } else {
+            if (dfaandb == 0) {
+                dist = Double.POSITIVE_INFINITY;
+            } else {
+                double jaccard = dfaandb / dfaorb;
+                dist = 1 / jaccard;
+            }
+        }
+        return dist;
+    }
+
+    private HashMap<String, Double> getDistanceTable () {
         HashMap<String, Double> distanceTableOfTwoWords =
                 new HashMap<String, Double>();
-        for (Entry<String, Double> entry : miOfTwoWords.entrySet()) {
-            distanceTableOfTwoWords.put(entry.getKey(), (1 / entry.getValue()));
+        countOfInvalidPair = 0;// For debug.
+        for (int i = 0; i < wordList.size(); i++) {
+            String w1 = wordList.get(i);
+            for (int j = i; j < wordList.size(); j++) {
+                String w2 = wordList.get(j);
+                if (w1.equals(w2)) {
+                    // The distance of a word itself should be 0.
+                    distanceTableOfTwoWords.put(getTwoWordsKey(w1, w2), 0.0);
+                } else {
+                    double dist;
+                    if (this.para.mode == MODE_LIFT) {
+                        dist = distanceOfLift(w1, w2);
+                    } else {
+                        dist = distanceOfJaccard(w1, w2);
+                    }
+                    assert !Double.isNaN(dist);
+                    distanceTableOfTwoWords.put(getTwoWordsKey(w1, w2), dist);
+                }
+            }
         }
         if (debug) {
             // Debug info.
             int to = wordList.size();
             int total = (to * to - to) / 2;
-            System.out.printf(
-                    "%d word-pairs are valid, among total of %d (%.2f%%)%n",
-                    linkcount, total, ((double) linkcount * 100.0) / total);
-            System.out
-                    .printf("%d words have at least one link to others, among total of %d (%.2f%%)%n",
-                            wordUsed.size(),
-                            wordList.size(),
-                            ((double) wordUsed.size() * 100.0)
-                                    / wordList.size());
+            System.out.printf("%d word-pairs are invalid, among total of %d, "
+                    + "the sparsity of upper-triangle is %.2f%%%n",
+                    countOfInvalidPair, total,
+                    ((double) countOfInvalidPair * 100.0) / total);
         }
 
         return distanceTableOfTwoWords;
@@ -269,26 +309,6 @@ public class ClusterWord {
         }
     }
 
-    private final double probOfTwoWords (String w1, String w2) {
-        double total = (double) wordSetOfDocs.size();
-        BitSet interval = (BitSet) word2DocIds.get(w1).clone();
-        interval.and(word2DocIds.get(w2));
-        double df = interval.cardinality();
-        double prob = df / total;
-        return prob;
-    }
-
-    private final double probOfWord (String w) {
-        if (probOfWord.containsKey(w)) {
-            return probOfWord.get(w);
-        }
-        double total = (double) wordSetOfDocs.size();
-        double df = (double) word2DocIds.get(w).cardinality();
-        double prob = df / total;
-        probOfWord.put(w, prob);
-        return prob;
-    }
-
     private static class MyWordDistance extends EditDistance {
         private static final long serialVersionUID = 1L;
         private final HashMap<String, Double> distanceTableOfTwoWords;
@@ -298,9 +318,6 @@ public class ClusterWord {
         }
 
         private double distanceOfTwoWords (String w1, String w2) {
-            if (w1.equals(w2)) {
-                return 0; // Same word, distance to itself is 0.
-            }
             String key = getTwoWordsKey(w1, w2);
             if (distanceTableOfTwoWords.containsKey(key)) {
                 return distanceTableOfTwoWords.get(key);
@@ -337,7 +354,7 @@ public class ClusterWord {
 
     // For test.
     private void eval () throws Exception {
-        System.out.println(wordList.size() + " instances to clustered.");
+        System.out.println(wordList.size() + " words to clustered.");
         Attribute strAttr = new Attribute("Word", (FastVector) null);
         FastVector attributes = new FastVector();
         attributes.addElement(strAttr);
@@ -356,7 +373,7 @@ public class ClusterWord {
         // print results
         System.out.println(eval.clusterResultsToString());
         List<List<String>> result = new ArrayList<List<String>>();
-        for (int cl = 0; cl < numOfCl; cl++) {
+        for (int cl = 0; cl < this.para.numOfCl; cl++) {
             result.add(new ArrayList<String>());
         }
         for (int i = 0; i < data.numInstances(); i++) {
@@ -364,14 +381,17 @@ public class ClusterWord {
             int cl = clusterer.clusterInstance(inst);
             result.get(cl).add(inst.toString());
         }
-        for (int cl = 0; cl < numOfCl; cl++) {
+        for (int cl = 0; cl < this.para.numOfCl; cl++) {
             System.out.println("****");
             System.out.println("Cluster " + cl);
             System.out.println(result.get(cl).toString());
         }
     }
 
-    private static void test3 (List<Status> tweets) throws Exception {
+    private static void test (List<Status> tweets) throws Exception {
+        ClusterWordSetting para = new ClusterWordSetting();
+        para.minDf = 500;
+
         DomainGetter domainGetter = DomainGetter.getInstance();
         List<String> pages = new ArrayList<String>();
         for (Status t : tweets) {
@@ -382,10 +402,17 @@ public class ClusterWord {
                 }
             }
         }
+        pages.addAll(ClusterWordFeatureFactory.getTweetPages(tweets,
+                para.needStem));
         System.out.println(pages.size() + " web pages.");
+
+        List<String> wlist =
+                ClusterWordFeatureFactory.getTweetWordList(tweets,
+                        para.needStem);
+
         ClusterWord cw = new ClusterWord(pages);
-        cw.setWordList(ClusterWordFeature.getTweetWordList(tweets, NEED_STEM));
-        cw.setMinDf(10);
+        cw.setWordList(wlist);
+        cw.para = para;
         cw.debug = true;
         long time = SysUtil.getCpuTime();
         cw.clusterWords();
@@ -394,8 +421,6 @@ public class ClusterWord {
     }
 
     public static void main (String[] args) throws Exception {
-        // ClusterWord.test2();
-        // System.exit(0);
         for (long id : UserInfo.KEY_AUTHORS) {
             if (id != 16958346L) {
                 continue;
@@ -405,7 +430,7 @@ public class ClusterWord {
                             ExampleGetter.TRAIN_START_DATE,
                             ExampleGetter.TEST_END_DATE);
             System.out.println(UserInfo.KA_ID2SCREENNAME.get(id));
-            ClusterWord.test3(tweets);
+            ClusterWord.test(tweets);
             System.out.println("****");
         }
     }

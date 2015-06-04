@@ -8,28 +8,28 @@ import java.util.Set;
 
 import twitter4j.Status;
 import twitter4j.URLEntity;
+import features.ClusterWord.ClusterWordSetting;
+import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor.FWordCluster;
+import features.FeatureExtractor.FWordCluster.SharedCache;
 import features.FeatureExtractor.FeatureGetter;
-import features.NewFeatureInserter.NewFeatureGettable;
 
 /**
- * FileName: ClusterWordFeature.java
+ * FileName: ClusterWordFeatureFactory.java
  * @Description:
  *
  * @author Xunhu(Tiger) Sun
  *         email: sunx2013@my.fit.edu
  * @date Jun 2, 2015 5:38:05 PM
  */
-public class ClusterWordFeature implements NewFeatureGettable {
+public class ClusterWordFeatureFactory implements FeatureFactory {
     public static final String PREFIX = "ClusterWord_";
-    private List<Status> tweets;
 
-    public ClusterWordFeature(List<Status> tweets) {
-        this.tweets = tweets;
-    }
+    public ClusterWordSetting para = new ClusterWordSetting();
+    public boolean withTweets = false;
 
     @Override
-    public List<FeatureGetter> getNewFeatures () {
+    public List<FeatureGetter> getNewFeatures (List<Status> tweets) {
         DomainGetter domainGetter = DomainGetter.getInstance();
         List<String> webPages = new ArrayList<String>();
         for (Status t : tweets) {
@@ -40,31 +40,21 @@ public class ClusterWordFeature implements NewFeatureGettable {
                 }
             }
         }
+        if (withTweets) {
+            webPages.addAll(ClusterWordFeatureFactory.getTweetPages(tweets,
+                    para.needStem));
+        }
         ClusterWord cw = new ClusterWord(webPages);
-        cw.setWordList(getTweetWordList(tweets, ClusterWord.NEED_STEM));
-        cw.setMinDf(0);
-        cw.setNumOfCl(getNumOfCl());
-        cw.setNeedStem(getNeedStem());
+        cw.setWordList(getTweetWordList(tweets, this.para.needStem));
+        cw.para = this.para;
         HashMap<String, Integer> word2cl = cw.clusterWords();
 
+        SharedCache cache = new SharedCache();
         List<FeatureGetter> list = new ArrayList<FeatureGetter>();
-        for (int cid = 0; cid < getNumOfCl(); cid++) {
-            list.add(new FWordCluster(cid, word2cl));
+        for (int cid = 0; cid < this.para.numOfCl; cid++) {
+            list.add(new FWordCluster(cid, word2cl, this.para, cache));
         }
         return list;
-    }
-
-    @Override
-    public String getNewFeaturePrefix () {
-        return PREFIX;
-    }
-
-    public static int getNumOfCl () {
-        return ClusterWord.NUM_OF_CL;
-    }
-
-    public static boolean getNeedStem () {
-        return ClusterWord.NEED_STEM;
     }
 
     static List<String> getTweetWordList (List<Status> ts, boolean needStem) {
@@ -76,5 +66,20 @@ public class ClusterWordFeature implements NewFeatureGettable {
             }
         }
         return new ArrayList<String>(set);
+    }
+
+    static List<String> getTweetPages (List<Status> ts, boolean needStem) {
+        List<String> pages = new ArrayList<String>();
+        for (Status t : ts) {
+            StringBuilder sb = new StringBuilder();
+            List<String> doc = WordFeature.splitIntoWords(t, true, needStem);
+            for (String w : doc) {
+                sb.append(w + " ");
+            }
+            if (sb.length() > 0) {
+                pages.add(sb.toString());
+            }
+        }
+        return pages;
     }
 }

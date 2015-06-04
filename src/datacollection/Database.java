@@ -12,7 +12,6 @@ import java.util.Map.Entry;
 
 import main.ExampleGetter;
 import main.ExampleGetter.PosAndNeg;
-import main.Main;
 import twitter4j.Status;
 import twitter4j.Trends;
 import twitter4j.TwitterException;
@@ -823,40 +822,5 @@ public class Database {
             userToRetweetedTweets.put(userId, rtSet);
         }
         return userToRetweetedTweets.get(userId).contains(tId);
-    }
-
-    private static class UserIdAndNFols implements Comparable<UserIdAndNFols> {
-        long id;
-        int n;
-
-        public UserIdAndNFols(long userId, int followersCount) {
-            this.id = userId;
-            this.n = followersCount;
-        }
-
-        @Override
-        public int compareTo (UserIdAndNFols o) {
-            return this.n - o.n;
-        }
-
-    }
-
-    public List<Long> getTopFollowers (long authorId, int topNum) {
-        if (topNum <= 0) {
-            return new ArrayList<Long>();
-        }
-        List<UserIdAndNFols> fols = new ArrayList<UserIdAndNFols>();
-        for (long folId : Main.VALID_USERS.get(authorId)) {
-            UserInfo f = this.getUser(folId);
-            fols.add(new UserIdAndNFols(f.userId, f.userProfile
-                    .getFollowersCount()));
-        }
-        Collections.sort(fols, Collections.reverseOrder());
-        List<Long> topFs = new ArrayList<Long>();
-        for (int i = 0; i < Math.min(topNum, fols.size()); i++) {
-            topFs.add(fols.get(i).id);
-            // System.out.println(fols.get(i).id + "," + fols.get(i).n);
-        }
-        return topFs;
     }
 }

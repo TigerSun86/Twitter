@@ -29,6 +29,7 @@ import common.RawAttr;
 import common.RawAttrList;
 import datacollection.Database;
 import features.AnewMap.Anew;
+import features.ClusterWord.ClusterWordSetting;
 import features.WordFeature.DomainMethods;
 import features.WordFeature.HashMethods;
 import features.WordFeature.MentionMethods;
@@ -48,8 +49,8 @@ public class FeatureExtractor {
     private static final int MOUNT_IN_HOUR = 30 * 24;
 
     public FeatureExtractor() {
-        initGetter();
-        initPreNum();
+        getterListOfPreNum = new ArrayList<FeatureGetter>();
+        getterListOfPreNum.addAll(BASE_FEATURE_SET);
     }
 
     /* 1Retweet. How many hours before t since last time f retweet something, at
@@ -124,6 +125,7 @@ public class FeatureExtractor {
     private final List<FeatureGetter> getterList =
             new ArrayList<FeatureGetter>();
 
+    @SuppressWarnings("unused")
     private void initGetter () {
         getterList.add(new F1()); // 1Retweet
         getterList.add(new F2()); // 2LastHashtag
@@ -153,25 +155,26 @@ public class FeatureExtractor {
         getterList.add(new F26()); // 26Trend
     }
 
-    public final List<FeatureGetter> getterListOfPreNum =
+    public static final List<FeatureGetter> BASE_FEATURE_SET =
             new ArrayList<FeatureGetter>();
 
-    private void initPreNum () {
-        getterListOfPreNum.add(new F4()); // 4Picture
-        getterListOfPreNum.add(new F5()); // 5Url
-        // getterListOfPreNum.add(new F6()); // 6Hour
-        getterListOfPreNum.add(new F18()); // 18RtWord
-        getterListOfPreNum.add(new F19()); // 19Valence
-        getterListOfPreNum.add(new F20()); // 20Arousal
-        getterListOfPreNum.add(new F21()); // 21Dominance
-        getterListOfPreNum.add(new F22()); // 22PosSenti
-        getterListOfPreNum.add(new F23()); // 23NegSenti
-        getterListOfPreNum.add(new F24()); // 24Len
-        getterListOfPreNum.add(new F25()); // 25LongestWord
-        getterListOfPreNum.add(new F26()); // 26Trend
-        getterListOfPreNum.add(new F27()); // 27DayInWeek
-        getterListOfPreNum.add(new F28()); // 28HourInDay
+    static {
+        BASE_FEATURE_SET.add(new F4()); // 4Picture
+        BASE_FEATURE_SET.add(new F5()); // 5Url
+        // BASE_FEATURE_SET.add(new F18()); // 18RtWord
+        BASE_FEATURE_SET.add(new F19()); // 19Valence
+        BASE_FEATURE_SET.add(new F20()); // 20Arousal
+        BASE_FEATURE_SET.add(new F21()); // 21Dominance
+        BASE_FEATURE_SET.add(new F22()); // 22PosSenti
+        BASE_FEATURE_SET.add(new F23()); // 23NegSenti
+        BASE_FEATURE_SET.add(new F24()); // 24Len
+        BASE_FEATURE_SET.add(new F25()); // 25LongestWord
+        BASE_FEATURE_SET.add(new F26()); // 26Trend
+        BASE_FEATURE_SET.add(new F27()); // 27DayInWeek
+        BASE_FEATURE_SET.add(new F28()); // 28HourInDay
     }
+
+    public final List<FeatureGetter> getterListOfPreNum;
 
     private static RawAttr getDiscreteAttr (String name) {
         RawAttr attr;
@@ -1414,17 +1417,24 @@ public class FeatureExtractor {
      * FWordCluster.
      */
     public static class FWordCluster extends FeatureGetter {
-        private static final HashMap<Long, Integer> totalCache =
-                new HashMap<Long, Integer>();
-        private static final HashMap<Long, int[]> clCache =
-                new HashMap<Long, int[]>();
+        public static class SharedCache {
+            private final HashMap<Long, Integer> totalCache =
+                    new HashMap<Long, Integer>();
+            private final HashMap<Long, int[]> clCache =
+                    new HashMap<Long, int[]>();
+        }
 
         int clusterId;
         HashMap<String, Integer> word2Cl;
+        ClusterWordSetting para;
+        SharedCache cache;
 
-        public FWordCluster(int clusterId, HashMap<String, Integer> word2Cl) {
+        public FWordCluster(int clusterId, HashMap<String, Integer> word2Cl,
+                ClusterWordSetting para, SharedCache cache) {
             this.clusterId = clusterId;
             this.word2Cl = word2Cl;
+            this.para = para;
+            this.cache = cache;
         }
 
         @Override
@@ -1432,15 +1442,14 @@ public class FeatureExtractor {
                 List<Status> userTweets) {
             int total;
             int[] countForEachCl;
-            if (totalCache.containsKey(t.getId())) {
-                total = totalCache.get(t.getId());
-                countForEachCl = clCache.get(t.getId());
+            if (cache.totalCache.containsKey(t.getId())) {
+                total = cache.totalCache.get(t.getId());
+                countForEachCl = cache.clCache.get(t.getId());
             } else { // Haven't cached.
                 total = 0;
-                countForEachCl = new int[ClusterWordFeature.getNumOfCl()];
+                countForEachCl = new int[para.numOfCl];
                 List<String> words =
-                        WordFeature.splitIntoWords(t, true,
-                                ClusterWordFeature.getNeedStem());
+                        WordFeature.splitIntoWords(t, true, para.needStem);
                 for (String w : words) {
                     Integer cl = word2Cl.get(w);
                     if (cl != null && cl >= 0 && cl < countForEachCl.length) {
@@ -1448,8 +1457,8 @@ public class FeatureExtractor {
                         total++;
                     }
                 }
-                totalCache.put(t.getId(), total);
-                clCache.put(t.getId(), countForEachCl);
+                cache.totalCache.put(t.getId(), total);
+                cache.clCache.put(t.getId(), countForEachCl);
             }
 
             final String feature;
@@ -1465,7 +1474,8 @@ public class FeatureExtractor {
 
         @Override
         public RawAttr getAttr () {
-            return new RawAttr(ClusterWordFeature.PREFIX + clusterId, true);
+            return new RawAttr(ClusterWordFeatureFactory.PREFIX + clusterId,
+                    true);
         }
     }
 }

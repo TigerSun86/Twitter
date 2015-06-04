@@ -22,7 +22,6 @@ import weka.core.tokenizers.AlphabeticTokenizer;
 import weka.core.tokenizers.Tokenizer;
 
 import com.google.common.primitives.Doubles;
-import common.RawAttr;
 
 import datacollection.Database;
 import datacollection.UserInfo;
@@ -53,45 +52,7 @@ public class WordFeature {
         WORD, HASH, MENTION, DOMAIN
     }
 
-    public static void setFeature (FeatureExtractor featureGetters,
-            List<Status> tweets, Type type, Mode mode) {
-        EntityMethods methods;
-        if (type.equals(Type.WORD)) {
-            methods = new WordMethods();
-        } else if (type.equals(Type.HASH)) {
-            methods = new HashMethods();
-        } else if (type.equals(Type.MENTION)) {
-            methods = new MentionMethods();
-        } else { // if(type.equals(Type.DOMAIN))
-            methods = new DomainMethods();
-        }
-
-        // First remove all specified type features.
-        Iterator<FeatureGetter> iter =
-                featureGetters.getterListOfPreNum.iterator();
-        while (iter.hasNext()) {
-            FeatureGetter f = iter.next();
-            RawAttr attr = f.getAttr();
-            if (attr.name.startsWith(methods.getPrefix())) {
-                iter.remove();
-            }
-        }
-        if (mode == Mode.NO) {
-            return;
-        }
-
-        // Convert tweets to entities.
-        methods.analyseTweets(tweets);
-        List<String> topEntities =
-                getTopEntities(methods.getEntitiesInTweets(),
-                        methods.getNumOfRts(), mode);
-        for (String entity : topEntities) { // Add entities as new features.
-            featureGetters.getterListOfPreNum.add(methods
-                    .getFeatureInstance(entity));
-        }
-    }
-
-    private static abstract class EntityMethods {
+    static abstract class EntityMethods {
         List<List<String>> entitiesInTweets = null;
         List<Integer> numOfRts = null;
 
@@ -249,6 +210,9 @@ public class WordFeature {
     public static List<String>
             getTopEntities (List<List<String>> wordsInTweets,
                     List<Integer> numOfRts, Mode mode) {
+        if (mode.equals(Mode.NO)) {
+            return new ArrayList<String>();
+        }
         // Count document frequence.
         final HashMap<String, Integer> wordToIdx =
                 new HashMap<String, Integer>();
