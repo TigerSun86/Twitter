@@ -25,17 +25,19 @@ import features.WordFeature.WordMethods;
 public class WordFeatureFactory implements FeatureFactory {
     private Type type;
     private Mode mode;
+    private int numOfWords;
 
-    public WordFeatureFactory(Type type, Mode mode) {
+    public WordFeatureFactory(Type type, Mode mode, int numOfWords) {
         this.type = type;
         this.mode = mode;
+        this.numOfWords = numOfWords;
     }
 
     @Override
     public List<FeatureGetter> getNewFeatures (List<Status> tweets) {
         EntityMethods methods;
         if (type.equals(Type.WORD)) {
-            methods = new WordMethods();
+            methods = new WordMethods(false);
         } else if (type.equals(Type.HASH)) {
             methods = new HashMethods();
         } else if (type.equals(Type.MENTION)) {
@@ -48,7 +50,7 @@ public class WordFeatureFactory implements FeatureFactory {
         methods.analyseTweets(tweets);
         List<String> topEntities =
                 WordFeature.getTopEntities(methods.getEntitiesInTweets(),
-                        methods.getNumOfRts(), mode);
+                        methods.getNumOfRts(), mode, numOfWords);
         List<FeatureGetter> list = new ArrayList<FeatureGetter>();
         for (String entity : topEntities) { // Add entities as new features.
             list.add(methods.getFeatureInstance(entity));

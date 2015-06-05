@@ -67,7 +67,8 @@ public class Main {
         FEATURE_EDITORS
                 .add(new FeatureEditor(new BaseFeatureFactory(), "Base"));
         FEATURE_EDITORS.add(new FeatureEditor(new WordFeatureFactory(
-                WordFeature.Type.WORD, WordFeature.Mode.SUM), "Top10WordSum"));
+                WordFeature.Type.WORD, WordFeature.Mode.SUM, 10),
+                "Top10WordSum"));
         ClusterWordFeatureFactory ff;
         ff = new ClusterWordFeatureFactory();
         ff.para.numOfCl = 10;
@@ -75,36 +76,45 @@ public class Main {
         FEATURE_EDITORS.add(new FeatureEditor(ff, "10T"));
         ff = new ClusterWordFeatureFactory();
         ff.para.numOfCl = 10;
-        ff.withTweets = false;
-        FEATURE_EDITORS.add(new FeatureEditor(ff, "10NoT"));
-        ff = new ClusterWordFeatureFactory();
-        ff.para.numOfCl = 100;
         ff.withTweets = true;
-        FEATURE_EDITORS.add(new FeatureEditor(ff, "100T"));
+        ff.numOfWords = 100;
+        ff.mode = WordFeature.Mode.SUM;
+        FEATURE_EDITORS.add(new FeatureEditor(ff, "10T100WSum"));
         ff = new ClusterWordFeatureFactory();
-        ff.para.numOfCl = 100;
-        ff.withTweets = false;
-        FEATURE_EDITORS.add(new FeatureEditor(ff, "100NoT"));
-        ff = new ClusterWordFeatureFactory();
-        ff.para.numOfCl = 100;
+        ff.para.numOfCl = 10;
         ff.withTweets = true;
-        FEATURE_EDITORS.add(new FeatureEditor(ff, false, "100TOnly"));
+        ff.numOfWords = 100;
+        ff.mode = WordFeature.Mode.DF;
+        FEATURE_EDITORS.add(new FeatureEditor(ff, "10T100WDf"));
+        ff = new ClusterWordFeatureFactory();
+        ff.para.numOfCl = 10;
+        ff.withTweets = true;
+        ff.numOfWords = 500;
+        ff.mode = WordFeature.Mode.SUM;
+        FEATURE_EDITORS.add(new FeatureEditor(ff, "10T500WSum"));
+        ff = new ClusterWordFeatureFactory();
+        ff.para.numOfCl = 10;
+        ff.withTweets = true;
+        ff.numOfWords = 500;
+        ff.mode = WordFeature.Mode.DF;
+        FEATURE_EDITORS.add(new FeatureEditor(ff, "10T500WDf"));
     }
 
     private void testClusterFeature () throws Exception {
+        File f = new File("debug.txt");
+        if (!f.exists()) {
+            f.createNewFile();
+        }
+        final PrintStream ps = System.out;
+        System.setOut(new PrintStream(new FileOutputStream(f, true)));
+        System.out.println(author.userProfile.getScreenName());
+        
         for (FeatureEditor featureEditor : FEATURE_EDITORS) {
             featureEditor.setFeature(this.featureGetters, exGetter.auTweets);
             final ExsForWeka exs = exGetter.getExsInWekaForPredictNum();
             Instances train = exs.train;
             Instances test = exs.test;
             for (int li = 0; li < W_LEARNERS.length; li++) {
-                File f = new File("debug.txt");
-                if (!f.exists()) {
-                    f.createNewFile();
-                }
-                final PrintStream ps = System.out;
-                System.setOut(new PrintStream(new FileOutputStream(f, true)));
-
                 WLearner learner = W_LEARNERS[li];
                 Classifier cls = learner.buildClassifier(train);
 
@@ -129,9 +139,12 @@ public class Main {
                         e.correlationCoefficient(), e.meanAbsoluteError(),
                         e.rootMeanSquaredError(), e.relativeAbsoluteError(),
                         e.rootRelativeSquaredError());
+                System.setOut(new PrintStream(new FileOutputStream(f, true)));
 
             } // for (int li = 0; li < W_LEARNERS.length; li++) {
         }
+        System.out.close();
+        System.setOut(ps);
     }
 
     public static void main (String[] args) throws Exception {
@@ -144,8 +157,8 @@ public class Main {
 
         final Database db = Database.getInstance();
         for (long authorId : UserInfo.KEY_AUTHORS) {
-            if (authorId != 15461733L) {
-                // continue;
+            if (authorId != 16958346L) {
+                //continue;
             }
             new Main(db, authorId).testClusterFeature();
 

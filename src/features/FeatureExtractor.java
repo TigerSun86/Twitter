@@ -1220,9 +1220,11 @@ public class FeatureExtractor {
      */
     public static class FTopWord extends FeatureGetter {
         String word;
+        boolean needStem;
 
-        public FTopWord(String word) {
+        public FTopWord(String word, boolean needStem) {
             this.word = word;
+            this.needStem = needStem;
         }
 
         private static HashMap<Long, List<String>> tidToWords =
@@ -1233,7 +1235,7 @@ public class FeatureExtractor {
                 List<Status> userTweets) {
             if (!tidToWords.containsKey(t.getId())) {
                 tidToWords.put(t.getId(),
-                        WordFeature.splitIntoWords(t, true, true));
+                        WordFeature.splitIntoWords(t, true, needStem));
             }
             List<String> words = tidToWords.get(t.getId());
             int count = 0;

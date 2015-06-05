@@ -73,6 +73,11 @@ public class WordFeature {
 
     static class WordMethods extends EntityMethods {
         static final String FEATURE_PRIFIX = "TOPWORD_";
+        private boolean needStem;
+
+        public WordMethods(boolean needStem) {
+            this.needStem = needStem;
+        }
 
         @Override
         public String getPrefix () {
@@ -85,7 +90,7 @@ public class WordFeature {
             List<List<String>> wordsInTweets = new ArrayList<List<String>>();
             List<Integer> numOfRts = new ArrayList<Integer>();
             for (Status t : tweets) {
-                List<String> words = splitIntoWords(t, true, true);
+                List<String> words = splitIntoWords(t, true, needStem);
                 if (!words.isEmpty()) {
                     wordsInTweets.add(words);
                     numOfRts.add(t.getRetweetCount());
@@ -97,7 +102,7 @@ public class WordFeature {
 
         @Override
         public FeatureGetter getFeatureInstance (String entityName) {
-            return new FTopWord(entityName);
+            return new FTopWord(entityName, needStem);
         }
     }
 
@@ -207,9 +212,9 @@ public class WordFeature {
         }
     }
 
-    public static List<String>
-            getTopEntities (List<List<String>> wordsInTweets,
-                    List<Integer> numOfRts, Mode mode) {
+    public static List<String> getTopEntities (
+            List<List<String>> wordsInTweets, List<Integer> numOfRts,
+            Mode mode, int numOfWords) {
         if (mode.equals(Mode.NO)) {
             return new ArrayList<String>();
         }
@@ -313,7 +318,7 @@ public class WordFeature {
         Collections.sort(was);
 
         List<String> topWords = new ArrayList<String>();
-        for (int i = 0; i < Math.min(TOP_WORDS, was.size()); i++) {
+        for (int i = 0; i < Math.min(numOfWords, was.size()); i++) {
             String word = was.get(i).w;
             boolean goodWord = true;
             if (mode == Mode.SUMTHR10) {
@@ -462,7 +467,7 @@ public class WordFeature {
                 System.out.println(m);
                 methods.analyseTweets(auTweets);
                 WordFeature.getTopEntities(methods.getEntitiesInTweets(),
-                        methods.getNumOfRts(), m);
+                        methods.getNumOfRts(), m, TOP_WORDS);
                 System.out.println();
             }
             System.out.println("****");

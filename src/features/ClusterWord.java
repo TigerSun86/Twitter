@@ -7,9 +7,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 
-import main.ExampleGetter;
-import twitter4j.Status;
-import twitter4j.URLEntity;
 import util.SysUtil;
 import weka.clusterers.ClusterEvaluation;
 import weka.clusterers.Clusterer;
@@ -25,8 +22,6 @@ import weka.core.stemmers.IteratedLovinsStemmer;
 import weka.core.stemmers.Stemmer;
 import weka.core.tokenizers.AlphabeticTokenizer;
 import weka.core.tokenizers.Tokenizer;
-import datacollection.Database;
-import datacollection.UserInfo;
 
 /**
  * FileName: ClusterWord.java
@@ -54,7 +49,7 @@ public class ClusterWord {
 
     private static final String WORD_SEPARATER = ",";
 
-    private boolean debug = false;
+    private boolean debug = true;
     private int countOfInvalidPair = 0; // For debug.
 
     private List<String> wordList = null;
@@ -74,6 +69,8 @@ public class ClusterWord {
     }
 
     public HashMap<String, Integer> clusterWords () {
+        long time = SysUtil.getCpuTime();
+
         init();
 
         Attribute strAttr = new Attribute("Word", (FastVector) null);
@@ -108,6 +105,11 @@ public class ClusterWord {
                 Instance inst = data.instance(i);
                 int cl = clusterer.clusterInstance(inst);
                 word2Cl.put(inst.toString(), cl);
+            }
+            if (debug) {
+                eval();
+                System.out.println("Time used: "
+                        + (SysUtil.getCpuTime() - time));
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -354,7 +356,9 @@ public class ClusterWord {
 
     // For test.
     private void eval () throws Exception {
-        System.out.println(wordList.size() + " words to clustered.");
+        System.out.println("*****");
+        System.out.println(pages.size() + " web pages.");
+        System.out.println(wordList.size() + " words to be clustered.");
         Attribute strAttr = new Attribute("Word", (FastVector) null);
         FastVector attributes = new FastVector();
         attributes.addElement(strAttr);
@@ -386,53 +390,6 @@ public class ClusterWord {
             System.out.println("Cluster " + cl);
             System.out.println(result.get(cl).toString());
         }
+        System.out.println("*****");
     }
-
-    private static void test (List<Status> tweets) throws Exception {
-        ClusterWordSetting para = new ClusterWordSetting();
-        para.minDf = 500;
-
-        DomainGetter domainGetter = DomainGetter.getInstance();
-        List<String> pages = new ArrayList<String>();
-        for (Status t : tweets) {
-            for (URLEntity url : t.getURLEntities()) {
-                String p = domainGetter.getWebPage(url.getText());
-                if (!p.isEmpty()) {
-                    pages.add(p);
-                }
-            }
-        }
-        pages.addAll(ClusterWordFeatureFactory.getTweetPages(tweets,
-                para.needStem));
-        System.out.println(pages.size() + " web pages.");
-
-        List<String> wlist =
-                ClusterWordFeatureFactory.getTweetWordList(tweets,
-                        para.needStem);
-
-        ClusterWord cw = new ClusterWord(pages);
-        cw.setWordList(wlist);
-        cw.para = para;
-        cw.debug = true;
-        long time = SysUtil.getCpuTime();
-        cw.clusterWords();
-        System.out.println("Time used: " + (SysUtil.getCpuTime() - time));
-        cw.eval();
-    }
-
-    public static void main (String[] args) throws Exception {
-        for (long id : UserInfo.KEY_AUTHORS) {
-            if (id != 16958346L) {
-                continue;
-            }
-            final List<Status> tweets =
-                    Database.getInstance().getAuthorTweets(id,
-                            ExampleGetter.TRAIN_START_DATE,
-                            ExampleGetter.TEST_END_DATE);
-            System.out.println(UserInfo.KA_ID2SCREENNAME.get(id));
-            ClusterWord.test(tweets);
-            System.out.println("****");
-        }
-    }
-
 }
