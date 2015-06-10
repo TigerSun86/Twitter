@@ -36,33 +36,14 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
     public int numOfWords = 0; // 0 means no limitation.
     public WordFeature.Mode mode = WordFeature.Mode.SUM;
 
-    private List<String> allAuthorWTPageCache = null;
-    private List<String> allAuthorNTPageCache = null;
+    private List<Set<String>> allAuthorWTPageCache = null;
+    private List<Set<String>> allAuthorNTPageCache = null;
 
     @Override
     public List<FeatureGetter> getNewFeatures (List<Status> tweets) {
-        List<String> webPages;
+        List<Set<String>> webPages;
         if (allAuthors) {
-            if (withTweets && allAuthorWTPageCache != null) {
-                webPages = allAuthorWTPageCache;
-            } else if (!withTweets && allAuthorNTPageCache != null) {
-                webPages = allAuthorNTPageCache;
-            } else {
-                List<Status> allTweets = new ArrayList<Status>();
-                for (long authorId : UserInfo.KEY_AUTHORS) {
-                    final List<Status> auTweets =
-                            Database.getInstance().getAuthorTweets(authorId,
-                                    ExampleGetter.TRAIN_START_DATE,
-                                    ExampleGetter.TEST_END_DATE);
-                    allTweets.addAll(auTweets);
-                }
-                webPages = getPages(allTweets);
-                if (withTweets) {
-                    allAuthorWTPageCache = webPages;
-                } else {
-                    allAuthorNTPageCache = webPages;
-                }
-            }
+            webPages = getWebPagesForAllAuthors();
         } else {
             webPages = getPages(tweets);
         }
@@ -92,12 +73,40 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
         return list;
     }
 
-    private List<String> getPages (List<Status> tweets) {
+    private List<Set<String>> getWebPagesForAllAuthors () {
+        List<Set<String>> webPages;
+        if (withTweets && allAuthorWTPageCache != null) {
+            webPages = allAuthorWTPageCache;
+        } else if (!withTweets && allAuthorNTPageCache != null) {
+            webPages = allAuthorNTPageCache;
+        } else {
+            List<Status> allTweets = new ArrayList<Status>();
+            for (long authorId : UserInfo.KEY_AUTHORS) {
+                final List<Status> auTweets =
+                        Database.getInstance().getAuthorTweets(authorId,
+                                ExampleGetter.TRAIN_START_DATE,
+                                ExampleGetter.TEST_END_DATE);
+                allTweets.addAll(auTweets);
+            }
+            webPages = getPages(allTweets);
+            if (withTweets) {
+                allAuthorWTPageCache = webPages;
+            } else {
+                allAuthorNTPageCache = webPages;
+            }
+        }
+        return webPages;
+    }
+
+    private List<Set<String>> getPages (List<Status> tweets) {
         DomainGetter domainGetter = DomainGetter.getInstance();
-        List<String> webPages = new ArrayList<String>();
+        List<Set<String>> webPages = new ArrayList<Set<String>>();
         for (Status t : tweets) {
             for (URLEntity url : t.getURLEntities()) {
-                String p = domainGetter.getWebPage(url.getText());
+                Set<String> p =
+                        domainGetter.getWordsOfWebPage(url.getText(),
+                                para.needStem,
+                                DomainGetter.DOMAIN_STOP_WORDS_THRESHOLD);
                 if (!p.isEmpty()) {
                     webPages.add(p);
                 }
@@ -110,7 +119,8 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
         return webPages;
     }
 
-    static List<String> getTweetWordList (List<Status> ts, boolean needStem) {
+    private static List<String> getTweetWordList (List<Status> ts,
+            boolean needStem) {
         Set<String> set = new HashSet<String>();
         for (Status t : ts) {
             List<String> doc = WordFeature.splitIntoWords(t, true, needStem);
@@ -121,18 +131,28 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
         return new ArrayList<String>(set);
     }
 
-    static List<String> getTweetPages (List<Status> ts, boolean needStem) {
-        List<String> pages = new ArrayList<String>();
+    private static List<Set<String>> getTweetPages (List<Status> ts,
+            boolean needStem) {
+        List<Set<String>> pages = new ArrayList<Set<String>>();
         for (Status t : ts) {
-            StringBuilder sb = new StringBuilder();
             List<String> doc = WordFeature.splitIntoWords(t, true, needStem);
-            for (String w : doc) {
-                sb.append(w + " ");
-            }
-            if (sb.length() > 0) {
-                pages.add(sb.toString());
+            if (!doc.isEmpty()) {
+                Set<String> set = new HashSet<String>(doc);
+                pages.add(set);
             }
         }
         return pages;
+    }
+
+    private static void test () {
+        ClusterWordFeatureFactory fac = new ClusterWordFeatureFactory();
+        fac.numOfWords = 100;
+        fac.para.mEstimate = true;
+        fac.getNewFeatures(Database.getInstance().getAuthorTweets(16958346L,
+                ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_END_DATE));
+    }
+
+    public static void main (String[] args) {
+        test();
     }
 }

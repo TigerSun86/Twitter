@@ -2,6 +2,7 @@
 lib/*
 bin/*
 data/WebPages/*
+data/Domains/*
 *.classpath
 *.project
 twitter4j.properties
@@ -14,3 +15,4 @@ src/test/Test2.java
 data/2551981338L-407374096.txt
 src/test/Test2.java
 debug.txt
+src/test/Test2.java

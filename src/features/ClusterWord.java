@@ -5,7 +5,10 @@ import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map.Entry;
+import java.util.Set;
 
 import util.SysUtil;
 import weka.clusterers.ClusterEvaluation;
@@ -16,12 +19,7 @@ import weka.core.EditDistance;
 import weka.core.FastVector;
 import weka.core.Instance;
 import weka.core.Instances;
-import weka.core.Stopwords;
 import weka.core.neighboursearch.PerformanceStats;
-import weka.core.stemmers.IteratedLovinsStemmer;
-import weka.core.stemmers.Stemmer;
-import weka.core.tokenizers.AlphabeticTokenizer;
-import weka.core.tokenizers.Tokenizer;
 
 /**
  * FileName: ClusterWord.java
@@ -41,25 +39,24 @@ public class ClusterWord {
         public int minDf = MIN_DF;
         public int numOfCl = NUM_OF_CL;
         public boolean needStem = false;
-        public int mode = MODE_LIFT;
+        public int mode = MODE_JACCARD;
         public boolean mEstimate = true;
     }
 
     public ClusterWordSetting para = new ClusterWordSetting();
 
-    private static final String WORD_SEPARATER = ",";
+    public static final String WORD_SEPARATER = ",";
 
     private boolean debug = true;
     private int countOfInvalidPair = 0; // For debug.
 
     private List<String> wordList = null;
-    private List<String> pages = null;
-    private List<HashSet<String>> wordSetOfDocs = null;
+    private List<Set<String>> wordSetOfDocs = null;
     private HashMap<String, BitSet> word2DocIds = null;
     private Clusterer clusterer = null; // For debug.
 
-    public ClusterWord(List<String> pages) {
-        this.pages = pages;
+    public ClusterWord(List<Set<String>> pages) {
+        this.wordSetOfDocs = pages;
     }
 
     public void setWordList (List<String> wordList) {
@@ -73,23 +70,219 @@ public class ClusterWord {
 
         init();
 
-        Attribute strAttr = new Attribute("Word", (FastVector) null);
-        FastVector attributes = new FastVector();
-        attributes.addElement(strAttr);
-        Instances data = new Instances("Test-dataset", attributes, 0);
-        for (String word : this.wordList) {
-            double[] values = new double[data.numAttributes()];
-            values[0] = data.attribute(0).addStringValue(word);
-            Instance inst = new Instance(1.0, values);
-            data.add(inst);
+        HashMap<String, Double> similarityTable = getSimilarityTable();
+        SimClusterAlg clAlg = new SimClusterAlg();
+        clAlg.debug = this.debug;
+        clAlg.cluster(similarityTable, wordList);
+
+        HashMap<String, Integer> word2Cl = new HashMap<String, Integer>();
+        for (int cid = 0; cid < clAlg.clusters.size(); cid++) {
+            Set<String> cl = clAlg.clusters.get(cid);
+            for (String w : cl) {
+                word2Cl.put(w, cid);
+            }
+        }
+        for (String w : clAlg.singletons) {
+            word2Cl.put(w, clAlg.clusters.size());
+        }
+        // Important! don't forget tell upper level how many clusters have.
+        para.numOfCl = clAlg.clusters.size() + 1;
+        if (debug) {
+            System.out.println("Time used: " + (SysUtil.getCpuTime() - time));
+        }
+        return word2Cl;
+    }
+
+    private static class SimClusterAlg {
+        int maxClusterSize = 0; // Initialize dynamically when runing.
+        int maxNumOfSteps = 20;
+        List<Set<String>> clusters; // Output
+        Set<String> singletons; // Output
+
+        private double low;
+        private double high;
+
+        boolean debug = true;
+
+        public void cluster (HashMap<String, Double> simTable,
+                List<String> wordList) {
+            int totalWordCount = wordList.size();
+
+            if (maxClusterSize <= 1) {
+                maxClusterSize = Math.max(3, totalWordCount / 5);
+            }
+            if (maxNumOfSteps <= 2) {
+                maxNumOfSteps = 3;
+            }
+            singletons = new HashSet<String>();
+            clusters = new ArrayList<Set<String>>();
+            getBound(simTable);
+
+            Set<String> usedWords = new HashSet<String>();
+            double step = (high - low) / (maxNumOfSteps - 2);
+            double threshold = low;
+
+            if (debug) {
+                System.out.printf("About to cluster %d words with %d edges.%n",
+                        totalWordCount, simTable.size());
+                System.out.printf("Lowest similarity = %.3f, "
+                        + "highest similarity = %.3f, maxClusterSize = %d, "
+                        + "maxNumOfSteps = %d, step size = %.3f.%n", low, high,
+                        maxClusterSize, maxNumOfSteps, step);
+            }
+            for (int i = 0; i < maxNumOfSteps; i++, threshold += step) {
+                System.out.println("Threshold: " + threshold);
+                HashMap<String, Double> curSimTable =
+                        filterSimTable(simTable, usedWords, threshold);
+                Set<String> single =
+                        getSingleton(curSimTable, usedWords, wordList);
+                if (debug) {
+                    System.out.println("Singletons: " + single.toString());
+                }
+                singletons.addAll(single);
+                usedWords.addAll(single);
+                List<Set<String>> cls = getClusters(curSimTable);
+                for (Set<String> cl : cls) {
+                    if (cl.size() <= maxClusterSize) {
+                        if (debug) {
+                            System.out.println("Cluster: " + cl.toString());
+                        }
+                        clusters.add(cl);
+                        usedWords.addAll(cl);
+                    }
+                }
+                if (debug) {
+                    System.out.println("Clustered words: " + usedWords.size()
+                            + "/" + totalWordCount);
+                }
+                if (usedWords.size() >= totalWordCount) {
+                    break;
+                }
+            }
+            if (debug) {
+                System.out.println("*****");
+                for (int i = 0; i < clusters.size(); i++) {
+                    System.out.println("Cluster " + i + ":");
+                    System.out.println(clusters.get(i).toString());
+                }
+                System.out.println("Singleton: " + singletons.toString());
+            }
         }
 
-        HashMap<String, Double> distanceTable = getDistanceTable();
+        private void getBound (HashMap<String, Double> simTable) {
+            Iterator<Entry<String, Double>> iter =
+                    simTable.entrySet().iterator();
+            low = iter.next().getValue();
+            high = low;
+            while (iter.hasNext()) {
+                double v = iter.next().getValue();
+                if (v > high) {
+                    high = v;
+                } else if (v < low) {
+                    low = v;
+                }
+            }
+            assert high > low;
+        }
+
+        private List<Set<String>> getClusters (HashMap<String, Double> st) {
+            List<Set<String>> cls = new ArrayList<Set<String>>();
+            while (!st.isEmpty()) {
+                Set<String> cl = oneMaximumConnectedCluster(st);
+                cls.add(cl);
+            }
+            return cls;
+        }
+
+        private HashMap<String, Double> filterSimTable (
+                HashMap<String, Double> simTable, Set<String> used, double thr) {
+            HashMap<String, Double> filteredSimTable =
+                    new HashMap<String, Double>();
+            for (Entry<String, Double> entry : simTable.entrySet()) {
+                double sim = entry.getValue();
+                if (sim >= thr) {
+                    // Keep only when they have strong similarity higher than
+                    // threshold.
+                    String[] s = entry.getKey().split(WORD_SEPARATER);
+                    if (!used.contains(s[0])) {
+                        assert !used.contains(s[1]);
+                        filteredSimTable.put(entry.getKey(), entry.getValue());
+                    }
+                }
+            }
+            return filteredSimTable;
+        }
+
+        private Set<String> getSingleton (HashMap<String, Double> simTable,
+                Set<String> used, List<String> wordList) {
+            Set<String> wordsOfTable = new HashSet<String>();
+            for (Entry<String, Double> entry : simTable.entrySet()) {
+                String[] s = entry.getKey().split(WORD_SEPARATER);
+                wordsOfTable.add(s[0]);
+                wordsOfTable.add(s[1]);
+            }
+            Set<String> single = new HashSet<String>();
+            for (String s : wordList) {
+                if (!wordsOfTable.contains(s) && !used.contains(s)) {
+                    single.add(s);
+                }
+            }
+            return single;
+        }
+
+        private Set<String> oneMaximumConnectedCluster (
+                HashMap<String, Double> simTable) {
+            Set<String> cl = new HashSet<String>();
+            Iterator<Entry<String, Double>> iter =
+                    simTable.entrySet().iterator();
+            String[] str = iter.next().getKey().split(WORD_SEPARATER);
+            cl.add(str[0]);
+            cl.add(str[1]);
+            iter.remove();
+            int oldSize = cl.size();
+            int newSize = cl.size();
+            do {
+                oldSize = newSize;
+                iter = simTable.entrySet().iterator();
+                while (iter.hasNext()) {
+                    Entry<String, Double> entry = iter.next();
+                    str = entry.getKey().split(WORD_SEPARATER);
+                    if ((cl.contains(str[0]) || cl.contains(str[1]))) {
+                        cl.add(str[0]);
+                        cl.add(str[1]);
+                        iter.remove();
+                    }
+                }
+                newSize = cl.size();
+            } while (newSize > oldSize);
+
+            return cl;
+        }
+    }
+
+    public HashMap<String, Integer> clusterWordsByHierachicalClusteringAlg () {
+        long time = SysUtil.getCpuTime();
+
+        init();
+
+        HashMap<String, Double> similarityTable = getSimilarityTable();
+        HashMap<String, Double> distanceTable =
+                getDistanceTable(similarityTable);
+
         // System.out.println("Distance table done.");
         MyWordDistance disFun = new MyWordDistance(distanceTable);
-
         HashMap<String, Integer> word2Cl = null;
         try {
+            Attribute strAttr = new Attribute("Word", (FastVector) null);
+            FastVector attributes = new FastVector();
+            attributes.addElement(strAttr);
+            Instances data = new Instances("Test-dataset", attributes, 0);
+            for (String word : this.wordList) {
+                double[] values = new double[data.numAttributes()];
+                values[0] = data.attribute(0).addStringValue(word);
+                Instance inst = new Instance(1.0, values);
+                data.add(inst);
+            }
             // train clusterer
             HierarchicalClusterer clusterer = new HierarchicalClusterer();
             clusterer.setOptions(new String[] { "-L", "AVERAGE" });
@@ -124,19 +317,10 @@ public class ClusterWord {
     }
 
     private void initializeWords () {
-        wordSetOfDocs = new ArrayList<HashSet<String>>();
         HashSet<String> wholeWordSet = new HashSet<String>();
-
-        List<List<String>> docs = webPage2Doc(pages);
-        for (List<String> doc : docs) {
-            HashSet<String> wordsOfDoc = new HashSet<String>();
-            for (String str : doc) {
-                wordsOfDoc.add(str);
-                wholeWordSet.add(str);
-            }
-            wordSetOfDocs.add(wordsOfDoc);
+        for (Set<String> page : wordSetOfDocs) {
+            wholeWordSet.addAll(page);
         }
-
         if (wordList == null) {
             // wordList is not assigned, so use the word list of docs.
             wordList = new ArrayList<String>();
@@ -152,7 +336,7 @@ public class ClusterWord {
             word2DocIds.put(word, new BitSet(wordSetOfDocs.size()));
         }
         for (int id = 0; id < wordSetOfDocs.size(); id++) {
-            HashSet<String> doc = wordSetOfDocs.get(id);
+            Set<String> doc = wordSetOfDocs.get(id);
             for (String word : doc) {
                 // There could be some words of doc do not existing in the
                 // wordList.
@@ -175,100 +359,87 @@ public class ClusterWord {
         Collections.sort(wordList);
     }
 
-    private List<List<String>> webPage2Doc (List<String> pages) {
-        Tokenizer tokenizer = new AlphabeticTokenizer();
-        Stemmer stemmer = new IteratedLovinsStemmer();
-        List<List<String>> docs = new ArrayList<List<String>>();
-        for (String page : pages) {
-            List<String> doc = new ArrayList<String>();
-            tokenizer.tokenize(page);
-            // Iterate through tokens, perform stemming, and remove stopwords
-            while (tokenizer.hasMoreElements()) {
-                String word = ((String) tokenizer.nextElement()).intern();
-                word = word.toLowerCase();
-                if (Stopwords.isStopword(word)) {
-                    continue;// Check stop word before and after stemmed.
-                }
-                if (this.para.needStem) {
-                    word = stemmer.stem(word);
-                }
-                doc.add(word);
-            }
-            docs.add(doc);
-        }
-        return docs;
-    }
-
     /**
      * Lift(a,b) = p(a,b)/(p(a)p(b)) = N*df(a,b)/(df(a)*df(b))
      * In m-estimate Lift(a,b) = (N+1)* (df(a,b)+m)/((df(a)+m )*(df(b)+m))
-     * Distance = 1/Lift(a,b)
      */
-    private double distanceOfLift (String w1, String w2) {
+    private double similarityOfLift (String w1, String w2) {
         BitSet seta = word2DocIds.get(w1);
         BitSet setb = word2DocIds.get(w2);
         BitSet intersection = (BitSet) seta.clone();
         intersection.and(setb);
         double dfab = intersection.cardinality();
+        double dfa = seta.cardinality();
+        double dfb = setb.cardinality();
+        double n = (double) wordSetOfDocs.size();
+        double lift;
+        if (this.para.mEstimate) {
+            double m = 1 / n;
+            lift = (n + 1) * (dfab + m) / ((dfa + m) * (dfb + m));
+        } else {
+            if (dfab == 0) {
+                lift = 0;
+            } else {
+                lift = n * dfab / (dfa * dfb);
+            }
+        }
+
         if (dfab == 0) {
             countOfInvalidPair++;
         }
-        double dfa = seta.cardinality();
-        double dfb = setb.cardinality();
-        double dist;
-        double n = (double) wordSetOfDocs.size();
-        if (this.para.mEstimate) {
-            double m = 1 / n;
-            double lift = (n + 1) * (dfab + m) / ((dfa + m) * (dfb + m));
-            dist = 1 / lift;
-        } else {
-            if (dfab == 0) {
-                dist = Double.POSITIVE_INFINITY;
-            } else {
-                double lift = n * dfab / (dfa * dfb);
-                dist = 1 / lift;
-            }
-        }
-        return dist;
+        return lift;
     }
 
     /**
      * Jaccard(a,b) = df(a and b)/ df(a or b)
      * In m-estimate Jaccard(a,b) = (df(a and b) + m)/ (df(a or b)+1)
-     * Distance = 1/Jaccard(a,b)
      */
-    private double distanceOfJaccard (String w1, String w2) {
+    private double similarityOfJaccard (String w1, String w2) {
         BitSet seta = word2DocIds.get(w1);
         BitSet setb = word2DocIds.get(w2);
         BitSet intersection = (BitSet) seta.clone();
         intersection.and(setb);
         double dfaandb = intersection.cardinality();
-        if (dfaandb == 0) {
-            countOfInvalidPair++;
-        }
         BitSet union = (BitSet) seta.clone();
         union.or(setb);
         double dfaorb = union.cardinality();
 
-        double dist;
+        double jaccard;
+
         if (this.para.mEstimate) {
             double n = (double) wordSetOfDocs.size();
             double m = 1 / n;
-            double jaccard = (dfaandb + m) / (dfaorb + 1);
-            dist = 1 / jaccard;
+            jaccard = (dfaandb + m) / (dfaorb + 1);
         } else {
             if (dfaandb == 0) {
-                dist = Double.POSITIVE_INFINITY;
+                jaccard = 0;
             } else {
-                double jaccard = dfaandb / dfaorb;
-                dist = 1 / jaccard;
+                jaccard = dfaandb / dfaorb;
             }
         }
-        return dist;
+
+        if (dfaandb == 0) {
+            countOfInvalidPair++;
+        }
+        return jaccard;
     }
 
-    private HashMap<String, Double> getDistanceTable () {
+    private HashMap<String, Double> getDistanceTable (
+            HashMap<String, Double> similarityTableOfTwoWords) {
         HashMap<String, Double> distanceTableOfTwoWords =
+                new HashMap<String, Double>();
+        for (Entry<String, Double> entry : similarityTableOfTwoWords.entrySet()) {
+            double sim = entry.getValue();
+            assert sim >= 0;
+            if (sim != 0.0) {
+                distanceTableOfTwoWords.put(entry.getKey(), 1 / sim);
+            }
+        }
+        return distanceTableOfTwoWords;
+    }
+
+    private HashMap<String, Double> getSimilarityTable () {
+        HashMap<String, Double> similarityTableOfTwoWords =
                 new HashMap<String, Double>();
         countOfInvalidPair = 0;// For debug.
         for (int i = 0; i < wordList.size(); i++) {
@@ -277,16 +448,16 @@ public class ClusterWord {
                 String w2 = wordList.get(j);
                 if (w1.equals(w2)) {
                     // The distance of a word itself should be 0.
-                    distanceTableOfTwoWords.put(getTwoWordsKey(w1, w2), 0.0);
+                    // distanceTableOfTwoWords.put(getTwoWordsKey(w1, w2), 0.0);
                 } else {
-                    double dist;
+                    double sim;
                     if (this.para.mode == MODE_LIFT) {
-                        dist = distanceOfLift(w1, w2);
+                        sim = similarityOfLift(w1, w2);
                     } else {
-                        dist = distanceOfJaccard(w1, w2);
+                        sim = similarityOfJaccard(w1, w2);
                     }
-                    assert !Double.isNaN(dist);
-                    distanceTableOfTwoWords.put(getTwoWordsKey(w1, w2), dist);
+                    assert !Double.isNaN(sim) && !Double.isInfinite(sim);
+                    similarityTableOfTwoWords.put(getTwoWordsKey(w1, w2), sim);
                 }
             }
         }
@@ -300,7 +471,7 @@ public class ClusterWord {
                     ((double) countOfInvalidPair * 100.0) / total);
         }
 
-        return distanceTableOfTwoWords;
+        return similarityTableOfTwoWords;
     }
 
     private static String getTwoWordsKey (String w1, String w2) {
@@ -320,6 +491,9 @@ public class ClusterWord {
         }
 
         private double distanceOfTwoWords (String w1, String w2) {
+            if (w1.equals(w2)) {
+                return 0.0;
+            }
             String key = getTwoWordsKey(w1, w2);
             if (distanceTableOfTwoWords.containsKey(key)) {
                 return distanceTableOfTwoWords.get(key);
@@ -357,7 +531,7 @@ public class ClusterWord {
     // For test.
     private void eval () throws Exception {
         System.out.println("*****");
-        System.out.println(pages.size() + " web pages.");
+        System.out.println(wordSetOfDocs.size() + " web pages/tweets.");
         System.out.println(wordList.size() + " words to be clustered.");
         Attribute strAttr = new Attribute("Word", (FastVector) null);
         FastVector attributes = new FastVector();

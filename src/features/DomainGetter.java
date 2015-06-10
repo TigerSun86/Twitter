@@ -13,13 +13,24 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map.Entry;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 
+import weka.core.Stopwords;
+import weka.core.stemmers.IteratedLovinsStemmer;
+import weka.core.stemmers.Stemmer;
+import weka.core.tokenizers.AlphabeticTokenizer;
+import weka.core.tokenizers.Tokenizer;
+
 import com.google.common.net.InternetDomainName;
+
+import features.ClusterWord.ClusterWordSetting;
 
 /**
  * FileName: DomainGetter.java
@@ -33,11 +44,15 @@ public class DomainGetter {
     public static final String UNKNOWN_URL = "UNKNOWN_URL";
     public static final String UNKNOWN_DOMAIN = "UNKNOWN_DOMAIN";
     public static final String UNKNOWN_FILE = "UNKNOWN_FILE";
+    public static final double DOMAIN_STOP_WORDS_THRESHOLD = 0.8;
+    public static final double DISABLE_DOMAIN_STOP_WORDS_THRESHOLD = 1.1;
 
     private static final String FILE_NAME =
             "file://localhost/C:/WorkSpace/Twitter/data/ShortUrlMap.txt";
     private static final String FILE_PATH =
             "file://localhost/C:/WorkSpace/Twitter/data/WebPages/";
+    private static final String DOMAIN_FILE_PATH =
+            "file://localhost/C:/WorkSpace/Twitter/data/Domains/";
     private static final String EXT = ".txt";
     private static final String MAP_FILE_SEPA = ",TIGER_SEPA,";
 
@@ -49,6 +64,11 @@ public class DomainGetter {
     private static final int INVALID_FILEID = -1;
 
     private static final String CONTENT_TYPE_TEXT = "text";
+
+    private static final DomainStopWordsGetter DOMAIN_STOP_WORDS_GETTER =
+            new DomainStopWordsGetter();
+    private static final Tokenizer TOKENIZER = new AlphabeticTokenizer();
+    private static final Stemmer STEMMER = new IteratedLovinsStemmer();
 
     private BufferedWriter shortenUrlMapFileWriter = null;
     private HashMap<String, String> shortUrl2FileName = null;
@@ -83,7 +103,38 @@ public class DomainGetter {
         } else {
             return readWebPageFile(FILE_PATH + fileName);
         }
+    }
 
+    /**
+     * @param double domainStopWordsThres: threshold for stop words, which has
+     *        df rate higher or equals threshold.
+     */
+    public HashSet<String> getWordsOfWebPage (String shortUrl,
+            boolean needStem, double domainStopWordsThres) {
+        HashSet<String> words = new HashSet<String>();
+
+        String page = getWebPage(shortUrl);
+        List<String> wList = page2Words(page, needStem);
+        if (wList.isEmpty()) {
+            return words;
+        }
+        String domain = getDomain(shortUrl);
+        HashSet<String> domainStopWords;
+        if (domain.equals(UNKNOWN_DOMAIN)
+                || (domainStopWordsThres > 1.0 && domainStopWordsThres < 0.0)) {
+            // Empty set for no stop words.
+            domainStopWords = new HashSet<String>();
+        } else {
+            domainStopWords =
+                    DOMAIN_STOP_WORDS_GETTER.getDomainStopWords(domain,
+                            domainStopWordsThres);
+        }
+        for (String w : wList) {
+            if (!domainStopWords.contains(w)) {
+                words.add(w);
+            }
+        }
+        return words;
     }
 
     public String getDomain (String shortUrl) {
@@ -149,6 +200,7 @@ public class DomainGetter {
             in.close();
             result = sb.toString();
         } catch (IOException e) { // If this file has problem, just skip it.
+            e.printStackTrace();
         }
         return result;
     }
@@ -368,5 +420,236 @@ public class DomainGetter {
         longUrl2FileId = longIdMap;
         // If there's no Id, the initial one will be 0.
         nextFileId = maxFileId + 1;
+    }
+
+    private static class DomainStopWordsGetter {
+        private HashMap<DomainAndThresh, HashSet<String>> d2StopWordsCache =
+                new HashMap<DomainAndThresh, HashSet<String>>();
+
+        /**
+         * @return stop words set which the word has df rate higher or equals
+         *         threshold.
+         */
+        public HashSet<String>
+                getDomainStopWords (String domain, double thresh) {
+            assert !domain.equals(UNKNOWN_DOMAIN);
+            DomainAndThresh key = new DomainAndThresh(domain, thresh);
+            HashSet<String> stopWords = this.d2StopWordsCache.get(key);
+            if (stopWords == null) {
+                File file = null;
+                try {
+                    file =
+                            new File(
+                                    new URL(DOMAIN_FILE_PATH + domain + EXT)
+                                            .getPath());
+                } catch (MalformedURLException e) {
+                    e.printStackTrace();
+                }
+                if (!file.exists()) {
+                    System.err
+                            .println("Haven't initialize the domain file for "
+                                    + domain);
+                    // Just return empty set so program can still run.
+                    stopWords = new HashSet<String>();
+                } else {
+                    stopWords = readStopWordsFromFile(file, thresh);
+                    this.d2StopWordsCache.put(key, stopWords);
+                }
+            }
+            return stopWords;
+        }
+
+        private HashSet<String>
+                readStopWordsFromFile (File file, double thresh) {
+            HashSet<String> stopWords = new HashSet<String>();
+            try {
+                BufferedReader in = new BufferedReader(new FileReader(file));
+                String line;
+                while ((line = in.readLine()) != null) {
+                    String[] strs = line.split(ITEM_SEPA);
+                    assert (strs.length == 3);
+                    String word = strs[0];
+                    double rate = Double.parseDouble(strs[2]);
+                    if (rate >= thresh) {
+                        stopWords.add(word);
+                    } else {
+                        // It's sorted so remain lines will be lower than
+                        // the threshold.
+                        break;
+                    }
+                }
+                in.close();
+            } catch (NumberFormatException | IOException e) {
+                e.printStackTrace();
+            }
+            return stopWords;
+        }
+
+        private static class DomainAndThresh {
+            String domain;
+            double thresh;
+
+            public DomainAndThresh(String domain2, double thresh2) {
+                this.domain = domain2;
+                this.thresh = thresh2;
+            }
+
+            @Override
+            public boolean equals (Object o) {
+                if (!(o instanceof DomainAndThresh)) {
+                    return false;
+                }
+                DomainAndThresh o2 = (DomainAndThresh) o;
+                if (this.domain.equals(o2.domain)
+                        && Math.abs(this.thresh - o2.thresh) < 0.0001) {
+                    // Same domain and threshold is quite the same.
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+
+            @Override
+            public int hashCode () {
+                // Just use domain's hash code, so domain with different
+                // thresholds will conflict and equals will be called.
+                return this.domain.hashCode();
+            }
+
+            @Override
+            public String toString () {
+                return String.format("%s %.4f", domain, thresh);
+            }
+        }
+    }
+
+    // For test
+    private static void rankUrls () throws IOException {
+        BufferedReader in =
+                new BufferedReader(new FileReader(new File(
+                        new URL(FILE_NAME).getPath())));
+        HashMap<String, Integer> count = new HashMap<String, Integer>();
+        HashMap<String, HashMap<String, Integer>> domain2wordCounter =
+                new HashMap<String, HashMap<String, Integer>>();
+
+        String inputLine;
+        while ((inputLine = in.readLine()) != null) {
+            String[] urls = inputLine.split(MAP_FILE_SEPA);
+            if (urls.length == 4 && !urls[2].isEmpty()) {
+                String domain = urls[2];
+                if (count.containsKey(domain)) {
+                    count.put(domain, count.get(domain) + 1);
+                } else {
+                    count.put(domain, 1);
+                }
+                String file = urls[3]; // Count words df for each domain.
+                if (!domain.equals(UNKNOWN_DOMAIN)
+                        && !file.equals(UNKNOWN_FILE)) {
+                    HashMap<String, Integer> wordCounter =
+                            domain2wordCounter.get(domain);
+                    if (wordCounter == null) {
+                        wordCounter = new HashMap<String, Integer>();
+                        domain2wordCounter.put(domain, wordCounter);
+                    }
+                    String page = readWebPageFile(FILE_PATH + file);
+                    List<String> words =
+                            page2Words(page, new ClusterWordSetting().needStem);
+                    HashSet<String> wVisited = new HashSet<String>();
+                    for (String w : words) {
+                        if (wVisited.contains(w)) {
+                            continue;
+                        }
+                        wVisited.add(w);
+                        if (wordCounter.containsKey(w)) {
+                            wordCounter.put(w, wordCounter.get(w) + 1);
+                        } else {
+                            wordCounter.put(w, 1);
+                        }
+                    }
+                }
+            }
+        }
+        in.close();
+        ArrayList<RankUrl> rank = new ArrayList<RankUrl>();
+        for (java.util.Map.Entry<String, Integer> entry : count.entrySet()) {
+            rank.add(new RankUrl(entry.getKey(), entry.getValue()));
+        }
+        java.util.Collections.sort(rank);
+        for (RankUrl r : rank) {
+            System.out.println(r.toString());
+        }
+        for (Entry<String, HashMap<String, Integer>> entry : domain2wordCounter
+                .entrySet()) {
+            ArrayList<RankUrl> wordRank = new ArrayList<RankUrl>();
+            for (Entry<String, Integer> e2 : entry.getValue().entrySet()) {
+                wordRank.add(new RankUrl(e2.getKey(), e2.getValue()));
+            }
+            Collections.sort(wordRank);
+
+            String domain = entry.getKey();
+            int totalCount = count.get(domain);
+            File file =
+                    new File(new URL(DOMAIN_FILE_PATH + domain + EXT).getPath());
+            if (!file.exists()) { // Create a new file.
+                file.createNewFile();
+            }
+            FileWriter fw = new FileWriter(file.getAbsoluteFile(), false);
+            BufferedWriter bw = new BufferedWriter(fw);
+            for (RankUrl wc : wordRank) {
+                String word = wc.domain;
+                int c = wc.count;
+                bw.write(word + ITEM_SEPA + c + ITEM_SEPA
+                        + (((double) c) / totalCount) + System.lineSeparator());
+            }
+
+            bw.close();
+        }
+    }
+
+    private static List<String> page2Words (String page, boolean needStem) {
+        List<String> words = new ArrayList<String>();
+        TOKENIZER.tokenize(page);
+        // Iterate through tokens, perform stemming, and remove stopwords
+        while (TOKENIZER.hasMoreElements()) {
+            String word = ((String) TOKENIZER.nextElement()).intern();
+            word = word.toLowerCase();
+            if (Stopwords.isStopword(word)) {
+                continue;// Check stop word before stemmed.
+            }
+            if (needStem) {
+                word = STEMMER.stem(word);
+            }
+            words.add(word);
+        }
+
+        return words;
+    }
+
+    private static class RankUrl implements Comparable<RankUrl> {
+        String domain;
+        int count;
+
+        public RankUrl(String domain, int count) {
+            this.domain = domain;
+            this.count = count;
+        }
+
+        @Override
+        public int compareTo (RankUrl o) {
+            if (this.count != o.count) {
+                return o.count - this.count;
+            } else {
+                return this.domain.compareTo(o.domain);
+            }
+        }
+
+        @Override
+        public String toString () {
+            return domain + " " + count;
+        }
+    }
+
+    public static void main (String[] args) throws IOException {
+        rankUrls();
     }
 }
