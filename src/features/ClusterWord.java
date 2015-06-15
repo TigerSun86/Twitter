@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import com.google.common.math.DoubleMath;
+
 import util.SysUtil;
 import weka.clusterers.ClusterEvaluation;
 import weka.clusterers.Clusterer;
@@ -391,6 +393,81 @@ public class ClusterWord {
     }
 
     /**
+     * Aemi(a,b) = p(a,b)*log(p(a,b)/(p(a)*p(b)))
+     * +p(na,nb)*log(p(na,nb)/(p(na)*p(nb)))
+     * -p(a,nb)*log(p(a,nb)/(p(a)*p(nb)))
+     * -p(na,b)*log(p(na,b)/(p(na)*p(b)))
+     * where
+     * p(a) = d(a)/N
+     * p(b) = d(b)/N
+     * p(na) = (N-d(a))/N
+     * p(nb) = (N-d(b))/N
+     * p(a,b) = d(a and b)/N
+     * p(na,nb) = (N-d(a or b))/N
+     * p(na,b) = (d(b) - d(a and b))/N
+     * p(a,nb) = (d(a) - d(a and b))/N
+     * m-estimate p(a) will be (d(a)+m)/(N+1)
+     */
+    private double similarityOfAemi (String w1, String w2) {
+        BitSet seta = word2DocIds.get(w1);
+        BitSet setb = word2DocIds.get(w2);
+        double da = seta.cardinality();
+        double db = setb.cardinality();
+        BitSet intersection = (BitSet) seta.clone();
+        intersection.and(setb);
+        double daandb = intersection.cardinality();
+        BitSet union = (BitSet) seta.clone();
+        union.or(setb);
+        double daorb = union.cardinality();
+
+        double N = wordSetOfDocs.size();
+        double m;
+        double deno;
+        if (this.para.mEstimate) {
+            m = 1 / N;
+            deno = N + 1;
+        } else {
+            m = 0;
+            deno = N;
+        }
+        /* p(a) = d(a)/N
+         * p(b) = d(b)/N
+         * p(na) = (N-d(a))/N
+         * p(nb) = (N-d(b))/N
+         * p(a,b) = d(a and b)/N
+         * p(na,nb) = (N-d(a or b))/N
+         * p(na,b) = (d(b) - d(a and b))/N
+         * p(a,nb) = (d(a) - d(a and b))/N */
+        double pa = (da + m) / deno;
+        double pb = (db + m) / deno;
+        double pna = (N - da + m) / deno;
+        double pnb = (N - db + m) / deno;
+        double pab = (daandb + m) / deno;
+        double pnanb = (N - daorb + m) / deno;
+        double pnab = (db - daandb + m) / deno;
+        double panb = (da - daandb + m) / deno;
+
+        /* Aemi(a,b) = p(a,b)*log(p(a,b)/(p(a)*p(b)))
+         * +p(na,nb)*log(p(na,nb)/(p(na)*p(nb)))
+         * -p(a,nb)*log(p(a,nb)/(p(a)*p(nb)))
+         * -p(na,b)*log(p(na,b)/(p(na)*p(b))) */
+        double part1 =
+                (pab == 0) ? 0 : (pab * DoubleMath.log2(pab / (pa * pb)));
+        double part2 =
+                (pnanb == 0) ? 0 : (pnanb * DoubleMath
+                        .log2(pnanb / (pna * pnb)));
+        double part3 =
+                (panb == 0) ? 0 : (panb * DoubleMath.log2(panb / (pa * pnb)));
+        double part4 =
+                (pnab == 0) ? 0 : (pnab * DoubleMath.log2(pnab / (pna * pb)));
+        double aemi = part1 + part2 - part3 - part4;
+        if (daandb == 0) {
+            countOfInvalidPair++;
+        }
+        return aemi;
+    }
+
+    /**
      * Jaccard(a,b) = df(a and b)/ df(a or b)
      * In m-estimate Jaccard(a,b) = (df(a and b) + m)/ (df(a or b)+1)
      */
@@ -452,7 +529,7 @@ public class ClusterWord {
                 } else {
                     double sim;
                     if (this.para.mode == MODE_LIFT) {
-                        sim = similarityOfLift(w1, w2);
+                        sim = similarityOfAemi(w1, w2);
                     } else {
                         sim = similarityOfJaccard(w1, w2);
                     }

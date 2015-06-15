@@ -148,6 +148,7 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
         ClusterWordFeatureFactory fac = new ClusterWordFeatureFactory();
         fac.numOfWords = 100;
         fac.para.mEstimate = true;
+        fac.withTweets = true;
         fac.getNewFeatures(Database.getInstance().getAuthorTweets(16958346L,
                 ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_END_DATE));
     }
