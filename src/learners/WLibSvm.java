@@ -20,10 +20,12 @@ import common.WLearner;
  * @date May 19, 2015 10:59:56 PM
  */
 public class WLibSvm implements Learner, WLearner {
-    private final int type;
+    private int sType;
+    private int kType;
 
-    public WLibSvm(int type) {
-        this.type = type;
+    public WLibSvm(int sType, int kType) {
+        this.sType = sType;
+        this.kType = kType;
     }
 
     @Override
@@ -38,13 +40,8 @@ public class WLibSvm implements Learner, WLearner {
     public Classifier buildClassifier (Instances data) {
         try {
             LibSVM cls = new LibSVM();
-            int stype;
-            if (type == 0) {
-                stype = LibSVM.SVMTYPE_EPSILON_SVR;
-            } else {
-                stype = LibSVM.SVMTYPE_NU_SVR;
-            }
-            cls.setSVMType(new SelectedTag(stype, LibSVM.TAGS_SVMTYPE));
+            cls.setSVMType(new SelectedTag(sType, LibSVM.TAGS_SVMTYPE));
+            cls.setSVMType(new SelectedTag(kType, LibSVM.TAGS_KERNELTYPE));
             cls.buildClassifier(data);
             return cls;
         } catch (Exception e) {

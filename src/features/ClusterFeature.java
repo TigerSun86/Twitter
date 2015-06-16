@@ -175,7 +175,7 @@ public class ClusterFeature {
             }
             final List<Status> tweets =
                     a.getAuthorTweets(id, ExampleGetter.TRAIN_START_DATE,
-                            ExampleGetter.TEST_END_DATE);
+                            ExampleGetter.TEST_START_DATE);
             System.out.println(UserInfo.KA_ID2SCREENNAME.get(id));
             a.testEM(tweets);
 

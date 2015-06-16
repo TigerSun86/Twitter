@@ -1,7 +1,9 @@
 package features;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import twitter4j.Status;
 import features.FeatureEditor.FeatureFactory;
@@ -56,6 +58,21 @@ public class WordFeatureFactory implements FeatureFactory {
             list.add(methods.getFeatureInstance(entity));
         }
         return list;
+    }
+
+    @Override
+    public Set<String> conflictedFeaturesOfBase () {
+        Set<String> result = new HashSet<String>();
+        if (type.equals(Type.WORD)) {
+            result.add("18RtWord");
+        } else if (type.equals(Type.HASH)) {
+            result.add("29Hashtag");
+        } else if (type.equals(Type.MENTION)) {
+            result.add("30Mention");
+        } else { // if(type.equals(Type.DOMAIN))
+            result.add("5Url");
+        }
+        return result;
     }
 
 }

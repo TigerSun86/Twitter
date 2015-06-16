@@ -121,7 +121,11 @@ public class FeatureExtractor {
      * 
      * 27DayInWeek. Monday is 0, Tuesday is 1....
      * 
-     * 28HourInDay. 0am is 0, 1am is 1... */
+     * 28HourInDay. 0am is 0, 1am is 1...
+     * 
+     * 29Hashtag. Whether t has hashtag.
+     * 
+     * 30Mention. Whether t mentioned someone. */
     private final List<FeatureGetter> getterList =
             new ArrayList<FeatureGetter>();
 
@@ -172,6 +176,8 @@ public class FeatureExtractor {
         BASE_FEATURE_SET.add(new F26()); // 26Trend
         BASE_FEATURE_SET.add(new F27()); // 27DayInWeek
         BASE_FEATURE_SET.add(new F28()); // 28HourInDay
+        BASE_FEATURE_SET.add(new F29()); // 29Hashtag
+        BASE_FEATURE_SET.add(new F30()); // 30Mention
     }
 
     public final List<FeatureGetter> getterListOfPreNum;
@@ -1478,6 +1484,50 @@ public class FeatureExtractor {
         public RawAttr getAttr () {
             return new RawAttr(ClusterWordFeatureFactory.PREFIX + clusterId,
                     true);
+        }
+    }
+
+    /**
+     * F29 Whether t has hashtag.
+     */
+    private static class F29 extends FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            // 29. Whether t has hashtag.
+            String feature = F0;
+            final HashtagEntity[] entries = t.getHashtagEntities();
+            if (entries != null && entries.length != 0) {
+                feature = F1;
+            }
+            return feature;
+        }
+
+        @Override
+        public RawAttr getAttr () {
+            return getDiscreteAttr("29Hashtag");
+        }
+    }
+
+    /**
+     * F30 Whether t mentioned someone.
+     */
+    private static class F30 extends FeatureGetter {
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            // 30. Whether t mentioned someone.
+            String feature = F0;
+            final UserMentionEntity[] entries = t.getUserMentionEntities();
+            if (entries != null && entries.length != 0) {
+                feature = F1;
+            }
+            return feature;
+        }
+
+        @Override
+        public RawAttr getAttr () {
+            return getDiscreteAttr("30Mention");
         }
     }
 }

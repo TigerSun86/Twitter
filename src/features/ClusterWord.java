@@ -10,8 +10,6 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import com.google.common.math.DoubleMath;
-
 import util.SysUtil;
 import weka.clusterers.ClusterEvaluation;
 import weka.clusterers.Clusterer;
@@ -22,6 +20,8 @@ import weka.core.FastVector;
 import weka.core.Instance;
 import weka.core.Instances;
 import weka.core.neighboursearch.PerformanceStats;
+
+import com.google.common.math.DoubleMath;
 
 /**
  * FileName: ClusterWord.java

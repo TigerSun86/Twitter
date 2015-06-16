@@ -14,6 +14,7 @@ import main.ExampleGetter.ExsForWeka;
 import twitter4j.Status;
 import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
+import weka.classifiers.functions.LibSVM;
 import weka.core.Instances;
 
 import common.WLearner;
@@ -23,6 +24,7 @@ import datacollection.UserInfo;
 import features.BaseFeatureFactory;
 import features.ClusterWordFeatureFactory;
 import features.FeatureEditor;
+import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor;
 import features.WordFeature;
 import features.WordFeatureFactory;
@@ -44,11 +46,11 @@ public class Main {
         this.author = db.getUser(authorId);
         final List<Status> auTweets =
                 db.getAuthorTweets(authorId, ExampleGetter.TRAIN_START_DATE,
-                        ExampleGetter.TEST_END_DATE);
+                        ExampleGetter.TEST_START_DATE);
 
         List<Status> auTweetsM2 =
-                db.getAuthorTweets(authorId, ExampleGetter.TEST_END_DATE,
-                        ExampleGetter.TESTM2_END_DATE);
+                db.getAuthorTweets(authorId, ExampleGetter.TEST_START_DATE,
+                        ExampleGetter.TEST_END_DATE);
 
         this.featureGetters = new FeatureExtractor();
         this.exGetter =
@@ -56,48 +58,70 @@ public class Main {
 
     }
 
-    private static final WLearner[] W_LEARNERS = { new WLr(), new WAnn(10),
-            new WAnn(), new WLibSvm(0), new WLibSvm(1) };
-    private static final String[] W_L_NAMES = { "LR", "Ann10", "AnnA",
-            "epsilonSVR", "nuSVR" };
+    private static final WLearner[] W_LEARNERS = {
+            new WLr(),
+            new WAnn(10, 0.1, 0.1),
+            new WAnn(10, 0.2, 0.2),
+            new WAnn(-1, 0.1, 0.1),
+            new WAnn(-1, 0.2, 0.2),
+            new WLibSvm(LibSVM.SVMTYPE_EPSILON_SVR, LibSVM.KERNELTYPE_RBF),
+            new WLibSvm(LibSVM.SVMTYPE_EPSILON_SVR,
+                    LibSVM.KERNELTYPE_POLYNOMIAL),
+            new WLibSvm(LibSVM.SVMTYPE_NU_SVR, LibSVM.KERNELTYPE_RBF),
+            new WLibSvm(LibSVM.SVMTYPE_NU_SVR, LibSVM.KERNELTYPE_POLYNOMIAL) };
+    private static final String[] W_L_NAMES =
+            { "LR", "AnnS1", "AnnS2", "AnnA1", "AnnA2", "EpSvrRbf",
+                    "EpSvrPoly", "NuSvrRbf", "NuSvrPoly" };
 
     private static final List<FeatureEditor> FEATURE_EDITORS;
     static {
         FEATURE_EDITORS = new ArrayList<FeatureEditor>();
-        FEATURE_EDITORS
-                .add(new FeatureEditor(new BaseFeatureFactory(), "Base"));
-        FEATURE_EDITORS.add(new FeatureEditor(new WordFeatureFactory(
-                WordFeature.Type.WORD, WordFeature.Mode.SUM, 10),
-                "Top10WordSum"));
-        ClusterWordFeatureFactory ff;
-        ff = new ClusterWordFeatureFactory();
-        ff.para.numOfCl = 10;
-        //ff.withTweets = true;
-        FEATURE_EDITORS.add(new FeatureEditor(ff, "10T"));
-        ff = new ClusterWordFeatureFactory();
-        ff.para.numOfCl = 10;
-        //ff.withTweets = true;
-        ff.numOfWords = 100;
-        ff.mode = WordFeature.Mode.SUM;
-        FEATURE_EDITORS.add(new FeatureEditor(ff, "10T100WSum"));
-        ff = new ClusterWordFeatureFactory();
-        ff.para.numOfCl = 10;
-        //ff.withTweets = true;
-        ff.numOfWords = 100;
-        ff.mode = WordFeature.Mode.DF;
-        FEATURE_EDITORS.add(new FeatureEditor(ff, "10T100WDf"));
-        ff = new ClusterWordFeatureFactory();
-        ff.para.numOfCl = 10;
-        //ff.withTweets = true;
-        ff.numOfWords = 500;
-        ff.mode = WordFeature.Mode.SUM;
-        FEATURE_EDITORS.add(new FeatureEditor(ff, "10T500WSum"));
-        ff = new ClusterWordFeatureFactory();
-        ff.para.numOfCl = 10;
-        //ff.withTweets = true;
-        ff.numOfWords = 500;
-        ff.mode = WordFeature.Mode.DF;
-        FEATURE_EDITORS.add(new FeatureEditor(ff, "10T500WDf"));
+        List<FeatureFactory> featureList;
+        featureList = new ArrayList<FeatureFactory>();
+        featureList.add(new BaseFeatureFactory());
+        FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
+        int numOfWords = 10;
+        for (WordFeature.Type type : WordFeature.Type.values()) {
+            for (WordFeature.Mode mode : WordFeature.Mode.values()) {
+                featureList = new ArrayList<FeatureFactory>();
+                featureList.add(new WordFeatureFactory(type, mode, numOfWords));
+                FEATURE_EDITORS.add(new FeatureEditor(featureList, "Top"
+                        + numOfWords + type + mode));
+            }
+        }
+        for (WordFeature.Mode mode : WordFeature.Mode.values()) {
+            featureList = new ArrayList<FeatureFactory>();
+            for (WordFeature.Type type : WordFeature.Type.values()) {
+                featureList.add(new WordFeatureFactory(type, mode, numOfWords));
+            }
+            FEATURE_EDITORS.add(new FeatureEditor(featureList, "Top"
+                    + numOfWords + "Com" + mode));
+        }
+        numOfWords = 100;
+        for (WordFeature.Type type : WordFeature.Type.values()) {
+            for (WordFeature.Mode mode : WordFeature.Mode.values()) {
+                featureList = new ArrayList<FeatureFactory>();
+                featureList.add(new WordFeatureFactory(type, mode, numOfWords));
+                FEATURE_EDITORS.add(new FeatureEditor(featureList, "Top"
+                        + numOfWords + type + mode));
+            }
+        }
+        for (WordFeature.Mode mode : WordFeature.Mode.values()) {
+            featureList = new ArrayList<FeatureFactory>();
+            for (WordFeature.Type type : WordFeature.Type.values()) {
+                featureList.add(new WordFeatureFactory(type, mode, numOfWords));
+            }
+            FEATURE_EDITORS.add(new FeatureEditor(featureList, "Top"
+                    + numOfWords + "Com" + mode));
+        }
+
+        // ClusterWordFeatureFactory ff;
+        // ff = new ClusterWordFeatureFactory();
+        // ff.para.numOfCl = 10;
+        // // ff.withTweets = true;
+        // featureList = new ArrayList<FeatureFactory>();
+        // featureList.add(ff);
+        // FEATURE_EDITORS.add(new FeatureEditor(featureList, "10T"));
     }
 
     private void testClusterFeature () throws Exception {
@@ -107,8 +131,7 @@ public class Main {
         }
         final PrintStream ps = System.out;
         System.setOut(new PrintStream(new FileOutputStream(f, true)));
-        System.out.println(author.userProfile.getScreenName());
-        
+
         for (FeatureEditor featureEditor : FEATURE_EDITORS) {
             featureEditor.setFeature(this.featureGetters, exGetter.auTweets);
             final ExsForWeka exs = exGetter.getExsInWekaForPredictNum();
@@ -158,7 +181,7 @@ public class Main {
         final Database db = Database.getInstance();
         for (long authorId : UserInfo.KEY_AUTHORS) {
             if (authorId != 16958346L) {
-                //continue;
+                // continue;
             }
             new Main(db, authorId).testClusterFeature();
 

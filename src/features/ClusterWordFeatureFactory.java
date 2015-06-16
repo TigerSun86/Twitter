@@ -73,6 +73,13 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
         return list;
     }
 
+    @Override
+    public Set<String> conflictedFeaturesOfBase () {
+        Set<String> result = new HashSet<String>();
+        result.add("18RtWord");
+        return result;
+    }
+
     private List<Set<String>> getWebPagesForAllAuthors () {
         List<Set<String>> webPages;
         if (withTweets && allAuthorWTPageCache != null) {
@@ -85,7 +92,7 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
                 final List<Status> auTweets =
                         Database.getInstance().getAuthorTweets(authorId,
                                 ExampleGetter.TRAIN_START_DATE,
-                                ExampleGetter.TEST_END_DATE);
+                                ExampleGetter.TEST_START_DATE);
                 allTweets.addAll(auTweets);
             }
             webPages = getPages(allTweets);
@@ -150,10 +157,11 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
         fac.para.mEstimate = true;
         fac.withTweets = true;
         fac.getNewFeatures(Database.getInstance().getAuthorTweets(16958346L,
-                ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_END_DATE));
+                ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_START_DATE));
     }
 
     public static void main (String[] args) {
         test();
     }
+
 }

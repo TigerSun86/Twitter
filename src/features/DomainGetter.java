@@ -447,7 +447,7 @@ public class DomainGetter {
                 }
                 if (!file.exists()) {
                     System.err
-                            .println("Haven't initialize the domain file for "
+                            .println("Haven't initialized the domain file of "
                                     + domain);
                     // Just return empty set so program can still run.
                     stopWords = new HashSet<String>();
@@ -524,7 +524,7 @@ public class DomainGetter {
     }
 
     // For test
-    private static void rankUrls () throws IOException {
+    private static void rankUrlsAndCountDomainStopWords () throws IOException {
         BufferedReader in =
                 new BufferedReader(new FileReader(new File(
                         new URL(FILE_NAME).getPath())));
@@ -650,6 +650,6 @@ public class DomainGetter {
     }
 
     public static void main (String[] args) throws IOException {
-        rankUrls();
+        rankUrlsAndCountDomainStopWords();
     }
 }

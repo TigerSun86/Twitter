@@ -19,10 +19,14 @@ import common.WLearner;
  */
 public class WAnn implements Learner, WLearner {
     private int node = -1;
+    private double lr = 0.1;
+    private double momentum = 0.1;
     public int iter = 5000;
 
-    public WAnn(int node) {
+    public WAnn(int node, double lr, double m) {
         this.node = node;
+        this.lr = lr;
+        this.momentum = m;
     }
 
     public WAnn() {
@@ -44,8 +48,8 @@ public class WAnn implements Learner, WLearner {
                     new weka.classifiers.functions.MultilayerPerceptron();
             cls.setTrainingTime(iter);
             cls.setValidationSetSize(30);
-            cls.setLearningRate(0.1);
-            cls.setMomentum(0.2);
+            cls.setLearningRate(lr);
+            cls.setMomentum(momentum);
             if (node > 0) {
                 cls.setHiddenLayers("" + node);
             }

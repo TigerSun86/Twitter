@@ -1,6 +1,8 @@
 package features;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import twitter4j.Status;
 import features.FeatureExtractor.FeatureGetter;
@@ -16,37 +18,50 @@ import features.FeatureExtractor.FeatureGetter;
 public class FeatureEditor {
     public interface FeatureFactory {
         List<FeatureGetter> getNewFeatures (List<Status> tweets);
+
+        Set<String> conflictedFeaturesOfBase ();
     }
 
-    private FeatureFactory newFeature;
+    private List<FeatureFactory> newFeatures;
     private boolean keepBase;
     public String name;
 
-    public FeatureEditor(FeatureFactory newFeature, boolean keepBase,
+    public FeatureEditor(List<FeatureFactory> newFeatures, boolean keepBase,
             String name) {
-        this.newFeature = newFeature;
+        this.newFeatures = newFeatures;
         this.keepBase = keepBase;
         this.name = name;
     }
 
-    public FeatureEditor(FeatureFactory newFeature, String name) {
-        this.newFeature = newFeature;
+    public FeatureEditor(List<FeatureFactory> newFeatures, String name) {
+        this.newFeatures = newFeatures;
         this.keepBase = true;
         this.name = name;
     }
 
     public void
             setFeature (FeatureExtractor featureGetters, List<Status> tweets) {
+        // Get conflicted features.
+        Set<String> conflictedFeatures = new HashSet<String>();
+        for (FeatureFactory newFeature : newFeatures) {
+            conflictedFeatures.addAll(newFeature.conflictedFeaturesOfBase());
+        }
+
         // First remove all features
         featureGetters.getterListOfPreNum.clear();
         if (keepBase) { // Add back base features
-            featureGetters.getterListOfPreNum
-                    .addAll(FeatureExtractor.BASE_FEATURE_SET);
+            for (FeatureGetter baseFeature : FeatureExtractor.BASE_FEATURE_SET) {
+                if (!conflictedFeatures.contains(baseFeature)) {
+                    featureGetters.getterListOfPreNum.add(baseFeature);
+                }
+            }
         }
         // Add new features;
-        List<FeatureGetter> nfs = newFeature.getNewFeatures(tweets);
-        for (FeatureGetter fg : nfs) {
-            featureGetters.getterListOfPreNum.add(fg);
+        for (FeatureFactory newFeature : newFeatures) {
+            List<FeatureGetter> nfs = newFeature.getNewFeatures(tweets);
+            for (FeatureGetter fg : nfs) {
+                featureGetters.getterListOfPreNum.add(fg);
+            }
         }
     }
 }

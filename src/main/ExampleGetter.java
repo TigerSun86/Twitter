@@ -16,11 +16,13 @@ import twitter4j.User;
 import weka.core.Instances;
 import weka.filters.Filter;
 import weka.filters.unsupervised.attribute.Normalize;
+
 import common.MappedAttrList;
 import common.RawAttrList;
 import common.RawExample;
 import common.RawExampleList;
 import common.TrainTestSplitter;
+
 import datacollection.Database;
 import datacollection.UserInfo;
 import features.FeatureExtractor;
@@ -80,7 +82,6 @@ public class ExampleGetter {
     public static Date TRAIN_START_DATE = null;
     public static Date TEST_START_DATE = null;
     public static Date TEST_END_DATE = null;
-    public static Date TESTM2_END_DATE = null;
     static {
         try {
             TRAIN_START_DATE =
@@ -88,13 +89,10 @@ public class ExampleGetter {
                             .parse("Tue Jan 27 22:34:47 EST 2015");
             TEST_START_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-                            .parse("Sat Feb 21 22:34:47 EST 2015");
+                            .parse("Fri May 15 14:44:54 EDT 2015");
             TEST_END_DATE =
                     new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-                            .parse("Wed Mar 25 06:31:35 EST 2015");
-            TESTM2_END_DATE =
-                    new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy")
-                            .parse("Mon Apr 13 14:44:54 EDT 2015");
+                            .parse("Mon Jun 15 00:42:00 EDT 2015");
         } catch (ParseException e) {
             e.printStackTrace();
         }
@@ -128,6 +126,10 @@ public class ExampleGetter {
     private static final boolean NEED_NORMALIZE = true;
 
     public ExsForWeka getExsInWekaForPredictNum () {
+        double avgRt = 0;
+        int minRt = Integer.MAX_VALUE;
+        int maxRt = Integer.MIN_VALUE;
+
         MeToWeka w =
                 new MeToWeka(this.featureGetters.getAttrListOfPredictNum());
         Instances train = new Instances("Train", w.attributes, auTweets.size());
@@ -135,20 +137,34 @@ public class ExampleGetter {
         Instances test = new Instances("Test", w.attributes, auTweetsM2.size());
         test.setClassIndex(test.numAttributes() - 1);
         for (Status t : auTweets) {
+            int rtCount = t.getRetweetCount();
             ArrayList<String> features =
                     featureGetters.getFeaturesOfPredictNum(t, null, null);
             RawExample e = new RawExample();
             e.xList = features;
-            e.t = Double.toString(Math.log(t.getRetweetCount()));
+            e.t = Double.toString(Math.log(rtCount + 1));
             train.add(w.convertInstance(e));
+            avgRt += rtCount;
+            if (minRt > rtCount) {
+                minRt = rtCount;
+            } else if (maxRt < rtCount) {
+                maxRt = rtCount;
+            }
         }
         for (Status t : auTweetsM2) {
+            int rtCount = t.getRetweetCount();
             ArrayList<String> features =
                     featureGetters.getFeaturesOfPredictNum(t, null, null);
             RawExample e = new RawExample();
             e.xList = features;
-            e.t = Double.toString(Math.log(t.getRetweetCount()));
+            e.t = Double.toString(Math.log(rtCount + 1));
             test.add(w.convertInstance(e));
+            avgRt += rtCount;
+            if (minRt > rtCount) {
+                minRt = rtCount;
+            } else if (maxRt < rtCount) {
+                maxRt = rtCount;
+            }
         }
 
         if (NEED_NORMALIZE) {
@@ -163,6 +179,13 @@ public class ExampleGetter {
         }
 
         ExsForWeka ret = new ExsForWeka(train, test);
+
+        String authorName = auTweets.get(0).getUser().getScreenName();
+        avgRt /= (auTweets.size() * auTweetsM2.size());
+        System.out.println("AuthorName, Instance#InTrainingSet, "
+                + "Instance#InTestSet, AvgRt, MinRt, MaxRt");
+        System.out.printf("%s,%d,%d,%.2f,%d,%d%n", authorName, auTweets.size(),
+                auTweetsM2.size(), avgRt, minRt, maxRt);
         return ret;
     }
 
@@ -341,7 +364,7 @@ public class ExampleGetter {
             final UserInfo au = db.getUser(keyAu);
             final List<Status> auTweets =
                     db.getOriginalTweetListInTimeRange(keyAu, TRAIN_START_DATE,
-                            TEST_END_DATE);
+                            TEST_START_DATE);
             Date last = new Date(0L);
             for (Status t : auTweets) {
                 System.out.printf("%s, %d, %s%n", au.userProfile.getName(),
@@ -356,13 +379,13 @@ public class ExampleGetter {
         System.out.printf(
                 "Begin at: %s, train start at: %s, test end at: %s.%n",
                 new Date().toString(), TRAIN_START_DATE.toString(),
-                TEST_END_DATE.toString());
+                TEST_START_DATE.toString());
         final Database db = Database.getInstance();
         for (Long keyAu : UserInfo.KEY_AUTHORS) {
             final UserInfo au = db.getUser(keyAu);
             final List<Status> auTweets =
                     db.getOriginalTweetListInTimeRange(keyAu, TRAIN_START_DATE,
-                            TEST_END_DATE);
+                            TEST_START_DATE);
             // Sort auTweets.
             Collections.sort(auTweets, TWEET_SORTER);
 
@@ -393,7 +416,7 @@ public class ExampleGetter {
             final UserInfo au = db.getUser(keyAu);
             final List<Status> auTweets =
                     db.getOriginalTweetListInTimeRange(keyAu, TRAIN_START_DATE,
-                            TEST_END_DATE);
+                            TEST_START_DATE);
             // Sort auTweets.
             Collections.sort(auTweets, TWEET_SORTER);
 
@@ -413,7 +436,7 @@ public class ExampleGetter {
                     + "trainStart: %s, testStart: %s, testEnd: %s.%n",
                     au.userProfile.getScreenName(), au.userId,
                     au.followersIds.size(), TRAIN_START_DATE.toString(),
-                    TEST_START_DATE.toString(), TEST_END_DATE.toString());
+                    TEST_START_DATE.toString(), TEST_START_DATE.toString());
             System.out.printf(
                     "Total#exs: %d, train#: %d, val#: %d, test#: %d.%n",
                     auTweets.size(), nTrain, nVal, nTest);

@@ -40,7 +40,6 @@ import features.FeatureExtractor.FeatureGetter;
  * @date Apr 23, 2015 5:20:16 PM
  */
 public class WordFeature {
-    private static final int TOP_WORDS = 10;
     private static final Tokenizer TOKENIZER = new AlphabeticTokenizer();
     private static final Stemmer STEMMER = new IteratedLovinsStemmer();
 
@@ -184,7 +183,7 @@ public class WordFeature {
 
         @Override
         public void analyseTweets (List<Status> tweets) {
-            // Convert tweets to hashtags.
+            // Convert tweets to domains.
             List<List<String>> wordsInTweets = new ArrayList<List<String>>();
             List<Integer> numOfRts = new ArrayList<Integer>();
             for (Status t : tweets) {
@@ -458,7 +457,7 @@ public class WordFeature {
             }
             final List<Status> auTweets =
                     a.getAuthorTweets(id, ExampleGetter.TRAIN_START_DATE,
-                            ExampleGetter.TEST_END_DATE);
+                            ExampleGetter.TEST_START_DATE);
             System.out.println(UserInfo.KA_ID2SCREENNAME.get(id));
             for (Mode m : Mode.values()) {
                 if (m == Mode.NO) {
@@ -467,7 +466,7 @@ public class WordFeature {
                 System.out.println(m);
                 methods.analyseTweets(auTweets);
                 WordFeature.getTopEntities(methods.getEntitiesInTweets(),
-                        methods.getNumOfRts(), m, TOP_WORDS);
+                        methods.getNumOfRts(), m, 10);
                 System.out.println();
             }
             System.out.println("****");
