@@ -22,7 +22,6 @@ import common.WLearner;
 import datacollection.Database;
 import datacollection.UserInfo;
 import features.BaseFeatureFactory;
-import features.ClusterWordFeatureFactory;
 import features.FeatureEditor;
 import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor;
@@ -73,6 +72,39 @@ public class Main {
             { "LR", "AnnS1", "AnnS2", "AnnA1", "AnnA2", "EpSvrRbf",
                     "EpSvrPoly", "NuSvrRbf", "NuSvrPoly" };
 
+    private static final List<FeatureEditor> TOP_SERIES_FEATURE_EDITORS;
+    static {
+        TOP_SERIES_FEATURE_EDITORS = new ArrayList<FeatureEditor>();
+        List<FeatureFactory> featureList;
+        int[] nums = { 10, 20, 30 };
+        for (int numOfWords : nums) {
+            for (WordFeature.Type type : WordFeature.Type.values()) {
+                for (WordFeature.Mode mode : WordFeature.Mode.values()) {
+                    if (mode.equals(WordFeature.Mode.NO)) {
+                        continue;
+                    }
+                    featureList = new ArrayList<FeatureFactory>();
+                    featureList.add(new WordFeatureFactory(type, mode,
+                            numOfWords));
+                    TOP_SERIES_FEATURE_EDITORS.add(new FeatureEditor(
+                            featureList, "Top" + numOfWords + type + mode));
+                }
+            }
+            for (WordFeature.Mode mode : WordFeature.Mode.values()) {
+                if (mode.equals(WordFeature.Mode.NO)) {
+                    continue;
+                }
+                featureList = new ArrayList<FeatureFactory>();
+                for (WordFeature.Type type : WordFeature.Type.values()) {
+                    featureList.add(new WordFeatureFactory(type, mode,
+                            numOfWords));
+                }
+                TOP_SERIES_FEATURE_EDITORS.add(new FeatureEditor(featureList,
+                        "Top" + numOfWords + "Com" + mode));
+            }
+        }
+    }
+
     private static final List<FeatureEditor> FEATURE_EDITORS;
     static {
         FEATURE_EDITORS = new ArrayList<FeatureEditor>();
@@ -80,48 +112,7 @@ public class Main {
         featureList = new ArrayList<FeatureFactory>();
         featureList.add(new BaseFeatureFactory());
         FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
-        int numOfWords = 10;
-        for (WordFeature.Type type : WordFeature.Type.values()) {
-            for (WordFeature.Mode mode : WordFeature.Mode.values()) {
-                featureList = new ArrayList<FeatureFactory>();
-                featureList.add(new WordFeatureFactory(type, mode, numOfWords));
-                FEATURE_EDITORS.add(new FeatureEditor(featureList, "Top"
-                        + numOfWords + type + mode));
-            }
-        }
-        for (WordFeature.Mode mode : WordFeature.Mode.values()) {
-            featureList = new ArrayList<FeatureFactory>();
-            for (WordFeature.Type type : WordFeature.Type.values()) {
-                featureList.add(new WordFeatureFactory(type, mode, numOfWords));
-            }
-            FEATURE_EDITORS.add(new FeatureEditor(featureList, "Top"
-                    + numOfWords + "Com" + mode));
-        }
-        numOfWords = 100;
-        for (WordFeature.Type type : WordFeature.Type.values()) {
-            for (WordFeature.Mode mode : WordFeature.Mode.values()) {
-                featureList = new ArrayList<FeatureFactory>();
-                featureList.add(new WordFeatureFactory(type, mode, numOfWords));
-                FEATURE_EDITORS.add(new FeatureEditor(featureList, "Top"
-                        + numOfWords + type + mode));
-            }
-        }
-        for (WordFeature.Mode mode : WordFeature.Mode.values()) {
-            featureList = new ArrayList<FeatureFactory>();
-            for (WordFeature.Type type : WordFeature.Type.values()) {
-                featureList.add(new WordFeatureFactory(type, mode, numOfWords));
-            }
-            FEATURE_EDITORS.add(new FeatureEditor(featureList, "Top"
-                    + numOfWords + "Com" + mode));
-        }
-
-        // ClusterWordFeatureFactory ff;
-        // ff = new ClusterWordFeatureFactory();
-        // ff.para.numOfCl = 10;
-        // // ff.withTweets = true;
-        // featureList = new ArrayList<FeatureFactory>();
-        // featureList.add(ff);
-        // FEATURE_EDITORS.add(new FeatureEditor(featureList, "10T"));
+        FEATURE_EDITORS.addAll(TOP_SERIES_FEATURE_EDITORS);
     }
 
     private void testClusterFeature () throws Exception {
