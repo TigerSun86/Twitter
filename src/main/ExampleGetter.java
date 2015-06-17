@@ -181,7 +181,7 @@ public class ExampleGetter {
         ExsForWeka ret = new ExsForWeka(train, test);
 
         String authorName = auTweets.get(0).getUser().getScreenName();
-        avgRt /= (auTweets.size() * auTweetsM2.size());
+        avgRt /= (auTweets.size() + auTweetsM2.size());
         System.out.println("AuthorName, Instance#InTrainingSet, "
                 + "Instance#InTestSet, AvgRt, MinRt, MaxRt");
         System.out.printf("%s,%d,%d,%.2f,%d,%d%n", authorName, auTweets.size(),

@@ -39,7 +39,7 @@ public class WordFeatureFactory implements FeatureFactory {
     public List<FeatureGetter> getNewFeatures (List<Status> tweets) {
         EntityMethods methods;
         if (type.equals(Type.WORD)) {
-            methods = new WordMethods(false);
+            methods = new WordMethods(FeatureExtractor.NEED_STEM);
         } else if (type.equals(Type.HASH)) {
             methods = new HashMethods();
         } else if (type.equals(Type.MENTION)) {

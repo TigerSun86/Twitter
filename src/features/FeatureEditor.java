@@ -16,6 +16,8 @@ import features.FeatureExtractor.FeatureGetter;
  * @date Jun 2, 2015 5:21:56 PM
  */
 public class FeatureEditor {
+    private static final boolean REMOVE_CONFLICTED_FEATURE = true;
+
     public interface FeatureFactory {
         List<FeatureGetter> getNewFeatures (List<Status> tweets);
 
@@ -43,15 +45,18 @@ public class FeatureEditor {
             setFeature (FeatureExtractor featureGetters, List<Status> tweets) {
         // Get conflicted features.
         Set<String> conflictedFeatures = new HashSet<String>();
-        for (FeatureFactory newFeature : newFeatures) {
-            conflictedFeatures.addAll(newFeature.conflictedFeaturesOfBase());
+        if (REMOVE_CONFLICTED_FEATURE) {
+            for (FeatureFactory newFeature : newFeatures) {
+                conflictedFeatures
+                        .addAll(newFeature.conflictedFeaturesOfBase());
+            }
         }
 
         // First remove all features
         featureGetters.getterListOfPreNum.clear();
         if (keepBase) { // Add back base features
             for (FeatureGetter baseFeature : FeatureExtractor.BASE_FEATURE_SET) {
-                if (!conflictedFeatures.contains(baseFeature)) {
+                if (!conflictedFeatures.contains(baseFeature.toString())) {
                     featureGetters.getterListOfPreNum.add(baseFeature);
                 }
             }

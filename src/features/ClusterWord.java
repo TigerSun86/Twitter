@@ -40,7 +40,7 @@ public class ClusterWord {
     public static class ClusterWordSetting {
         public int minDf = MIN_DF;
         public int numOfCl = NUM_OF_CL;
-        public boolean needStem = false;
+        public boolean needStem = FeatureExtractor.NEED_STEM;
         public int mode = MODE_JACCARD;
         public boolean mEstimate = true;
     }

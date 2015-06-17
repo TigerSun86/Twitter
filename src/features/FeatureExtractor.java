@@ -44,6 +44,8 @@ import features.WordFeature.WordMethods;
  * @date Dec 18, 2014 4:04:46 PM
  */
 public class FeatureExtractor {
+    public static final boolean NEED_STEM = true;
+    
     private static final String F0 = "0";
     private static final String F1 = "1";
     private static final int MOUNT_IN_HOUR = 30 * 24;

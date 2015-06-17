@@ -127,7 +127,7 @@ public class DomainGetter {
         } else {
             domainStopWords =
                     DOMAIN_STOP_WORDS_GETTER.getDomainStopWords(domain,
-                            domainStopWordsThres);
+                            needStem, domainStopWordsThres);
         }
         for (String w : wList) {
             if (!domainStopWords.contains(w)) {
@@ -430,8 +430,8 @@ public class DomainGetter {
          * @return stop words set which the word has df rate higher or equals
          *         threshold.
          */
-        public HashSet<String>
-                getDomainStopWords (String domain, double thresh) {
+        public HashSet<String> getDomainStopWords (String domain,
+                boolean needStem, double thresh) {
             assert !domain.equals(UNKNOWN_DOMAIN);
             DomainAndThresh key = new DomainAndThresh(domain, thresh);
             HashSet<String> stopWords = this.d2StopWordsCache.get(key);
@@ -453,6 +453,14 @@ public class DomainGetter {
                     stopWords = new HashSet<String>();
                 } else {
                     stopWords = readStopWordsFromFile(file, thresh);
+                    if (needStem) {
+                        HashSet<String> stemmedStopWords =
+                                new HashSet<String>();
+                        for (String word : stopWords) {
+                            stemmedStopWords.add(STEMMER.stem(word));
+                        }
+                        stopWords = stemmedStopWords;
+                    }
                     this.d2StopWordsCache.put(key, stopWords);
                 }
             }

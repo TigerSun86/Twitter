@@ -57,20 +57,12 @@ public class Main {
 
     }
 
-    private static final WLearner[] W_LEARNERS = {
-            new WLr(),
-            new WAnn(10, 0.1, 0.1),
-            new WAnn(10, 0.2, 0.2),
+    private static final WLearner[] W_LEARNERS = { new WLr(),
             new WAnn(-1, 0.1, 0.1),
-            new WAnn(-1, 0.2, 0.2),
             new WLibSvm(LibSVM.SVMTYPE_EPSILON_SVR, LibSVM.KERNELTYPE_RBF),
-            new WLibSvm(LibSVM.SVMTYPE_EPSILON_SVR,
-                    LibSVM.KERNELTYPE_POLYNOMIAL),
-            new WLibSvm(LibSVM.SVMTYPE_NU_SVR, LibSVM.KERNELTYPE_RBF),
-            new WLibSvm(LibSVM.SVMTYPE_NU_SVR, LibSVM.KERNELTYPE_POLYNOMIAL) };
-    private static final String[] W_L_NAMES =
-            { "LR", "AnnS1", "AnnS2", "AnnA1", "AnnA2", "EpSvrRbf",
-                    "EpSvrPoly", "NuSvrRbf", "NuSvrPoly" };
+            new WLibSvm(LibSVM.SVMTYPE_NU_SVR, LibSVM.KERNELTYPE_RBF) };
+    private static final String[] W_L_NAMES = { "LR", "AnnA1", "EpSvrRbf",
+            "NuSvrRbf", };
 
     private static final List<FeatureEditor> TOP_SERIES_FEATURE_EDITORS;
     static {
