@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -73,7 +74,7 @@ public class ClusterWord {
         init();
 
         HashMap<String, Double> similarityTable = getSimilarityTable();
-        SimClusterAlg clAlg = new SimClusterAlg();
+        SingleCutAlg clAlg = new SingleCutAlg();
         clAlg.debug = this.debug;
         clAlg.cluster(similarityTable, wordList);
 
@@ -84,15 +85,306 @@ public class ClusterWord {
                 word2Cl.put(w, cid);
             }
         }
-        for (String w : clAlg.singletons) {
-            word2Cl.put(w, clAlg.clusters.size());
-        }
+        // for (String w : clAlg.singletons) {
+        // word2Cl.put(w, clAlg.clusters.size());
+        // }
         // Important! don't forget tell upper level how many clusters have.
         para.numOfCl = clAlg.clusters.size() + 1;
         if (debug) {
             System.out.println("Time used: " + (SysUtil.getCpuTime() - time));
         }
         return word2Cl;
+    }
+
+    private static class SingleCutAlg {
+        boolean debug = true;
+        int maxInitClusterSize = 20;
+        int minInitClusterSize = 5;
+        List<Set<String>> clusters;
+
+        private static class Edge implements Comparable<Edge> {
+            String e;
+            double v;
+
+            public Edge(String e, double v) {
+                super();
+                this.e = e;
+                this.v = v;
+            }
+
+            @Override
+            public int compareTo (Edge o) {
+                int result = Double.compare(this.v, o.v);
+                if (result == 0) {
+                    result = this.e.compareTo(o.e);
+                }
+                return result;
+            }
+
+            @Override
+            public String toString () {
+                return String.format("%s %.3f", e, v);
+            }
+        }
+
+        private static class Node {
+            String n;
+            Set<String> nei;
+
+            public Node(String n) {
+                this.n = n;
+                this.nei = new HashSet<String>();
+            }
+
+        }
+
+        public void cluster (HashMap<String, Double> simTable,
+                List<String> wordList) {
+            clusters = new ArrayList<Set<String>>();
+
+            // Get initial singletons.
+            Set<String> single =
+                    SimClusterAlg.getSingleton(simTable, new HashSet<String>(),
+                            wordList);
+            if (debug) {
+                System.out.println("Initial singletons: " + single.toString());
+            }
+
+            if (debug) {
+                System.out.println("*****");
+                System.out.println("Cutting stage.");
+                System.out.printf(
+                        "maxInitClusterSize is %d, minInitClusterSize is %d%n",
+                        maxInitClusterSize, minInitClusterSize);
+            }
+            HashMap<String, Node> curGraph = getTheGraph(simTable);
+            // Sort all edges.
+            List<Edge> sortedEdges = new ArrayList<Edge>();
+            for (Entry<String, Double> entry : simTable.entrySet()) {
+                sortedEdges.add(new Edge(entry.getKey(), entry.getValue()));
+            }
+            Collections.sort(sortedEdges);
+
+            // For re-attaching, should in descending order.
+            LinkedList<Edge> visitedEdges = new LinkedList<Edge>();
+
+            // Loop through all edges lowest to highest,
+            for (Edge edge : sortedEdges) {
+                if (curGraph.isEmpty()) {
+                    break;
+                }
+                String[] ns = edge.e.split(WORD_SEPARATER);
+                String n1 = ns[0];
+                String n2 = ns[1];
+                // if the edge hasn't been removed.
+                if (curGraph.containsKey(n1)
+                        && curGraph.get(n1).nei.contains(n2)) {
+                    assert curGraph.containsKey(n2)
+                            && curGraph.get(n2).nei.contains(n1);
+                    // Cut one edge.
+                    curGraph.get(n1).nei.remove(n2);
+                    curGraph.get(n2).nei.remove(n1);
+                    visitedEdges.addFirst(edge); // Will be descending.
+                    if (debug) {
+                        System.out.println("Cut edge: " + edge.toString());
+                    }
+                    // Check isolated subgraph.
+                    List<Set<String>> subGraphs =
+                            getIsolatedSubgraphs(curGraph, n1, n2);
+                    // For all (at most 2) new small enough subgraph.
+                    for (Set<String> subG : subGraphs) {
+                        if (subG.size() <= maxInitClusterSize) {
+                            // Add subgraph into cluster list.
+                            clusters.add(subG);
+                            // Remove all edges of subgraph from the whole
+                            // graph.
+                            for (String nodeToRemove : subG) {
+                                removeNode(curGraph, nodeToRemove);
+                            }
+                            if (debug) {
+                                System.out.println("New cluster: "
+                                        + subG.toString());
+                            }
+                        }
+                    }
+                }
+            }
+            assert curGraph.isEmpty();
+            if (debug) {
+                System.out.println("*****");
+                System.out.println("Clustering result:");
+                for (int i = 0; i < clusters.size(); i++) {
+                    System.out.println("Cluster " + i + ":");
+                    System.out.println(clusters.get(i).toString());
+                }
+                System.out.println("Singleton: " + single.toString());
+            }
+
+            if (debug) {
+                System.out.println("*****");
+                System.out.println("Re-attaching stage.");
+                System.out.printf(
+                        "maxInitClusterSize is %d, minInitClusterSize is %d%n",
+                        maxInitClusterSize, minInitClusterSize);
+            }
+            // Selected node -> the sub graph it belongs to.
+            HashMap<String, Set<String>> selectedNodes =
+                    new HashMap<String, Set<String>>();
+            // Unselected node -> the sub graph it belongs to.
+            HashMap<String, Set<String>> frontierNodes =
+                    new HashMap<String, Set<String>>();
+            List<Set<String>> selectedClusters = new ArrayList<Set<String>>();
+
+            for (Set<String> subG : clusters) {
+                if (subG.size() >= minInitClusterSize) {
+                    selectedClusters.add(subG);
+                    for (String node : subG) {
+                        selectedNodes.put(node, subG);
+                    }
+                } else {
+                    for (String node : subG) {
+                        frontierNodes.put(node, subG);
+                    }
+                }
+            }
+            clusters = selectedClusters;
+            if (debug) {
+                System.out.println("*****");
+
+                System.out.println("Selected seed clusters:");
+                for (int i = 0; i < clusters.size(); i++) {
+                    System.out.println("Cluster " + i + ":");
+                    System.out.println(clusters.get(i).toString());
+                }
+            }
+
+            for (Edge edge : visitedEdges) {
+                if (frontierNodes.isEmpty()) {
+                    break;
+                }
+                if (debug) {
+                    System.out.println("Trying to attach edge: "
+                            + edge.toString());
+                }
+                String[] ns = edge.e.split(WORD_SEPARATER);
+                String n1 = ns[0];
+                String n2 = ns[1];
+                // One and only one set contains the node.
+                assert selectedNodes.containsKey(n1) != frontierNodes
+                        .containsKey(n1);
+                assert selectedNodes.containsKey(n2) != frontierNodes
+                        .containsKey(n2);
+                boolean isN1In = selectedNodes.containsKey(n1);
+                boolean isN2In = selectedNodes.containsKey(n2);
+                if (isN1In != isN2In) {
+                    // One node from selected, one from frontier.
+                    String nodeIn = (isN1In ? n1 : n2);
+                    String nodeOut = (isN1In ? n2 : n1);
+                    Set<String> subGIn = selectedNodes.get(nodeIn);
+                    Set<String> subGOut = frontierNodes.get(nodeOut);
+                    for (String nodeOfSubGOut : subGOut) {
+                        // Move the nodes of the sub graph at frontier into the
+                        // sub graph at selected.
+                        subGIn.add(nodeOfSubGOut);
+                        selectedNodes.put(nodeOfSubGOut, subGIn);
+                        frontierNodes.remove(nodeOfSubGOut);
+                    }
+                    if (debug) {
+                        System.out.printf(
+                                "Sub graph of node %s has joined by %s%n",
+                                nodeIn, subGOut.toString());
+                    }
+                }
+            }
+            assert frontierNodes.isEmpty();
+
+            if (debug) {
+                System.out.println("*****");
+                System.out.println("Clustering result:");
+                for (int i = 0; i < clusters.size(); i++) {
+                    System.out.println("Cluster " + i + ":");
+                    System.out.println(clusters.get(i).toString());
+                }
+                System.out.println("Singleton: " + single.toString());
+            }
+        }
+
+        private static HashMap<String, Node> getTheGraph (
+                HashMap<String, Double> simTable) {
+            HashMap<String, Node> graph = new HashMap<String, Node>();
+            for (Entry<String, Double> entry : simTable.entrySet()) {
+                String[] ns = entry.getKey().split(WORD_SEPARATER);
+                String n1 = ns[0];
+                String n2 = ns[1];
+                assert !n1.equals(n2);
+                Node node1 = graph.get(n1);
+                if (node1 == null) {
+                    node1 = new Node(n1);
+                    graph.put(n1, node1);
+                }
+                node1.nei.add(n2);
+                Node node2 = graph.get(n2);
+                if (node2 == null) {
+                    node2 = new Node(n2);
+                    graph.put(n2, node2);
+                }
+                node2.nei.add(n1);
+            }
+            return graph;
+        }
+
+        private static void removeNode (HashMap<String, Node> graph, String n) {
+            graph.remove(n);
+            for (Entry<String, Node> entry : graph.entrySet()) {
+                entry.getValue().nei.remove(n);
+            }
+        }
+
+        private static List<Set<String>> getIsolatedSubgraphs (
+                HashMap<String, Node> graph, String n1, String n2) {
+            List<Set<String>> subGs = new ArrayList<Set<String>>();
+
+            Set<String> subG1 = getMaximumConnectedGraph(graph, n1, n2);
+            if (subG1 != null) { // If == null return empty subGs.
+                Set<String> subG2 = getMaximumConnectedGraph(graph, n2, n1);
+                assert subG2 != null;
+                subGs.add(subG1);
+                subGs.add(subG2);
+            }
+            return subGs;
+        }
+
+        private static Set<String> getMaximumConnectedGraph (
+                HashMap<String, Node> graph, String initNode, String stopNode) {
+            Set<String> outQue = new HashSet<String>();
+            Set<String> inQue = new HashSet<String>();
+            LinkedList<String> que = new LinkedList<String>();
+            inQue.add(initNode);
+            que.add(initNode);
+
+            boolean breakByStopNode = false;
+            while (!que.isEmpty() && !breakByStopNode) {
+                String curN = que.removeFirst();
+                if (curN.equals(stopNode)) {
+                    breakByStopNode = true;
+                } else {
+                    inQue.remove(curN);
+                    outQue.add(curN);
+                    for (String nei : graph.get(curN).nei) {
+                        if (!outQue.contains(nei) && !inQue.contains(nei)) {
+                            // Haven't visited and haven't planed to visit.
+                            inQue.add(nei);
+                            que.add(nei);
+                        }
+                    }
+                }
+            }
+            if (breakByStopNode) {
+                return null;
+            } else {
+                return outQue;
+            }
+        }
     }
 
     private static class SimClusterAlg {
@@ -127,10 +419,11 @@ public class ClusterWord {
             if (debug) {
                 System.out.printf("About to cluster %d words with %d edges.%n",
                         totalWordCount, simTable.size());
-                System.out.printf("Lowest similarity = %.3f, "
-                        + "highest similarity = %.3f, maxClusterSize = %d, "
-                        + "maxNumOfSteps = %d, step size = %.3f.%n", low, high,
-                        maxClusterSize, maxNumOfSteps, step);
+                System.out
+                        .printf("Lowest similarity = %.3f, "
+                                + "highest similarity = %.3f, maxInitClusterSize = %d, "
+                                + "maxNumOfSteps = %d, step size = %.3f.%n",
+                                low, high, maxClusterSize, maxNumOfSteps, step);
             }
             for (int i = 0; i < maxNumOfSteps; i++, threshold += step) {
                 System.out.println("Threshold: " + threshold);
@@ -215,8 +508,9 @@ public class ClusterWord {
             return filteredSimTable;
         }
 
-        private Set<String> getSingleton (HashMap<String, Double> simTable,
-                Set<String> used, List<String> wordList) {
+        public static Set<String> getSingleton (
+                HashMap<String, Double> simTable, Set<String> used,
+                List<String> wordList) {
             Set<String> wordsOfTable = new HashSet<String>();
             for (Entry<String, Double> entry : simTable.entrySet()) {
                 String[] s = entry.getKey().split(WORD_SEPARATER);
@@ -534,7 +828,9 @@ public class ClusterWord {
                         sim = similarityOfJaccard(w1, w2);
                     }
                     assert !Double.isNaN(sim) && !Double.isInfinite(sim);
-                    similarityTableOfTwoWords.put(getTwoWordsKey(w1, w2), sim);
+                    if(sim != 0){ // Comment this later.
+                        similarityTableOfTwoWords.put(getTwoWordsKey(w1, w2), sim);
+                    }
                 }
             }
         }

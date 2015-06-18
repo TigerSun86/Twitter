@@ -153,10 +153,10 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
 
     private static void test () {
         ClusterWordFeatureFactory fac = new ClusterWordFeatureFactory();
-        fac.numOfWords = 100;
-        fac.para.mEstimate = true;
-        fac.withTweets = true;
-        fac.getNewFeatures(Database.getInstance().getAuthorTweets(16958346L,
+        fac.numOfWords = 1000;
+        fac.para.mEstimate = false;
+        fac.withTweets = false;
+        fac.getNewFeatures(Database.getInstance().getAuthorTweets(3459051L,
                 ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_START_DATE));
     }
 

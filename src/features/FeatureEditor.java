@@ -16,7 +16,7 @@ import features.FeatureExtractor.FeatureGetter;
  * @date Jun 2, 2015 5:21:56 PM
  */
 public class FeatureEditor {
-    private static final boolean REMOVE_CONFLICTED_FEATURE = true;
+    private static final boolean REMOVE_CONFLICTED_FEATURE = false;
 
     public interface FeatureFactory {
         List<FeatureGetter> getNewFeatures (List<Status> tweets);
