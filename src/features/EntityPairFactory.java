@@ -12,7 +12,6 @@ import features.EntityPair.EntityPairSetting;
 import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor.FEntityPair;
 import features.FeatureExtractor.FeatureGetter;
-import features.SimCalculator.Mode;
 import features.SimCalculator.Pair;
 
 /**
@@ -32,8 +31,6 @@ public class EntityPairFactory implements FeatureFactory {
     public List<FeatureGetter> getNewFeatures (List<Status> tweets) {
         EntityPair ep = new EntityPair();
         ep.para = this.para;
-        this.para.num = 10;
-        this.para.mode = Mode.DF;
         List<Pair> pairs = ep.getTopEntities(tweets);
         List<FeatureGetter> list = new ArrayList<FeatureGetter>();
         for (Pair p : pairs) {

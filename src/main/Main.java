@@ -104,12 +104,10 @@ public class Main {
     private static final List<FeatureEditor> ENTITY_PAIR_FEATURE_EDITORS;
     static {
         ENTITY_PAIR_FEATURE_EDITORS = new ArrayList<FeatureEditor>();
-        int[] nums = { 10, 20, 30 };
+        int[] nums = { -1 };
         boolean[] needs = { true, false };
         for (SimCalculator.Mode mode : SimCalculator.Mode.values()) {
-            if (mode == SimCalculator.Mode.AEMI
-                    || mode == SimCalculator.Mode.JACCARD
-                    || mode == SimCalculator.Mode.LIFT) {
+            if (mode != SimCalculator.Mode.AEMI) {
                 continue;
             }
             for (int num : nums) {
@@ -128,37 +126,6 @@ public class Main {
                 }
             }
         }
-
-        // Only similarity, to retweet
-        boolean[] webs = { true, false };
-        String[] webNames = { "WithWeb", "NoWeb" };
-        for (boolean web : webs) {
-            String webName = web ? webNames[0] : webNames[1];
-            for (SimCalculator.Mode mode : SimCalculator.Mode.values()) {
-                if (!(mode == SimCalculator.Mode.AEMI || mode == SimCalculator.Mode.JACCARD)) {
-                    continue;
-                }
-                for (int num : nums) {
-                    for (boolean need : needs) {
-                        List<FeatureFactory> featureList =
-                                new ArrayList<FeatureFactory>();
-                        EntityPairFactory fac = new EntityPairFactory();
-                        fac.para.mode = mode;
-                        fac.para.num = num;
-                        fac.para.needEntity = need;
-                        fac.para.noRt = true;
-                        fac.para.withWeb = web;
-                        featureList.add(fac);
-                        ENTITY_PAIR_FEATURE_EDITORS.add(new FeatureEditor(
-                                featureList, EntityPairFactory.PREFIX
-                                        + fac.para.mode + fac.para.num
-                                        + fac.para.needEntity + "NoRt"
-                                        + webName));
-                    }
-                }
-            }
-        }
-
     }
 
     private static final List<FeatureEditor> FEATURE_EDITORS;
