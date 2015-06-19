@@ -21,8 +21,8 @@ import weka.core.FastVector;
 import weka.core.Instance;
 import weka.core.Instances;
 import weka.core.neighboursearch.PerformanceStats;
-
-import com.google.common.math.DoubleMath;
+import features.SimCalculator.Mode;
+import features.SimCalculator.Pair;
 
 /**
  * FileName: ClusterWord.java
@@ -35,23 +35,18 @@ import com.google.common.math.DoubleMath;
 public class ClusterWord {
     public static final int MIN_DF = 0;
     public static final int NUM_OF_CL = 10;
-    public static final int MODE_LIFT = 0;
-    public static final int MODE_JACCARD = 1;
 
     public static class ClusterWordSetting {
         public int minDf = MIN_DF;
         public int numOfCl = NUM_OF_CL;
         public boolean needStem = FeatureExtractor.NEED_STEM;
-        public int mode = MODE_JACCARD;
+        public Mode mode = SimCalculator.Mode.JACCARD;
         public boolean mEstimate = true;
     }
 
     public ClusterWordSetting para = new ClusterWordSetting();
 
-    public static final String WORD_SEPARATER = ",";
-
     private boolean debug = true;
-    private int countOfInvalidPair = 0; // For debug.
 
     private List<String> wordList = null;
     private List<Set<String>> wordSetOfDocs = null;
@@ -73,7 +68,10 @@ public class ClusterWord {
 
         init();
 
-        HashMap<String, Double> similarityTable = getSimilarityTable();
+        SimCalculator simCal =
+                new SimCalculator(this.para.mode, this.para.mEstimate, true,
+                        wordList, wordSetOfDocs, word2DocIds, null);
+        HashMap<String, Double> similarityTable = simCal.getSimilarityTable();
         SingleCutAlg clAlg = new SingleCutAlg();
         clAlg.debug = this.debug;
         clAlg.cluster(similarityTable, wordList);
@@ -89,7 +87,7 @@ public class ClusterWord {
         // word2Cl.put(w, clAlg.clusters.size());
         // }
         // Important! don't forget tell upper level how many clusters have.
-        para.numOfCl = clAlg.clusters.size() + 1;
+        para.numOfCl = clAlg.clusters.size();
         if (debug) {
             System.out.println("Time used: " + (SysUtil.getCpuTime() - time));
         }
@@ -101,31 +99,6 @@ public class ClusterWord {
         int maxInitClusterSize = 20;
         int minInitClusterSize = 5;
         List<Set<String>> clusters;
-
-        private static class Edge implements Comparable<Edge> {
-            String e;
-            double v;
-
-            public Edge(String e, double v) {
-                super();
-                this.e = e;
-                this.v = v;
-            }
-
-            @Override
-            public int compareTo (Edge o) {
-                int result = Double.compare(this.v, o.v);
-                if (result == 0) {
-                    result = this.e.compareTo(o.e);
-                }
-                return result;
-            }
-
-            @Override
-            public String toString () {
-                return String.format("%s %.3f", e, v);
-            }
-        }
 
         private static class Node {
             String n;
@@ -159,21 +132,18 @@ public class ClusterWord {
             }
             HashMap<String, Node> curGraph = getTheGraph(simTable);
             // Sort all edges.
-            List<Edge> sortedEdges = new ArrayList<Edge>();
-            for (Entry<String, Double> entry : simTable.entrySet()) {
-                sortedEdges.add(new Edge(entry.getKey(), entry.getValue()));
-            }
-            Collections.sort(sortedEdges);
+            List<Pair> sortedEdges =
+                    SimCalculator.Pair.getAscendingPairs(simTable);
 
             // For re-attaching, should in descending order.
-            LinkedList<Edge> visitedEdges = new LinkedList<Edge>();
+            LinkedList<Pair> visitedEdges = new LinkedList<Pair>();
 
             // Loop through all edges lowest to highest,
-            for (Edge edge : sortedEdges) {
+            for (Pair pair : sortedEdges) {
                 if (curGraph.isEmpty()) {
                     break;
                 }
-                String[] ns = edge.e.split(WORD_SEPARATER);
+                String[] ns = pair.e.split(SimCalculator.WORD_SEPARATER);
                 String n1 = ns[0];
                 String n2 = ns[1];
                 // if the edge hasn't been removed.
@@ -184,9 +154,9 @@ public class ClusterWord {
                     // Cut one edge.
                     curGraph.get(n1).nei.remove(n2);
                     curGraph.get(n2).nei.remove(n1);
-                    visitedEdges.addFirst(edge); // Will be descending.
+                    visitedEdges.addFirst(pair); // Will be descending.
                     if (debug) {
-                        System.out.println("Cut edge: " + edge.toString());
+                        System.out.println("Cut edge: " + pair.toString());
                     }
                     // Check isolated subgraph.
                     List<Set<String>> subGraphs =
@@ -258,15 +228,15 @@ public class ClusterWord {
                 }
             }
 
-            for (Edge edge : visitedEdges) {
+            for (Pair pair : visitedEdges) {
                 if (frontierNodes.isEmpty()) {
                     break;
                 }
                 if (debug) {
                     System.out.println("Trying to attach edge: "
-                            + edge.toString());
+                            + pair.toString());
                 }
-                String[] ns = edge.e.split(WORD_SEPARATER);
+                String[] ns = pair.e.split(SimCalculator.WORD_SEPARATER);
                 String n1 = ns[0];
                 String n2 = ns[1];
                 // One and only one set contains the node.
@@ -313,7 +283,8 @@ public class ClusterWord {
                 HashMap<String, Double> simTable) {
             HashMap<String, Node> graph = new HashMap<String, Node>();
             for (Entry<String, Double> entry : simTable.entrySet()) {
-                String[] ns = entry.getKey().split(WORD_SEPARATER);
+                String[] ns =
+                        entry.getKey().split(SimCalculator.WORD_SEPARATER);
                 String n1 = ns[0];
                 String n2 = ns[1];
                 assert !n1.equals(n2);
@@ -498,7 +469,8 @@ public class ClusterWord {
                 if (sim >= thr) {
                     // Keep only when they have strong similarity higher than
                     // threshold.
-                    String[] s = entry.getKey().split(WORD_SEPARATER);
+                    String[] s =
+                            entry.getKey().split(SimCalculator.WORD_SEPARATER);
                     if (!used.contains(s[0])) {
                         assert !used.contains(s[1]);
                         filteredSimTable.put(entry.getKey(), entry.getValue());
@@ -513,7 +485,7 @@ public class ClusterWord {
                 List<String> wordList) {
             Set<String> wordsOfTable = new HashSet<String>();
             for (Entry<String, Double> entry : simTable.entrySet()) {
-                String[] s = entry.getKey().split(WORD_SEPARATER);
+                String[] s = entry.getKey().split(SimCalculator.WORD_SEPARATER);
                 wordsOfTable.add(s[0]);
                 wordsOfTable.add(s[1]);
             }
@@ -531,7 +503,8 @@ public class ClusterWord {
             Set<String> cl = new HashSet<String>();
             Iterator<Entry<String, Double>> iter =
                     simTable.entrySet().iterator();
-            String[] str = iter.next().getKey().split(WORD_SEPARATER);
+            String[] str =
+                    iter.next().getKey().split(SimCalculator.WORD_SEPARATER);
             cl.add(str[0]);
             cl.add(str[1]);
             iter.remove();
@@ -542,7 +515,7 @@ public class ClusterWord {
                 iter = simTable.entrySet().iterator();
                 while (iter.hasNext()) {
                     Entry<String, Double> entry = iter.next();
-                    str = entry.getKey().split(WORD_SEPARATER);
+                    str = entry.getKey().split(SimCalculator.WORD_SEPARATER);
                     if ((cl.contains(str[0]) || cl.contains(str[1]))) {
                         cl.add(str[0]);
                         cl.add(str[1]);
@@ -560,8 +533,10 @@ public class ClusterWord {
         long time = SysUtil.getCpuTime();
 
         init();
-
-        HashMap<String, Double> similarityTable = getSimilarityTable();
+        SimCalculator simCal =
+                new SimCalculator(this.para.mode, this.para.mEstimate, true,
+                        wordList, wordSetOfDocs, word2DocIds, null);
+        HashMap<String, Double> similarityTable = simCal.getSimilarityTable();
         HashMap<String, Double> distanceTable =
                 getDistanceTable(similarityTable);
 
@@ -655,146 +630,6 @@ public class ClusterWord {
         Collections.sort(wordList);
     }
 
-    /**
-     * Lift(a,b) = p(a,b)/(p(a)p(b)) = N*df(a,b)/(df(a)*df(b))
-     * In m-estimate Lift(a,b) = (N+1)* (df(a,b)+m)/((df(a)+m )*(df(b)+m))
-     */
-    private double similarityOfLift (String w1, String w2) {
-        BitSet seta = word2DocIds.get(w1);
-        BitSet setb = word2DocIds.get(w2);
-        BitSet intersection = (BitSet) seta.clone();
-        intersection.and(setb);
-        double dfab = intersection.cardinality();
-        double dfa = seta.cardinality();
-        double dfb = setb.cardinality();
-        double n = (double) wordSetOfDocs.size();
-        double lift;
-        if (this.para.mEstimate) {
-            double m = 1 / n;
-            lift = (n + 1) * (dfab + m) / ((dfa + m) * (dfb + m));
-        } else {
-            if (dfab == 0) {
-                lift = 0;
-            } else {
-                lift = n * dfab / (dfa * dfb);
-            }
-        }
-
-        if (dfab == 0) {
-            countOfInvalidPair++;
-        }
-        return lift;
-    }
-
-    /**
-     * Aemi(a,b) = p(a,b)*log(p(a,b)/(p(a)*p(b)))
-     * +p(na,nb)*log(p(na,nb)/(p(na)*p(nb)))
-     * -p(a,nb)*log(p(a,nb)/(p(a)*p(nb)))
-     * -p(na,b)*log(p(na,b)/(p(na)*p(b)))
-     * where
-     * p(a) = d(a)/N
-     * p(b) = d(b)/N
-     * p(na) = (N-d(a))/N
-     * p(nb) = (N-d(b))/N
-     * p(a,b) = d(a and b)/N
-     * p(na,nb) = (N-d(a or b))/N
-     * p(na,b) = (d(b) - d(a and b))/N
-     * p(a,nb) = (d(a) - d(a and b))/N
-     * m-estimate p(a) will be (d(a)+m)/(N+1)
-     */
-    private double similarityOfAemi (String w1, String w2) {
-        BitSet seta = word2DocIds.get(w1);
-        BitSet setb = word2DocIds.get(w2);
-        double da = seta.cardinality();
-        double db = setb.cardinality();
-        BitSet intersection = (BitSet) seta.clone();
-        intersection.and(setb);
-        double daandb = intersection.cardinality();
-        BitSet union = (BitSet) seta.clone();
-        union.or(setb);
-        double daorb = union.cardinality();
-
-        double N = wordSetOfDocs.size();
-        double m;
-        double deno;
-        if (this.para.mEstimate) {
-            m = 1 / N;
-            deno = N + 1;
-        } else {
-            m = 0;
-            deno = N;
-        }
-        /* p(a) = d(a)/N
-         * p(b) = d(b)/N
-         * p(na) = (N-d(a))/N
-         * p(nb) = (N-d(b))/N
-         * p(a,b) = d(a and b)/N
-         * p(na,nb) = (N-d(a or b))/N
-         * p(na,b) = (d(b) - d(a and b))/N
-         * p(a,nb) = (d(a) - d(a and b))/N */
-        double pa = (da + m) / deno;
-        double pb = (db + m) / deno;
-        double pna = (N - da + m) / deno;
-        double pnb = (N - db + m) / deno;
-        double pab = (daandb + m) / deno;
-        double pnanb = (N - daorb + m) / deno;
-        double pnab = (db - daandb + m) / deno;
-        double panb = (da - daandb + m) / deno;
-
-        /* Aemi(a,b) = p(a,b)*log(p(a,b)/(p(a)*p(b)))
-         * +p(na,nb)*log(p(na,nb)/(p(na)*p(nb)))
-         * -p(a,nb)*log(p(a,nb)/(p(a)*p(nb)))
-         * -p(na,b)*log(p(na,b)/(p(na)*p(b))) */
-        double part1 =
-                (pab == 0) ? 0 : (pab * DoubleMath.log2(pab / (pa * pb)));
-        double part2 =
-                (pnanb == 0) ? 0 : (pnanb * DoubleMath
-                        .log2(pnanb / (pna * pnb)));
-        double part3 =
-                (panb == 0) ? 0 : (panb * DoubleMath.log2(panb / (pa * pnb)));
-        double part4 =
-                (pnab == 0) ? 0 : (pnab * DoubleMath.log2(pnab / (pna * pb)));
-        double aemi = part1 + part2 - part3 - part4;
-        if (daandb == 0) {
-            countOfInvalidPair++;
-        }
-        return aemi;
-    }
-
-    /**
-     * Jaccard(a,b) = df(a and b)/ df(a or b)
-     * In m-estimate Jaccard(a,b) = (df(a and b) + m)/ (df(a or b)+1)
-     */
-    private double similarityOfJaccard (String w1, String w2) {
-        BitSet seta = word2DocIds.get(w1);
-        BitSet setb = word2DocIds.get(w2);
-        BitSet intersection = (BitSet) seta.clone();
-        intersection.and(setb);
-        double dfaandb = intersection.cardinality();
-        BitSet union = (BitSet) seta.clone();
-        union.or(setb);
-        double dfaorb = union.cardinality();
-
-        double jaccard;
-
-        if (this.para.mEstimate) {
-            double n = (double) wordSetOfDocs.size();
-            double m = 1 / n;
-            jaccard = (dfaandb + m) / (dfaorb + 1);
-        } else {
-            if (dfaandb == 0) {
-                jaccard = 0;
-            } else {
-                jaccard = dfaandb / dfaorb;
-            }
-        }
-
-        if (dfaandb == 0) {
-            countOfInvalidPair++;
-        }
-        return jaccard;
-    }
-
     private HashMap<String, Double> getDistanceTable (
             HashMap<String, Double> similarityTableOfTwoWords) {
         HashMap<String, Double> distanceTableOfTwoWords =
@@ -809,52 +644,6 @@ public class ClusterWord {
         return distanceTableOfTwoWords;
     }
 
-    private HashMap<String, Double> getSimilarityTable () {
-        HashMap<String, Double> similarityTableOfTwoWords =
-                new HashMap<String, Double>();
-        countOfInvalidPair = 0;// For debug.
-        for (int i = 0; i < wordList.size(); i++) {
-            String w1 = wordList.get(i);
-            for (int j = i; j < wordList.size(); j++) {
-                String w2 = wordList.get(j);
-                if (w1.equals(w2)) {
-                    // The distance of a word itself should be 0.
-                    // distanceTableOfTwoWords.put(getTwoWordsKey(w1, w2), 0.0);
-                } else {
-                    double sim;
-                    if (this.para.mode == MODE_LIFT) {
-                        sim = similarityOfAemi(w1, w2);
-                    } else {
-                        sim = similarityOfJaccard(w1, w2);
-                    }
-                    assert !Double.isNaN(sim) && !Double.isInfinite(sim);
-                    if(sim != 0){ // Comment this later.
-                        similarityTableOfTwoWords.put(getTwoWordsKey(w1, w2), sim);
-                    }
-                }
-            }
-        }
-        if (debug) {
-            // Debug info.
-            int to = wordList.size();
-            int total = (to * to - to) / 2;
-            System.out.printf("%d word-pairs are invalid, among total of %d, "
-                    + "the sparsity of upper-triangle is %.2f%%%n",
-                    countOfInvalidPair, total,
-                    ((double) countOfInvalidPair * 100.0) / total);
-        }
-
-        return similarityTableOfTwoWords;
-    }
-
-    private static String getTwoWordsKey (String w1, String w2) {
-        if (w1.compareTo(w2) <= 0) {
-            return w1 + WORD_SEPARATER + w2;
-        } else {
-            return w2 + WORD_SEPARATER + w1;
-        }
-    }
-
     private static class MyWordDistance extends EditDistance {
         private static final long serialVersionUID = 1L;
         private final HashMap<String, Double> distanceTableOfTwoWords;
@@ -867,7 +656,7 @@ public class ClusterWord {
             if (w1.equals(w2)) {
                 return 0.0;
             }
-            String key = getTwoWordsKey(w1, w2);
+            String key = SimCalculator.getTwoWordsKey(w1, w2);
             if (distanceTableOfTwoWords.containsKey(key)) {
                 return distanceTableOfTwoWords.get(key);
             } else { // No such word pair, distance is infinite.

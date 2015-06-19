@@ -18,7 +18,7 @@ public class Dbg {
     private static final String DBG_STR_DEFAULT = "default";
 
     // Don'tList print debug info if didn'tList assign -Dverbose.
-    public static boolean dbgSwitch = false; // Default don'tList debug anything.
+    public static boolean dbg = true; // Default don'tList debug anything.
     private static boolean allSwitch = false; // Debug all modules.
     // Debug modules specified by module it self.
     public static boolean defaultSwitch = false;
@@ -27,7 +27,7 @@ public class Dbg {
     static {
         final String str = System.getProperty(DBG_STR_SWITCH);
         if (str != null) {
-            dbgSwitch = true;
+            dbg = true;
             final String[] modules = str.split(",");
             for (String module : modules) {
                 if (module.equals(DBG_STR_ALL)) {
@@ -44,7 +44,7 @@ public class Dbg {
 
     public static void print (final boolean dbg, final String module,
             final String dbgInfo) {
-        if (!dbgSwitch) {
+        if (!dbg) {
             return;
         }
         boolean needDbg = false;

@@ -8,6 +8,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import main.ExampleGetter;
@@ -25,8 +26,10 @@ import weka.core.Instance;
 import weka.core.Instances;
 import weka.filters.Filter;
 import weka.filters.unsupervised.attribute.StringToWordVector;
+
 import common.RawAttr;
 import common.RawAttrList;
+
 import datacollection.Database;
 import features.AnewMap.Anew;
 import features.ClusterWord.ClusterWordSetting;
@@ -45,7 +48,7 @@ import features.WordFeature.WordMethods;
  */
 public class FeatureExtractor {
     public static final boolean NEED_STEM = false;
-    
+
     private static final String F0 = "0";
     private static final String F1 = "1";
     private static final int MOUNT_IN_HOUR = 30 * 24;
@@ -1530,6 +1533,48 @@ public class FeatureExtractor {
         @Override
         public RawAttr getAttr () {
             return getDiscreteAttr("30Mention");
+        }
+    }
+
+    /**
+     * FEntityPair.
+     */
+    public static class FEntityPair extends FeatureGetter {
+        private static final HashMap<Long, Set<String>> tidToEntities =
+                new HashMap<Long, Set<String>>();
+
+        String en1;
+        String en2;
+
+        public FEntityPair(String en1, String en2) {
+            this.en1 = en1;
+            this.en2 = en2;
+        }
+
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            Set<String> entities = tidToEntities.get(t.getId());
+            if (entities == null) {
+                // Always split with entities. It won't hurt result, but benefit
+                // cache.
+                entities = EntityPair.getEntitiesFromTweet(t, true);
+                tidToEntities.put(t.getId(), entities);
+            }
+
+            final String feature;
+            if (entities.contains(en1) && entities.contains(en2)) {
+                feature = F1;
+            } else {
+                feature = F0;
+            }
+            return feature;
+        }
+
+        @Override
+        public RawAttr getAttr () {
+            return getDiscreteAttr(EntityPairFactory.PREFIX + en1
+                    + SimCalculator.WORD_SEPARATER + en2);
         }
     }
 }
