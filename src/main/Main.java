@@ -16,13 +16,13 @@ import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
 import weka.classifiers.functions.LibSVM;
 import weka.core.Instances;
-
 import common.WLearner;
-
 import datacollection.Database;
 import datacollection.UserInfo;
 import features.BaseFeatureFactory;
+import features.EntityPairFactory;
 import features.FeatureEditor;
+import features.SimCalculator;
 import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor;
 import features.WordFeature;
@@ -68,11 +68,13 @@ public class Main {
     static {
         TOP_SERIES_FEATURE_EDITORS = new ArrayList<FeatureEditor>();
         List<FeatureFactory> featureList;
-        int[] nums = { 10, 20, 30 };
+        int[] nums = { 100 };
         for (int numOfWords : nums) {
             for (WordFeature.Type type : WordFeature.Type.values()) {
                 for (WordFeature.Mode mode : WordFeature.Mode.values()) {
-                    if (mode.equals(WordFeature.Mode.NO)) {
+                    if (!(mode.equals(WordFeature.Mode.SUM)
+                            || mode.equals(WordFeature.Mode.AVG) || mode
+                                .equals(WordFeature.Mode.IDF))) {
                         continue;
                     }
                     featureList = new ArrayList<FeatureFactory>();
@@ -83,7 +85,9 @@ public class Main {
                 }
             }
             for (WordFeature.Mode mode : WordFeature.Mode.values()) {
-                if (mode.equals(WordFeature.Mode.NO)) {
+                if (!(mode.equals(WordFeature.Mode.SUM)
+                        || mode.equals(WordFeature.Mode.AVG) || mode
+                            .equals(WordFeature.Mode.IDF))) {
                     continue;
                 }
                 featureList = new ArrayList<FeatureFactory>();
@@ -97,14 +101,74 @@ public class Main {
         }
     }
 
+    private static final List<FeatureEditor> ENTITY_PAIR_FEATURE_EDITORS;
+    static {
+        ENTITY_PAIR_FEATURE_EDITORS = new ArrayList<FeatureEditor>();
+        int[] nums = { 10, 20, 30 };
+        boolean[] needs = { true, false };
+        for (SimCalculator.Mode mode : SimCalculator.Mode.values()) {
+            if (mode == SimCalculator.Mode.AEMI
+                    || mode == SimCalculator.Mode.JACCARD
+                    || mode == SimCalculator.Mode.LIFT) {
+                continue;
+            }
+            for (int num : nums) {
+                for (boolean need : needs) {
+                    List<FeatureFactory> featureList =
+                            new ArrayList<FeatureFactory>();
+                    EntityPairFactory fac = new EntityPairFactory();
+                    fac.para.mode = mode;
+                    fac.para.num = num;
+                    fac.para.needEntity = need;
+                    featureList.add(fac);
+                    ENTITY_PAIR_FEATURE_EDITORS.add(new FeatureEditor(
+                            featureList, EntityPairFactory.PREFIX
+                                    + fac.para.mode + fac.para.num
+                                    + fac.para.needEntity));
+                }
+            }
+        }
+
+        // Only similarity, to retweet
+        boolean[] webs = { true, false };
+        String[] webNames = { "WithWeb", "NoWeb" };
+        for (boolean web : webs) {
+            String webName = web ? webNames[0] : webNames[1];
+            for (SimCalculator.Mode mode : SimCalculator.Mode.values()) {
+                if (!(mode == SimCalculator.Mode.AEMI || mode == SimCalculator.Mode.JACCARD)) {
+                    continue;
+                }
+                for (int num : nums) {
+                    for (boolean need : needs) {
+                        List<FeatureFactory> featureList =
+                                new ArrayList<FeatureFactory>();
+                        EntityPairFactory fac = new EntityPairFactory();
+                        fac.para.mode = mode;
+                        fac.para.num = num;
+                        fac.para.needEntity = need;
+                        fac.para.noRt = true;
+                        fac.para.withWeb = web;
+                        featureList.add(fac);
+                        ENTITY_PAIR_FEATURE_EDITORS.add(new FeatureEditor(
+                                featureList, EntityPairFactory.PREFIX
+                                        + fac.para.mode + fac.para.num
+                                        + fac.para.needEntity + "NoRt"
+                                        + webName));
+                    }
+                }
+            }
+        }
+
+    }
+
     private static final List<FeatureEditor> FEATURE_EDITORS;
     static {
         FEATURE_EDITORS = new ArrayList<FeatureEditor>();
         List<FeatureFactory> featureList;
         featureList = new ArrayList<FeatureFactory>();
         featureList.add(new BaseFeatureFactory());
-        FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
-        FEATURE_EDITORS.addAll(TOP_SERIES_FEATURE_EDITORS);
+        // FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
+        FEATURE_EDITORS.addAll(ENTITY_PAIR_FEATURE_EDITORS);
     }
 
     private void testClusterFeature () throws Exception {

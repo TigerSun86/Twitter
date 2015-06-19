@@ -80,6 +80,23 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
         return result;
     }
 
+    public static List<Set<String>> getWebPages (List<Status> tweets,
+            boolean needStem) {
+        DomainGetter domainGetter = DomainGetter.getInstance();
+        List<Set<String>> webPages = new ArrayList<Set<String>>();
+        for (Status t : tweets) {
+            for (URLEntity url : t.getURLEntities()) {
+                Set<String> p =
+                        domainGetter.getWordsOfWebPage(url.getText(), needStem,
+                                DomainGetter.DOMAIN_STOP_WORDS_THRESHOLD);
+                if (!p.isEmpty()) {
+                    webPages.add(p);
+                }
+            }
+        }
+        return webPages;
+    }
+
     private List<Set<String>> getWebPagesForAllAuthors () {
         List<Set<String>> webPages;
         if (withTweets && allAuthorWTPageCache != null) {
@@ -106,19 +123,7 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
     }
 
     private List<Set<String>> getPages (List<Status> tweets) {
-        DomainGetter domainGetter = DomainGetter.getInstance();
-        List<Set<String>> webPages = new ArrayList<Set<String>>();
-        for (Status t : tweets) {
-            for (URLEntity url : t.getURLEntities()) {
-                Set<String> p =
-                        domainGetter.getWordsOfWebPage(url.getText(),
-                                para.needStem,
-                                DomainGetter.DOMAIN_STOP_WORDS_THRESHOLD);
-                if (!p.isEmpty()) {
-                    webPages.add(p);
-                }
-            }
-        }
+        List<Set<String>> webPages = getWebPages(tweets, this.para.needStem);
         if (withTweets) {
             webPages.addAll(ClusterWordFeatureFactory.getTweetPages(tweets,
                     para.needStem));

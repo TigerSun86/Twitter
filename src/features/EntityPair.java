@@ -13,6 +13,7 @@ import twitter4j.Status;
 import twitter4j.URLEntity;
 import twitter4j.UserMentionEntity;
 import util.Dbg;
+import features.SimCalculator.Mode;
 import features.SimCalculator.Pair;
 
 /**
@@ -24,12 +25,15 @@ import features.SimCalculator.Pair;
  * @date Jun 18, 2015 7:37:31 PM
  */
 public class EntityPair {
+    private static final double AEMI_THRES = 0;
 
     public static class EntityPairSetting {
-        public SimCalculator.Mode mode = SimCalculator.Mode.JACCARD;
+        public SimCalculator.Mode mode = SimCalculator.Mode.AEMI;
         public boolean mEstimate = true;
         public boolean needEntity = true;
         public int num = 10;
+        public boolean noRt = false; // Handled in initialization.
+        public boolean withWeb = false;
     }
 
     public EntityPairSetting para = new EntityPairSetting();
@@ -41,15 +45,29 @@ public class EntityPair {
 
     public List<Pair> getTopEntities (List<Status> tweets) {
         init(tweets);
+        if (para.withWeb) {
+            initWebPages(tweets);
+        }
         SimCalculator simCal =
                 new SimCalculator(para.mode, para.mEstimate, true, wordList,
                         wordSetOfDocs, word2DocIds, numOfRtOfDocs);
         HashMap<String, Double> simTable = simCal.getSimilarityTable();
         List<Pair> pairs = Pair.getDescendingPairs(simTable);
         List<Pair> topPairs = new ArrayList<Pair>();
-        for (int i = 0; i < Math.min(para.num, pairs.size()); i++) {
-            topPairs.add(pairs.get(i));
+        if (para.num > 0) {
+            for (int i = 0; i < Math.min(para.num, pairs.size()); i++) {
+                topPairs.add(pairs.get(i));
+            }
+        } else {
+            assert para.mode == Mode.AEMI;
+            for (Pair p : pairs) {
+                if (p.v <= AEMI_THRES) {
+                    break;
+                }
+                topPairs.add(p);
+            }
         }
+
         if (Dbg.dbg) {
             int maxDf = 0;
             String maxPair = "";
@@ -66,24 +84,41 @@ public class EntityPair {
                     }
                 }
             }
+            System.out.println("**** EntityPair ****");
             System.out.printf("Author: %s, number of tweets: %d, "
                     + "number of top pairs: %d, mode: %s, needEntity: %b, "
-                    + "most frequent pair: %s, frequence: %s%n", tweets.get(0)
-                    .getUser().getScreenName(), tweets.size(), topPairs.size(),
-                    para.mode.toString(), para.needEntity, maxPair, maxDf);
+                    + "most frequent pair: %s, frequency: %s, "
+                    + "WithRt: %b, WithWeb, %b%n", tweets.get(0).getUser()
+                    .getScreenName(), tweets.size(), topPairs.size(),
+                    para.mode.toString(), para.needEntity, maxPair, maxDf,
+                    !para.noRt, para.withWeb);
             System.out.println("Top pairs:");
             for (Pair p : topPairs) {
                 String[] ens = p.e.split(SimCalculator.WORD_SEPARATER);
                 String w1 = ens[0];
                 String w2 = ens[1];
-                System.out.printf("%s, Df: %d, NumOfRt: %d, %s_Df: %d, "
-                        + "%s_NumOfRt: %d, %s_Df: %d, %s_NumOfRt: %d%n",
-                        p.toString(), simCal.getDfaAndb(w1, w2, true),
-                        simCal.getDfaAndb(w1, w2, false), w1,
-                        simCal.getDfw(w1, true), w1, simCal.getDfw(w1, false),
-                        w2, simCal.getDfw(w2, true), w2,
-                        simCal.getDfw(w2, false));
+                System.out.printf("%s, Df: %d, %s_Df: %d, %s_Df: %d",
+                        p.toString(), simCal.getDfaAndb(w1, w2, true), w1,
+                        simCal.getDfw(w1, true), w2, simCal.getDfw(w2, true));
+                if (!para.noRt) {
+                    System.out
+                            .printf(", PairNumOfRt: %d, %s_NumOfRt: %d, %s_NumOfRt: %d",
+                                    simCal.getDfaAndb(w1, w2, false), w1,
+                                    simCal.getDfw(w1, false), w2,
+                                    simCal.getDfw(w2, false));
+                }
+
+                System.out.println();
             }
+            // for (Pair p : topPairs) {
+            // String[] ens = p.e.split(SimCalculator.WORD_SEPARATER);
+            // String w1 = ens[0];
+            // String w2 = ens[1];
+            // System.out.printf("%s, Df: %d, AEMI: %.3f%n", p.toString(),
+            // simCal.getDfaAndb(w1, w2, true),
+            // simCal.similarityOfAemi(w1, w2));
+            // assert !para.noRt;
+            // }
         }
         return topPairs;
     }
@@ -113,14 +148,14 @@ public class EntityPair {
 
     private void init (List<Status> tweets) {
         wordSetOfDocs = new ArrayList<Set<String>>();
-        numOfRtOfDocs = new ArrayList<Integer>();
+        if (!para.noRt) numOfRtOfDocs = new ArrayList<Integer>();
         Set<String> wordSet = new HashSet<String>();
         for (Status t : tweets) {
             Set<String> entities =
                     getEntitiesFromTweet(t, this.para.needEntity);
             wordSetOfDocs.add(entities);
             wordSet.addAll(entities);
-            numOfRtOfDocs.add(t.getRetweetCount());
+            if (!para.noRt) numOfRtOfDocs.add(t.getRetweetCount());
         }
         wordList = new ArrayList<String>(wordSet);
         Collections.sort(wordList);
@@ -136,6 +171,23 @@ public class EntityPair {
                 word2DocIds.get(word).set(id);
             }
         }
+    }
 
+    private void initWebPages (List<Status> tweets) {
+        List<Set<String>> pages =
+                ClusterWordFeatureFactory.getWebPages(tweets,
+                        FeatureExtractor.NEED_STEM);
+        int firstWebIdx = wordSetOfDocs.size();
+        for (Set<String> p : pages) {
+            wordSetOfDocs.add(p);
+        }
+        for (int id = firstWebIdx; id < wordSetOfDocs.size(); id++) {
+            Set<String> doc = wordSetOfDocs.get(id);
+            for (String word : doc) {
+                if (word2DocIds.containsKey(word)) {
+                    word2DocIds.get(word).set(id);
+                }
+            }
+        }
     }
 }
