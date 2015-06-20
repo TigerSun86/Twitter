@@ -13,6 +13,10 @@ import twitter4j.Status;
 import twitter4j.URLEntity;
 import twitter4j.UserMentionEntity;
 import util.Dbg;
+import util.MyMath;
+
+import com.google.common.primitives.Doubles;
+
 import features.SimCalculator.Mode;
 import features.SimCalculator.Pair;
 
@@ -25,14 +29,13 @@ import features.SimCalculator.Pair;
  * @date Jun 18, 2015 7:37:31 PM
  */
 public class EntityPair {
-    private static final double AEMI_THRES = 0;
-
     public static class EntityPairSetting {
         public SimCalculator.Mode mode = SimCalculator.Mode.AEMI;
-        public boolean mEstimate = true;
+        public boolean mEstimate = false;
         public boolean needEntity = true;
+        public boolean needPrescreen = true;
+        public boolean withRt = true; // Handled in initialization.
         public int num = 10;
-        public boolean noRt = false; // Handled in initialization.
         public boolean withWeb = false;
     }
 
@@ -49,7 +52,8 @@ public class EntityPair {
             initWebPages(tweets);
         }
         SimCalculator simCal =
-                new SimCalculator(para.mode, para.mEstimate, true, wordList,
+                new SimCalculator(para.mode, para.mEstimate,
+                        para.needPrescreen, para.withRt, wordList,
                         wordSetOfDocs, word2DocIds, numOfRtOfDocs);
         HashMap<String, Double> simTable = simCal.getSimilarityTable();
         List<Pair> pairs = Pair.getDescendingPairs(simTable);
@@ -60,8 +64,22 @@ public class EntityPair {
             }
         } else {
             assert para.mode == Mode.AEMI;
+            List<Double> values = new ArrayList<Double>();
             for (Pair p : pairs) {
-                if (p.v <= AEMI_THRES) {
+                if (p.v <= 0) {
+                    break;
+                }
+                values.add(p.v);
+            }
+            double mean = MyMath.getMean(Doubles.toArray(values));
+            double dev = MyMath.getStdDev(Doubles.toArray(values));
+            double aemiThres = 3 * (mean + dev);
+            if (Dbg.dbg) {
+                System.out.printf("AEMI threshold: %.4f, mean: %.4f, "
+                        + "std dev: %.4f%n", aemiThres, mean, dev);
+            }
+            for (Pair p : pairs) {
+                if (p.v <= aemiThres) {
                     break;
                 }
                 topPairs.add(p);
@@ -76,7 +94,7 @@ public class EntityPair {
                 for (int j = i; j < wordList.size(); j++) {
                     String w2 = wordList.get(j);
                     if (!w1.equals(w2)) {
-                        int df = simCal.getDfaAndb(w1, w2, true);
+                        int df = simCal.getDfaAndb(w1, w2, false);
                         if (maxDf < df) {
                             maxDf = df;
                             maxPair = w1 + SimCalculator.WORD_SEPARATER + w2;
@@ -88,26 +106,30 @@ public class EntityPair {
             System.out.printf("Author: %s, number of tweets: %d, "
                     + "number of top pairs: %d, mode: %s, needEntity: %b, "
                     + "most frequent pair: %s, frequency: %s, "
-                    + "WithRt: %b, WithWeb, %b%n", tweets.get(0).getUser()
-                    .getScreenName(), tweets.size(), topPairs.size(),
-                    para.mode.toString(), para.needEntity, maxPair, maxDf,
-                    !para.noRt, para.withWeb);
+                    + "NeedPrescreen: %b, WithRt: %b, WithWeb, %b%n", tweets
+                    .get(0).getUser().getScreenName(), tweets.size(),
+                    topPairs.size(), para.mode.toString(), para.needEntity,
+                    maxPair, maxDf, para.needPrescreen, para.withRt,
+                    para.withWeb);
             System.out.println("Top pairs:");
             for (Pair p : topPairs) {
                 String[] ens = p.e.split(SimCalculator.WORD_SEPARATER);
                 String w1 = ens[0];
                 String w2 = ens[1];
                 System.out.printf("%s, Df: %d, %s_Df: %d, %s_Df: %d",
-                        p.toString(), simCal.getDfaAndb(w1, w2, true), w1,
-                        simCal.getDfw(w1, true), w2, simCal.getDfw(w2, true));
-                if (!para.noRt) {
+                        p.toString(), simCal.getDfaAndb(w1, w2, false), w1,
+                        simCal.getDfw(w1, false), w2, simCal.getDfw(w2, false));
+                if (para.withRt) {
                     System.out
                             .printf(", PairNumOfRt: %d, %s_NumOfRt: %d, %s_NumOfRt: %d",
-                                    simCal.getDfaAndb(w1, w2, false), w1,
-                                    simCal.getDfw(w1, false), w2,
-                                    simCal.getDfw(w2, false));
+                                    simCal.getDfaAndb(w1, w2, true), w1,
+                                    simCal.getDfw(w1, true), w2,
+                                    simCal.getDfw(w2, true));
                 }
-
+                if (para.needPrescreen) {
+                    System.out
+                            .printf(", AEMI: %.3f", simCal.pair2Aemi.get(p.e));
+                }
                 System.out.println();
             }
             // for (Pair p : topPairs) {
@@ -148,14 +170,14 @@ public class EntityPair {
 
     private void init (List<Status> tweets) {
         wordSetOfDocs = new ArrayList<Set<String>>();
-        if (!para.noRt) numOfRtOfDocs = new ArrayList<Integer>();
+        if (para.withRt) numOfRtOfDocs = new ArrayList<Integer>();
         Set<String> wordSet = new HashSet<String>();
         for (Status t : tweets) {
             Set<String> entities =
                     getEntitiesFromTweet(t, this.para.needEntity);
             wordSetOfDocs.add(entities);
             wordSet.addAll(entities);
-            if (!para.noRt) numOfRtOfDocs.add(t.getRetweetCount());
+            if (para.withRt) numOfRtOfDocs.add(t.getRetweetCount());
         }
         wordList = new ArrayList<String>(wordSet);
         Collections.sort(wordList);

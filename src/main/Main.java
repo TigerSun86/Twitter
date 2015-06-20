@@ -57,12 +57,15 @@ public class Main {
 
     }
 
-    private static final WLearner[] W_LEARNERS = { new WLr(),
-            new WAnn(-1, 0.1, 0.1),
+    private static final WLearner[] W_LEARNERS = { // new WLr(),
+            // new WAnn(-1, 0.1, 0.1),
             new WLibSvm(LibSVM.SVMTYPE_EPSILON_SVR, LibSVM.KERNELTYPE_RBF),
-            new WLibSvm(LibSVM.SVMTYPE_NU_SVR, LibSVM.KERNELTYPE_RBF) };
-    private static final String[] W_L_NAMES = { "LR", "AnnA1", "EpSvrRbf",
-            "NuSvrRbf", };
+            // new WLibSvm(LibSVM.SVMTYPE_NU_SVR, LibSVM.KERNELTYPE_RBF)
+            };
+    private static final String[] W_L_NAMES = {// "LR", "AnnA1",
+            "EpSvrRbf",
+            // "NuSvrRbf",
+            };
 
     private static final List<FeatureEditor> TOP_SERIES_FEATURE_EDITORS;
     static {
@@ -104,10 +107,12 @@ public class Main {
     private static final List<FeatureEditor> ENTITY_PAIR_FEATURE_EDITORS;
     static {
         ENTITY_PAIR_FEATURE_EDITORS = new ArrayList<FeatureEditor>();
-        int[] nums = { -1 };
-        boolean[] needs = { true, false };
+        int[] nums = { 10, 20, 30 };
+        boolean[] needs = { true };
         for (SimCalculator.Mode mode : SimCalculator.Mode.values()) {
-            if (mode != SimCalculator.Mode.AEMI) {
+            if (mode == SimCalculator.Mode.AEMI
+                    || mode == SimCalculator.Mode.JACCARD
+                    || mode == SimCalculator.Mode.LIFT) {
                 continue;
             }
             for (int num : nums) {
@@ -118,11 +123,12 @@ public class Main {
                     fac.para.mode = mode;
                     fac.para.num = num;
                     fac.para.needEntity = need;
+                    fac.para.withWeb = false;
                     featureList.add(fac);
                     ENTITY_PAIR_FEATURE_EDITORS.add(new FeatureEditor(
                             featureList, EntityPairFactory.PREFIX
                                     + fac.para.mode + fac.para.num
-                                    + fac.para.needEntity));
+                                    + fac.para.needEntity+"Prescreen"));
                 }
             }
         }

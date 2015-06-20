@@ -237,6 +237,14 @@ public class MyMath {
         return new Statistics(data).getStdDev();
     }
 
+    public static double getMean (double[] data) {
+        return new Statistics(data).getMean();
+    }
+    
+    public static double getVariance (double[] data) {
+        return new Statistics(data).getVariance();
+    }
+    
     private static class Statistics {
         double[] data;
         double size;

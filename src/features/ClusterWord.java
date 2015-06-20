@@ -70,7 +70,7 @@ public class ClusterWord {
 
         SimCalculator simCal =
                 new SimCalculator(this.para.mode, this.para.mEstimate, true,
-                        wordList, wordSetOfDocs, word2DocIds, null);
+                        false, wordList, wordSetOfDocs, word2DocIds, null);
         HashMap<String, Double> similarityTable = simCal.getSimilarityTable();
         SingleCutAlg clAlg = new SingleCutAlg();
         clAlg.debug = this.debug;
@@ -535,7 +535,7 @@ public class ClusterWord {
         init();
         SimCalculator simCal =
                 new SimCalculator(this.para.mode, this.para.mEstimate, true,
-                        wordList, wordSetOfDocs, word2DocIds, null);
+                        false, wordList, wordSetOfDocs, word2DocIds, null);
         HashMap<String, Double> similarityTable = simCal.getSimilarityTable();
         HashMap<String, Double> distanceTable =
                 getDistanceTable(similarityTable);

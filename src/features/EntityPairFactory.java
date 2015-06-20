@@ -12,6 +12,7 @@ import features.EntityPair.EntityPairSetting;
 import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor.FEntityPair;
 import features.FeatureExtractor.FeatureGetter;
+import features.SimCalculator.Mode;
 import features.SimCalculator.Pair;
 
 /**
@@ -48,6 +49,10 @@ public class EntityPairFactory implements FeatureFactory {
 
     private static void test () {
         EntityPairFactory fac = new EntityPairFactory();
+        fac.para.mode = Mode.AEMI;
+        fac.para.num = 10;
+        fac.para.withRt = false;
+        fac.para.needPrescreen = false;
         fac.getNewFeatures(Database.getInstance().getAuthorTweets(15461733L,
                 ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_START_DATE));
     }
