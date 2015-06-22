@@ -15,6 +15,7 @@ import twitter4j.Status;
 import twitter4j.URLEntity;
 import twitter4j.UserMentionEntity;
 import util.MyMath;
+import util.MyStopwords;
 import weka.core.Stopwords;
 import weka.core.stemmers.IteratedLovinsStemmer;
 import weka.core.stemmers.Stemmer;
@@ -402,7 +403,9 @@ public class WordFeature {
         while (TOKENIZER.hasMoreElements()) {
             String word = ((String) TOKENIZER.nextElement()).intern();
             word = word.toLowerCase();
-            if (discardStopWords && Stopwords.isStopword(word)) {
+            if (discardStopWords
+                    && (Stopwords.isStopword(word) || MyStopwords
+                            .isStopword(word))) {
                 continue;// Check stop word before stemmed.
             }
             if (needStemming) {

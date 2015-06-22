@@ -22,6 +22,7 @@ import java.util.Map.Entry;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 
+import util.MyStopwords;
 import weka.core.Stopwords;
 import weka.core.stemmers.IteratedLovinsStemmer;
 import weka.core.stemmers.Stemmer;
@@ -621,7 +622,7 @@ public class DomainGetter {
         while (TOKENIZER.hasMoreElements()) {
             String word = ((String) TOKENIZER.nextElement()).intern();
             word = word.toLowerCase();
-            if (Stopwords.isStopword(word)) {
+            if (Stopwords.isStopword(word) || MyStopwords.isStopword(word)) {
                 continue;// Check stop word before stemmed.
             }
             if (needStem) {
