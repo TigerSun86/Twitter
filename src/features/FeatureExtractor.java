@@ -7,6 +7,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -33,6 +34,7 @@ import common.RawAttrList;
 import datacollection.Database;
 import features.AnewMap.Anew;
 import features.ClusterWord.ClusterWordSetting;
+import features.FeatureEditor.FeatureFactory;
 import features.WordFeature.DomainMethods;
 import features.WordFeature.HashMethods;
 import features.WordFeature.MentionMethods;
@@ -183,6 +185,14 @@ public class FeatureExtractor {
         BASE_FEATURE_SET.add(new F28()); // 28HourInDay
         BASE_FEATURE_SET.add(new F29()); // 29Hashtag
         BASE_FEATURE_SET.add(new F30()); // 30Mention
+        // for (FeatureGetter fg : new
+        // DayInWeekV2Factory().getNewFeatures(null)) {
+        // //BASE_FEATURE_SET.add(fg); // 31DayInWeekV2
+        // }
+        // for (FeatureGetter fg : new
+        // HourInDayV2Factory().getNewFeatures(null)) {
+        // //BASE_FEATURE_SET.add(fg); // 32HourInDayV2
+        // }
     }
 
     public final List<FeatureGetter> getterListOfPreNum;
@@ -1575,6 +1585,115 @@ public class FeatureExtractor {
         public RawAttr getAttr () {
             return getDiscreteAttr(EntityPairFactory.PREFIX + en1
                     + SimCalculator.WORD_SEPARATER + en2);
+        }
+    }
+
+    /**
+     * 31DayInWeekV2.
+     */
+    private static class F31 extends FeatureGetter {
+        int day;
+
+        public F31(int day) {
+            this.day = day;
+        }
+
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            final Date date = t.getCreatedAt();
+            final Calendar c = Calendar.getInstance();
+            c.setTime(date);
+            boolean isDay = day == c.get(Calendar.DAY_OF_WEEK);
+            final String feature = isDay ? F1 : F0;
+            return feature;
+        }
+
+        @Override
+        public RawAttr getAttr () {
+            return getDiscreteAttr("31DayInWeekV2"
+                    + DayInWeekV2Factory.DAY_MAP.get(day));
+        }
+    }
+
+    private static class DayInWeekV2Factory implements FeatureFactory {
+        public static final LinkedHashMap<Integer, String> DAY_MAP =
+                new LinkedHashMap<Integer, String>();
+        static {
+            DAY_MAP.put(Calendar.MONDAY, "Mon");
+            DAY_MAP.put(Calendar.TUESDAY, "Tue");
+            DAY_MAP.put(Calendar.WEDNESDAY, "Wed");
+            DAY_MAP.put(Calendar.THURSDAY, "Thu");
+            DAY_MAP.put(Calendar.FRIDAY, "Fri");
+            DAY_MAP.put(Calendar.SATURDAY, "Sat");
+            DAY_MAP.put(Calendar.SUNDAY, "Sun");
+        }
+
+        @Override
+        public List<FeatureGetter> getNewFeatures (List<Status> tweets) {
+            List<FeatureGetter> fs = new ArrayList<FeatureGetter>();
+            for (int day : DAY_MAP.keySet()) {
+                fs.add(new F31(day));
+            }
+            return fs;
+        }
+
+        @Override
+        public Set<String> conflictedFeaturesOfBase () {
+            Set<String> result = new HashSet<String>();
+            result.add("27DayInWeek");
+            return result;
+        }
+    }
+
+    /**
+     * 32HourInDayV2.
+     */
+    private static class F32 extends FeatureGetter {
+        int hourRangeIdx;
+
+        public F32(int hourRangeIdx) {
+            this.hourRangeIdx = hourRangeIdx;
+        }
+
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            final Date date = t.getCreatedAt();
+            final Calendar c = Calendar.getInstance();
+            c.setTime(date);
+            final int hourOfDay = c.get(Calendar.HOUR_OF_DAY);
+            int min = HourInDayV2Factory.HOUR_RANGE_TO_MIN_MAX[hourRangeIdx][0];
+            int max = HourInDayV2Factory.HOUR_RANGE_TO_MIN_MAX[hourRangeIdx][1];
+            boolean isInRange = hourOfDay >= min && hourOfDay < max;
+            final String feature = isInRange ? F1 : F0;
+            return feature;
+        }
+
+        @Override
+        public RawAttr getAttr () {
+            return getDiscreteAttr("32HourInDayV2" + "Range" + hourRangeIdx);
+        }
+    }
+
+    private static class HourInDayV2Factory implements FeatureFactory {
+        public static final int[][] HOUR_RANGE_TO_MIN_MAX = { { 0, 6 },
+                { 6, 12 }, { 12, 18 }, { 18, 24 } };
+
+        @Override
+        public List<FeatureGetter> getNewFeatures (List<Status> tweets) {
+            List<FeatureGetter> fs = new ArrayList<FeatureGetter>();
+            for (int hourRangeIdx = 0; hourRangeIdx < HOUR_RANGE_TO_MIN_MAX.length; hourRangeIdx++) {
+                fs.add(new F32(hourRangeIdx));
+            }
+            return fs;
+        }
+
+        @Override
+        public Set<String> conflictedFeaturesOfBase () {
+            Set<String> result = new HashSet<String>();
+            result.add("28HourInDay");
+            return result;
         }
     }
 }
