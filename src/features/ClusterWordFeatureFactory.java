@@ -31,7 +31,8 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
     public static final String PREFIX = "ClusterWord_";
 
     public ClusterWordSetting para = new ClusterWordSetting();
-    public boolean withTweets = false;
+    public boolean withWeb = true;
+    public boolean withTweets = true;
     public boolean allAuthors = false;
     public int numOfWords = 0; // 0 means no limitation.
     public WordFeature.Mode mode = WordFeature.Mode.SUM;
@@ -98,6 +99,7 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
     }
 
     private List<Set<String>> getWebPagesForAllAuthors () {
+        assert withWeb;
         List<Set<String>> webPages;
         if (withTweets && allAuthorWTPageCache != null) {
             webPages = allAuthorWTPageCache;
@@ -123,7 +125,10 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
     }
 
     private List<Set<String>> getPages (List<Status> tweets) {
-        List<Set<String>> webPages = getWebPages(tweets, this.para.needStem);
+        List<Set<String>> webPages  = new ArrayList<Set<String>>();
+        if(withWeb){
+            webPages.addAll(getWebPages(tweets, this.para.needStem));
+        }
         if (withTweets) {
             webPages.addAll(ClusterWordFeatureFactory.getTweetPages(tweets,
                     para.needStem));
@@ -158,9 +163,9 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
 
     private static void test () {
         ClusterWordFeatureFactory fac = new ClusterWordFeatureFactory();
-        fac.numOfWords = 1000;
-        fac.para.mEstimate = false;
-        fac.withTweets = false;
+        //fac.numOfWords = 1000;
+        //fac.para.mEstimate = false;
+        //fac.withTweets = true;
         fac.getNewFeatures(Database.getInstance().getAuthorTweets(3459051L,
                 ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_START_DATE));
     }

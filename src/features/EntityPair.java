@@ -13,12 +13,8 @@ import twitter4j.Status;
 import twitter4j.URLEntity;
 import twitter4j.UserMentionEntity;
 import util.Dbg;
-import util.MyMath;
-
-import com.google.common.primitives.Doubles;
-
 import features.SimCalculator.Mode;
-import features.SimCalculator.Pair;
+import features.SimTable.Pair;
 
 /**
  * FileName: EntityPair.java
@@ -55,53 +51,20 @@ public class EntityPair {
                 new SimCalculator(para.mode, para.mEstimate,
                         para.needPrescreen, para.withRt, wordList,
                         wordSetOfDocs, word2DocIds, numOfRtOfDocs);
-        HashMap<String, Double> simTable = simCal.getSimilarityTable();
-        List<Pair> pairs = Pair.getDescendingPairs(simTable);
-        List<Pair> topPairs = new ArrayList<Pair>();
-        if (para.num > 0) {
-            for (int i = 0; i < Math.min(para.num, pairs.size()); i++) {
-                topPairs.add(pairs.get(i));
-            }
-        } else {
+        SimTable simTable = simCal.getSimTable();
+        simTable.sortPairDescendingly();
+
+        if (para.num <= 0) {
             assert para.mode == Mode.AEMI;
-            List<Double> values = new ArrayList<Double>();
-            for (Pair p : pairs) {
-                if (p.v <= 0) {
-                    break;
-                }
-                values.add(p.v);
-            }
-            double mean = MyMath.getMean(Doubles.toArray(values));
-            double dev = MyMath.getStdDev(Doubles.toArray(values));
-            double aemiThres = 3 * (mean + dev);
-            if (Dbg.dbg) {
-                System.out.printf("AEMI threshold: %.4f, mean: %.4f, "
-                        + "std dev: %.4f%n", aemiThres, mean, dev);
-            }
-            for (Pair p : pairs) {
-                if (p.v <= aemiThres) {
-                    break;
-                }
-                topPairs.add(p);
-            }
+            simTable.keepOnlyHighValuePairs();
+        }
+        List<Pair> topPairs = new ArrayList<Pair>();
+        for (int i = 0; i < Math.min(para.num, simTable.size()); i++) {
+            topPairs.add(simTable.getPairs().get(i));
         }
 
         if (Dbg.dbg) {
-            int maxDf = 0;
-            String maxPair = "";
-            for (int i = 0; i < wordList.size(); i++) {
-                String w1 = wordList.get(i);
-                for (int j = i; j < wordList.size(); j++) {
-                    String w2 = wordList.get(j);
-                    if (!w1.equals(w2)) {
-                        int df = simCal.getDfaAndb(w1, w2, false);
-                        if (maxDf < df) {
-                            maxDf = df;
-                            maxPair = w1 + SimCalculator.WORD_SEPARATER + w2;
-                        }
-                    }
-                }
-            }
+            simCal.findMaxDfPair();
             System.out.println("**** EntityPair ****");
             System.out.printf("Author: %s, number of tweets: %d, "
                     + "number of top pairs: %d, mode: %s, needEntity: %b, "
@@ -109,8 +72,8 @@ public class EntityPair {
                     + "NeedPrescreen: %b, WithRt: %b, WithWeb, %b%n", tweets
                     .get(0).getUser().getScreenName(), tweets.size(),
                     topPairs.size(), para.mode.toString(), para.needEntity,
-                    maxPair, maxDf, para.needPrescreen, para.withRt,
-                    para.withWeb);
+                    simCal.maxPair, simCal.maxDf, para.needPrescreen,
+                    para.withRt, para.withWeb);
             System.out.println("Top pairs:");
             for (Pair p : topPairs) {
                 String[] ens = p.e.split(SimCalculator.WORD_SEPARATER);
@@ -127,8 +90,8 @@ public class EntityPair {
                                     simCal.getDfw(w2, true));
                 }
                 if (para.needPrescreen) {
-                    System.out
-                            .printf(", AEMI: %.3f", simCal.pair2Aemi.get(p.e));
+                    System.out.printf(", AEMI: %.3f",
+                            simCal.prescreenTable.getValue(p.e));
                 }
                 System.out.println();
             }

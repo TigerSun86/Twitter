@@ -16,15 +16,18 @@ import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
 import weka.classifiers.functions.LibSVM;
 import weka.core.Instances;
+
 import common.WLearner;
+
 import datacollection.Database;
 import datacollection.UserInfo;
 import features.BaseFeatureFactory;
+import features.ClusterWordFeatureFactory;
 import features.EntityPairFactory;
 import features.FeatureEditor;
-import features.SimCalculator;
 import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor;
+import features.SimCalculator;
 import features.WordFeature;
 import features.WordFeatureFactory;
 
@@ -128,20 +131,46 @@ public class Main {
                     ENTITY_PAIR_FEATURE_EDITORS.add(new FeatureEditor(
                             featureList, EntityPairFactory.PREFIX
                                     + fac.para.mode + fac.para.num
-                                    + fac.para.needEntity+"Prescreen"));
+                                    + fac.para.needEntity + "Prescreen"));
                 }
             }
         }
     }
 
+    private static final List<FeatureEditor> CLUSTER_FEATURE_EDITORS;
+    static {
+        CLUSTER_FEATURE_EDITORS = new ArrayList<FeatureEditor>();
+
+        SimCalculator.Mode[] modes =
+                { SimCalculator.Mode.AEMI, SimCalculator.Mode.JACCARD };
+        int[] nums = { 10, 20, 30 };
+        boolean[] reattach = { true, false };
+        for (SimCalculator.Mode mode : modes) {
+            for (int num : nums) {
+                for (boolean reat : reattach) {
+                    List<FeatureFactory> featureList =
+                            new ArrayList<FeatureFactory>();
+                    ClusterWordFeatureFactory fac =
+                            new ClusterWordFeatureFactory();
+                    fac.para.mode = mode;
+                    fac.para.numOfCl = num;
+                    fac.para.reattach = reat;
+                    featureList.add(fac);
+                    CLUSTER_FEATURE_EDITORS.add(new FeatureEditor(featureList,
+                            fac.para.mode.toString() + fac.para.numOfCl
+                                    + fac.para.reattach));
+                }
+            }
+        }
+    }
     private static final List<FeatureEditor> FEATURE_EDITORS;
     static {
         FEATURE_EDITORS = new ArrayList<FeatureEditor>();
         List<FeatureFactory> featureList;
         featureList = new ArrayList<FeatureFactory>();
         featureList.add(new BaseFeatureFactory());
-        // FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
-        FEATURE_EDITORS.addAll(ENTITY_PAIR_FEATURE_EDITORS);
+        FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
+        FEATURE_EDITORS.addAll(CLUSTER_FEATURE_EDITORS);
     }
 
     private void testClusterFeature () throws Exception {

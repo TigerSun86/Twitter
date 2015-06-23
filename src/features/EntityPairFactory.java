@@ -13,7 +13,7 @@ import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor.FEntityPair;
 import features.FeatureExtractor.FeatureGetter;
 import features.SimCalculator.Mode;
-import features.SimCalculator.Pair;
+import features.SimTable.Pair;
 
 /**
  * FileName: EntityPairFactory.java
@@ -27,7 +27,7 @@ public class EntityPairFactory implements FeatureFactory {
     public static final String PREFIX = "EntityPair_";
 
     public EntityPairSetting para = new EntityPairSetting();
-    
+
     @Override
     public List<FeatureGetter> getNewFeatures (List<Status> tweets) {
         EntityPair ep = new EntityPair();

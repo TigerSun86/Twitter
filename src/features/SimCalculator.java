@@ -1,15 +1,11 @@
 package features;
 
-import java.util.ArrayList;
 import java.util.BitSet;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Set;
 
 import util.Dbg;
-import util.MyMath;
 
 import com.google.common.math.DoubleMath;
 
@@ -28,7 +24,10 @@ public class SimCalculator {
 
     public static final String WORD_SEPARATER = ",";
 
-    public HashMap<String, Double> pair2Aemi = null;
+    // Intermediate information for debug
+    public SimTable prescreenTable = null;
+    public int maxDf = 0;
+    public String maxPair = "";
 
     private Mode mode = Mode.JACCARD;
     private boolean mEstimate = true;
@@ -40,7 +39,11 @@ public class SimCalculator {
     private List<Integer> numOfRtOfDocs = null;
     private int totalNumOfRt = 0;
 
-    private int countOfInvalidPair = 0; // For debug.
+    private int countOfValidPair = 0; // For debug.
+
+    // Initiate these when every time calculate table.
+    private HashMap<String, Integer> dfCacheNoRt = null;
+    private HashMap<String, Integer> dfCacheHasRt = null;
 
     public SimCalculator(Mode mode, boolean mEstimate, boolean needPrescreen,
             boolean withRt, List<String> wordList,
@@ -60,32 +63,45 @@ public class SimCalculator {
                 totalNumOfRt += num;
             }
         }
-        if (needPrescreen) {
-            pair2Aemi = new HashMap<String, Double>();
-        }
     }
 
-    public HashMap<String, Double> getSimilarityTable () {
-        HashMap<String, Double> similarityTableOfTwoWords =
-                new HashMap<String, Double>();
-        countOfInvalidPair = 0;// For debug.
+    public SimTable getSimTable () {
+        SimTable highRelatedPairs = null;
+        if (needPrescreen) {
+            if (Dbg.dbg) {
+                System.out.println("Prescreening section");
+            }
+            Mode mBackup = this.mode;
+            boolean rtBackup = this.withRt;
+            if (mode != Mode.AEMI && mode != Mode.LIFT && mode != Mode.JACCARD) {
+                this.mode = Mode.AEMI;
+            }
+            this.withRt = false;
+
+            highRelatedPairs = getSimTable(null);
+            highRelatedPairs.keepOnlyHighValuePairs();
+
+            this.mode = mBackup;
+            this.withRt = rtBackup;
+        }
+        this.prescreenTable = highRelatedPairs;
+        return getSimTable(highRelatedPairs);
+    }
+
+    private SimTable getSimTable (SimTable highRelatedPairs) {
+        dfCacheNoRt = new HashMap<String, Integer>();
+        dfCacheHasRt = new HashMap<String, Integer>();
+
+        countOfValidPair = 0;// For debug.
+
+        SimTable table = new SimTable();
         for (int i = 0; i < wordList.size(); i++) {
             String w1 = wordList.get(i);
             for (int j = i; j < wordList.size(); j++) {
                 String w2 = wordList.get(j);
-                if (w1.equals(w2)) {
-                    // The distance of a word itself should be 0.
-                    // distanceTableOfTwoWords.put(getTwoWordsKey(w1, w2), 0.0);
-                } else {
-                    if (needPrescreen) {
-                        // Mesure AEMI without retweets.
-                        double aemi = similarityOfAemi(w1, w2, false);
-                        if (aemi <= 0) { // Definitely not a good pair.
-                            continue;
-                        } else {
-                            pair2Aemi.put(getTwoWordsKey(w1, w2), aemi);
-                        }
-                    }
+                if (!w1.equals(w2)
+                        && (highRelatedPairs == null || highRelatedPairs
+                                .contains(w1, w2))) {
                     double sim;
                     if (mode == Mode.JACCARD) {
                         sim = similarityOfJaccard(w1, w2, withRt);
@@ -102,9 +118,7 @@ public class SimCalculator {
                     } else { // if (mode == Mode.AVG)
                         sim = simAvg(w1, w2);
                     }
-
-                    assert !Double.isNaN(sim) && !Double.isInfinite(sim);
-                    similarityTableOfTwoWords.put(getTwoWordsKey(w1, w2), sim);
+                    table.add(w1, w2, sim);
                 }
             }
         }
@@ -112,114 +126,36 @@ public class SimCalculator {
             // Debug info.
             int to = wordList.size();
             int total = (to * to - to) / 2;
-            System.out.printf("Calculated similarities between %d words%n",
-                    wordList.size());
+            System.out.printf(
+                    "Calculated similarities between %d words, using %s%n",
+                    wordList.size(), mode.toString());
             System.out.printf(
                     "%d word-pairs are valid, %d word-pairs are invalid, "
                             + "the sparsity of upper-triangle is %.2f%%%n",
-                    total - countOfInvalidPair, countOfInvalidPair,
-                    ((double) countOfInvalidPair * 100.0) / total);
+                    countOfValidPair, total - countOfValidPair,
+                    ((total - countOfValidPair) * 100.0) / total);
         }
 
-        if (needPrescreen) {
-            List<Pair> aemiPairs = Pair.getPairs(pair2Aemi);
-            double[] values = new double[aemiPairs.size()];
-            for (int i = 0; i < aemiPairs.size(); i++) {
-                values[i] = aemiPairs.get(i).v;
-            }
-            double mean = MyMath.getMean(values);
-            double dev = MyMath.getStdDev(values);
-            //double thres = mean + dev;
-            double thres = 0;
-            List<Pair> filteredPairs = new ArrayList<Pair>();
-            for (Pair p : aemiPairs) {
-                if (p.v > thres) {
-                    Pair realPair =
-                            new Pair(p.e, similarityTableOfTwoWords.get(p.e));
-                    filteredPairs.add(realPair);
+        return table;
+    }
+
+    public void findMaxDfPair () {
+        maxDf = 0;
+        maxPair = "";
+        for (int i = 0; i < wordList.size(); i++) {
+            String w1 = wordList.get(i);
+            for (int j = i; j < wordList.size(); j++) {
+                String w2 = wordList.get(j);
+                if (!w1.equals(w2)) {
+                    int df = getDfaAndb(w1, w2, false);
+                    if (maxDf < df) {
+                        maxDf = df;
+                        maxPair = SimTable.getTwoWordsKey(w1, w2);
+                    }
                 }
             }
-            if (Dbg.dbg) {
-                System.out.println("Prescreening section");
-                System.out.printf("AEMI threshold: %.4f, mean: %.4f, "
-                        + "std dev: %.4f%n", thres, mean, dev);
-                System.out.printf("Number of pairs: %d, out of: %d%n",
-                        filteredPairs.size(), aemiPairs.size());
-            }
-            similarityTableOfTwoWords = new HashMap<String, Double>();
-            for (Pair p : filteredPairs) {
-                similarityTableOfTwoWords.put(p.e, p.v);
-            }
-        }
-        return similarityTableOfTwoWords;
-    }
-
-    public static class Pair implements Comparable<Pair> {
-        String e;
-        double v;
-        String w1;
-        String w2;
-
-        public Pair(String e, double v) {
-            super();
-            this.e = e;
-            this.v = v;
-            String[] str = e.split(WORD_SEPARATER);
-            w1 = str[0];
-            w2 = str[1];
-        }
-
-        public static List<Pair> getAscendingPairs (
-                HashMap<String, Double> simTable) {
-            // Sort all pairs.
-            List<Pair> sortedPairs = getPairs(simTable);
-            Collections.sort(sortedPairs);
-            return sortedPairs;
-        }
-
-        public static List<Pair> getDescendingPairs (
-                HashMap<String, Double> simTable) {
-            // Sort all pairs.
-            List<Pair> sortedPairs = getPairs(simTable);
-            Collections.sort(sortedPairs, Collections.reverseOrder());
-            return sortedPairs;
-        }
-
-        static List<Pair> getPairs (HashMap<String, Double> simTable) {
-            List<Pair> pairs = new ArrayList<Pair>();
-            for (Entry<String, Double> entry : simTable.entrySet()) {
-                pairs.add(new Pair(entry.getKey(), entry.getValue()));
-            }
-            return pairs;
-        }
-
-        @Override
-        public int compareTo (Pair o) {
-            int result = Double.compare(this.v, o.v);
-            if (result == 0) {
-                result = this.e.compareTo(o.e);
-            }
-            return result;
-        }
-
-        @Override
-        public String toString () {
-            return String.format("%s %.3f", e, v);
         }
     }
-
-    public static String getTwoWordsKey (String w1, String w2) {
-        if (w1.compareTo(w2) <= 0) {
-            return w1 + WORD_SEPARATER + w2;
-        } else {
-            return w2 + WORD_SEPARATER + w1;
-        }
-    }
-
-    private HashMap<String, Integer> dfCacheNoRt =
-            new HashMap<String, Integer>();
-    private HashMap<String, Integer> dfCacheHasRt =
-            new HashMap<String, Integer>();
 
     public int getDfw (String w, boolean rt) {
         HashMap<String, Integer> cache = rt ? dfCacheHasRt : dfCacheNoRt;
@@ -300,8 +236,8 @@ public class SimCalculator {
             }
         }
 
-        if (dfaandb == 0) {
-            countOfInvalidPair++;
+        if (dfaandb != 0) {
+            countOfValidPair++;
         }
         return jaccard;
     }
@@ -376,8 +312,8 @@ public class SimCalculator {
         double part4 =
                 (pnab == 0) ? 0 : (pnab * DoubleMath.log2(pnab / (pna * pb)));
         double aemi = part1 + part2 - part3 - part4;
-        if (daandb == 0) {
-            countOfInvalidPair++;
+        if (daandb != 0) {
+            countOfValidPair++;
         }
         return aemi;
     }
@@ -404,8 +340,8 @@ public class SimCalculator {
             }
         }
 
-        if (daandb == 0) {
-            countOfInvalidPair++;
+        if (daandb != 0) {
+            countOfValidPair++;
         }
         return lift;
     }
