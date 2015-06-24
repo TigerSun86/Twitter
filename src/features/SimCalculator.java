@@ -2,12 +2,12 @@ package features;
 
 import java.util.BitSet;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Set;
 
 import util.Dbg;
 
 import com.google.common.math.DoubleMath;
+
+import features.SimTable.Pair;
 
 /**
  * FileName: SimCalculator.java
@@ -18,50 +18,38 @@ import com.google.common.math.DoubleMath;
  * @date Jun 18, 2015 8:41:39 PM
  */
 public class SimCalculator {
-    public enum Mode {
+    private static final int LEAST_FREQUENCY = 1;
+    private static final boolean M_ESTIMATE = true;
+    private static final boolean ONLY_KEEP_VALID_PAIR = true;
+
+    public enum SimMode {
         JACCARD, AEMI, LIFT, DF, SUM, IDF, AVG
     }
 
-    public static final String WORD_SEPARATER = ",";
-
-    // Intermediate information for debug
+    // Intermediate information for output debug
     public SimTable prescreenTable = null;
-    public int maxDf = 0;
-    public String maxPair = "";
+    public Pair maxPair = null;
 
-    private Mode mode = Mode.JACCARD;
-    private boolean mEstimate = true;
+    private SimMode simMode = SimMode.JACCARD;
     private boolean needPrescreen = true;
-    private boolean withRt = false;
-    private List<String> wordList = null;
-    private List<Set<String>> wordSetOfDocs = null;
-    private HashMap<String, BitSet> word2DocIds = null;
-    private List<Integer> numOfRtOfDocs = null;
-    private int totalNumOfRt = 0;
-
-    private int countOfValidPair = 0; // For debug.
+    private WordStatisDoc doc = null;
+    private double totalNumOfRt = 0;
 
     // Initiate these when every time calculate table.
-    private HashMap<String, Integer> dfCacheNoRt = null;
-    private HashMap<String, Integer> dfCacheHasRt = null;
+    private HashMap<String, Double> dfCacheNoRt = null;
+    private HashMap<String, Double> dfCacheHasRt = null;
+    // A temp variable for getDfaAndb() and getDfaOrb() to avoid allocating
+    // memory every time.
+    private static final BitSet BS_TEMP = new BitSet();
 
-    public SimCalculator(Mode mode, boolean mEstimate, boolean needPrescreen,
-            boolean withRt, List<String> wordList,
-            List<Set<String>> wordSetOfDocs,
-            HashMap<String, BitSet> word2DocIds, List<Integer> numOfRtOfDocs) {
+    public SimCalculator(SimMode simMode, boolean needPrescreen,
+            WordStatisDoc doc) {
         super();
-        this.mode = mode;
-        this.mEstimate = mEstimate;
+        this.simMode = simMode;
         this.needPrescreen = needPrescreen;
-        this.withRt = withRt;
-        this.wordList = wordList;
-        this.wordSetOfDocs = wordSetOfDocs;
-        this.word2DocIds = word2DocIds;
-        this.numOfRtOfDocs = numOfRtOfDocs;
-        if (numOfRtOfDocs != null) {
-            for (int num : numOfRtOfDocs) {
-                totalNumOfRt += num;
-            }
+        this.doc = doc;
+        if (this.doc.para.withRt) {
+            this.totalNumOfRt = doc.getRtSum();
         }
     }
 
@@ -71,64 +59,81 @@ public class SimCalculator {
             if (Dbg.dbg) {
                 System.out.println("Prescreening section");
             }
-            Mode mBackup = this.mode;
-            boolean rtBackup = this.withRt;
-            if (mode != Mode.AEMI && mode != Mode.LIFT && mode != Mode.JACCARD) {
-                this.mode = Mode.AEMI;
+            SimMode mBackup = this.simMode;
+            boolean rtBackup = this.doc.para.withRt;
+            if (simMode != SimMode.AEMI && simMode != SimMode.LIFT
+                    && simMode != SimMode.JACCARD) {
+                this.simMode = SimMode.AEMI;
             }
-            this.withRt = false;
+            this.doc.para.withRt = false;
 
             highRelatedPairs = getSimTable(null);
             highRelatedPairs.keepOnlyHighValuePairs();
 
-            this.mode = mBackup;
-            this.withRt = rtBackup;
+            this.simMode = mBackup;
+            this.doc.para.withRt = rtBackup;
         }
         this.prescreenTable = highRelatedPairs;
         return getSimTable(highRelatedPairs);
     }
 
     private SimTable getSimTable (SimTable highRelatedPairs) {
-        dfCacheNoRt = new HashMap<String, Integer>();
-        dfCacheHasRt = new HashMap<String, Integer>();
+        dfCacheNoRt = new HashMap<String, Double>();
+        dfCacheHasRt = new HashMap<String, Double>();
 
-        countOfValidPair = 0;// For debug.
+        int countOfValidPair = 0;// For debug.
+        int maxDf = 0;
+        String maxW1 = null;
+        String maxW2 = null;
 
         SimTable table = new SimTable();
-        for (int i = 0; i < wordList.size(); i++) {
-            String w1 = wordList.get(i);
-            for (int j = i; j < wordList.size(); j++) {
-                String w2 = wordList.get(j);
+        for (int i = 0; i < doc.wordList.size(); i++) {
+            String w1 = doc.wordList.get(i);
+            for (int j = i; j < doc.wordList.size(); j++) {
+                String w2 = doc.wordList.get(j);
                 if (!w1.equals(w2)
                         && (highRelatedPairs == null || highRelatedPairs
                                 .contains(w1, w2))) {
-                    double sim;
-                    if (mode == Mode.JACCARD) {
-                        sim = similarityOfJaccard(w1, w2, withRt);
-                    } else if (mode == Mode.AEMI) {
-                        sim = similarityOfAemi(w1, w2, withRt);
-                    } else if (mode == Mode.LIFT) {
-                        sim = similarityOfLift(w1, w2, withRt);
-                    } else if (mode == Mode.DF) {
-                        sim = simDf(w1, w2);
-                    } else if (mode == Mode.SUM) {
-                        sim = simSum(w1, w2);
-                    } else if (mode == Mode.IDF) {
-                        sim = simIdf(w1, w2);
-                    } else { // if (mode == Mode.AVG)
-                        sim = simAvg(w1, w2);
+                    int df = (int) getDfaAndb(w1, w2, false);
+                    if (maxDf < df) { // Find max df pair for debug.
+                        maxDf = df;
+                        maxW1 = w1;
+                        maxW2 = w2;
                     }
-                    table.add(w1, w2, sim);
+                    if (df >= LEAST_FREQUENCY) {
+                        countOfValidPair++;
+                    }
+                    if (!ONLY_KEEP_VALID_PAIR || df >= LEAST_FREQUENCY) {
+                        // df >= LEAST_FREQUENCY means valid pair.
+                        double sim;
+                        if (simMode == SimMode.JACCARD) {
+                            sim = similarityOfJaccard(w1, w2, doc.para.withRt);
+                        } else if (simMode == SimMode.AEMI) {
+                            sim = similarityOfAemi(w1, w2, doc.para.withRt);
+                        } else if (simMode == SimMode.LIFT) {
+                            sim = similarityOfLift(w1, w2, doc.para.withRt);
+                        } else if (simMode == SimMode.DF) {
+                            sim = simDf(w1, w2);
+                        } else if (simMode == SimMode.SUM) {
+                            sim = simSum(w1, w2);
+                        } else if (simMode == SimMode.IDF) {
+                            sim = simIdf(w1, w2);
+                        } else { // if (simMode == SimMode.AVG)
+                            sim = simAvg(w1, w2);
+                        }
+                        table.add(w1, w2, sim);
+                    }
                 }
             }
         }
+        maxPair = new Pair(maxW1, maxW2, maxDf);
         if (Dbg.dbg) {
             // Debug info.
-            int to = wordList.size();
+            int to = doc.wordList.size();
             int total = (to * to - to) / 2;
             System.out.printf(
-                    "Calculated similarities between %d words, using %s%n",
-                    wordList.size(), mode.toString());
+                    "Calculated similarities between %d words, simMode: %s%n",
+                    doc.wordList.size(), simMode.toString());
             System.out.printf(
                     "%d word-pairs are valid, %d word-pairs are invalid, "
                             + "the sparsity of upper-triangle is %.2f%%%n",
@@ -139,78 +144,55 @@ public class SimCalculator {
         return table;
     }
 
-    public void findMaxDfPair () {
-        maxDf = 0;
-        maxPair = "";
-        for (int i = 0; i < wordList.size(); i++) {
-            String w1 = wordList.get(i);
-            for (int j = i; j < wordList.size(); j++) {
-                String w2 = wordList.get(j);
-                if (!w1.equals(w2)) {
-                    int df = getDfaAndb(w1, w2, false);
-                    if (maxDf < df) {
-                        maxDf = df;
-                        maxPair = SimTable.getTwoWordsKey(w1, w2);
-                    }
-                }
-            }
-        }
-    }
-
-    public int getDfw (String w, boolean rt) {
-        HashMap<String, Integer> cache = rt ? dfCacheHasRt : dfCacheNoRt;
+    public double getDfw (String w, boolean rt) {
+        HashMap<String, Double> cache = rt ? dfCacheHasRt : dfCacheNoRt;
         if (cache.containsKey(w)) {
             return cache.get(w);
         }
-        BitSet set = word2DocIds.get(w);
-        int df;
-        if (!rt) {
-            df = set.cardinality();
-        } else {
-            assert numOfRtOfDocs != null;
-            df = 0; // Sum of number of retweets.
-            for (int id = set.nextSetBit(0); id >= 0; id =
-                    set.nextSetBit(id + 1)) {
-                df += numOfRtOfDocs.get(id);
-            }
-        }
+        double df = rt ? doc.getRtSum(w) : doc.getDf(w);
         cache.put(w, df);
         return df;
     }
 
-    public int getDfaAndb (String w1, String w2, boolean rt) {
-        BitSet seta = word2DocIds.get(w1);
-        BitSet setb = word2DocIds.get(w2);
-        BitSet intersection = (BitSet) seta.clone();
+    public double getDfaAndb (String w1, String w2, boolean rt) {
+        BitSet seta = doc.word2DocIds.get(w1);
+        BitSet setb = doc.word2DocIds.get(w2);
+        BitSet intersection = BS_TEMP;
+        intersection.clear();
+        intersection.or(seta);
         intersection.and(setb);
-        int dfaandb;
+
+        double dfaandb;
         if (!rt) {
             dfaandb = intersection.cardinality();
         } else {
-            assert numOfRtOfDocs != null;
+            assert doc.numOfRtOfDocs != null;
             dfaandb = 0; // Sum of number of retweets.
             for (int id = intersection.nextSetBit(0); id >= 0; id =
                     intersection.nextSetBit(id + 1)) {
-                dfaandb += numOfRtOfDocs.get(id);
+                dfaandb += doc.numOfRtOfDocs.get(id);
             }
         }
         return dfaandb;
     }
 
-    public int getDfaOrb (String w1, String w2, boolean rt) {
-        BitSet seta = word2DocIds.get(w1);
-        BitSet setb = word2DocIds.get(w2);
-        BitSet union = (BitSet) seta.clone();
+    public double getDfaOrb (String w1, String w2, boolean rt) {
+        BitSet seta = doc.word2DocIds.get(w1);
+        BitSet setb = doc.word2DocIds.get(w2);
+        BitSet union = BS_TEMP;
+        union.clear();
+        union.or(seta);
         union.or(setb);
-        int dfaorb;
+
+        double dfaorb;
         if (!rt) {
             dfaorb = union.cardinality();
         } else {
-            assert numOfRtOfDocs != null;
+            assert doc.numOfRtOfDocs != null;
             dfaorb = 0; // Sum of number of retweets.
             for (int id = union.nextSetBit(0); id >= 0; id =
                     union.nextSetBit(id + 1)) {
-                dfaorb += numOfRtOfDocs.get(id);
+                dfaorb += doc.numOfRtOfDocs.get(id);
             }
         }
         return dfaorb;
@@ -224,8 +206,8 @@ public class SimCalculator {
         double dfaandb = getDfaAndb(w1, w2, rt);
         double dfaorb = getDfaOrb(w1, w2, rt);
         double jaccard;
-        if (mEstimate) {
-            double n = rt ? totalNumOfRt : wordSetOfDocs.size();
+        if (M_ESTIMATE) {
+            double n = rt ? totalNumOfRt : doc.getDf();
             double m = 1 / n;
             jaccard = (dfaandb + m) / (dfaorb + 1);
         } else {
@@ -234,10 +216,6 @@ public class SimCalculator {
             } else {
                 jaccard = dfaandb / dfaorb;
             }
-        }
-
-        if (dfaandb != 0) {
-            countOfValidPair++;
         }
         return jaccard;
     }
@@ -262,7 +240,7 @@ public class SimCalculator {
      */
 
     public double similarityOfAemi (String w1, String w2, boolean rt) {
-        double N = rt ? totalNumOfRt : wordSetOfDocs.size();
+        double N = rt ? totalNumOfRt : doc.getDf();
         double da = getDfw(w1, rt);
         double db = getDfw(w2, rt);
         double daandb = getDfaAndb(w1, w2, rt);
@@ -270,7 +248,7 @@ public class SimCalculator {
 
         double m;
         double deno;
-        if (mEstimate) {
+        if (M_ESTIMATE) {
             m = 1 / N;
             deno = N + 1;
         } else {
@@ -312,9 +290,6 @@ public class SimCalculator {
         double part4 =
                 (pnab == 0) ? 0 : (pnab * DoubleMath.log2(pnab / (pna * pb)));
         double aemi = part1 + part2 - part3 - part4;
-        if (daandb != 0) {
-            countOfValidPair++;
-        }
         return aemi;
     }
 
@@ -323,13 +298,13 @@ public class SimCalculator {
      * In m-estimate Lift(a,b) = (N+1)* (df(a,b)+m)/((df(a)+m )*(df(b)+m))
      */
     private double similarityOfLift (String w1, String w2, boolean rt) {
-        double N = rt ? totalNumOfRt : wordSetOfDocs.size();
+        double N = rt ? totalNumOfRt : doc.getDf();
         double da = getDfw(w1, rt);
         double db = getDfw(w2, rt);
         double daandb = getDfaAndb(w1, w2, rt);
 
         double lift;
-        if (mEstimate) {
+        if (M_ESTIMATE) {
             double m = 1 / N;
             lift = (N + 1) * (daandb + m) / ((da + m) * (db + m));
         } else {
@@ -338,10 +313,6 @@ public class SimCalculator {
             } else {
                 lift = N * daandb / (da * db);
             }
-        }
-
-        if (daandb != 0) {
-            countOfValidPair++;
         }
         return lift;
     }
@@ -352,25 +323,22 @@ public class SimCalculator {
     }
 
     private double simSum (String w1, String w2) {
-        assert numOfRtOfDocs != null;
         double sumaandb = getDfaAndb(w1, w2, true);
         return sumaandb;
     }
 
     private double simIdf (String w1, String w2) {
-        assert numOfRtOfDocs != null;
         double sumaandb = getDfaAndb(w1, w2, true);
         if (sumaandb == 0) {
             return 0;
         }
         double dfaandb = getDfaAndb(w1, w2, false);
-        double logD = Math.log(wordSetOfDocs.size());
+        double logD = Math.log(doc.getDf());
         double idf = logD - Math.log(dfaandb);
         return sumaandb * idf;
     }
 
     private double simAvg (String w1, String w2) {
-        assert numOfRtOfDocs != null;
         double sumaandb = getDfaAndb(w1, w2, true);
         if (sumaandb == 0) {
             return 0;

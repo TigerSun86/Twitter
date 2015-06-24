@@ -8,16 +8,14 @@ import java.util.Set;
 
 import main.ExampleGetter;
 import twitter4j.Status;
-import twitter4j.URLEntity;
 import datacollection.Database;
-import datacollection.UserInfo;
 import features.ClusterWord.ClusterWordSetting;
 import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor.FWordCluster;
 import features.FeatureExtractor.FWordCluster.SharedCache;
 import features.FeatureExtractor.FeatureGetter;
-import features.WordFeature.EntityMethods;
-import features.WordFeature.WordMethods;
+import features.SimCalculator.SimMode;
+import features.WordStatisDoc.EntityType;
 
 /**
  * FileName: ClusterWordFeatureFactory.java
@@ -31,45 +29,18 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
     public static final String PREFIX = "ClusterWord_";
 
     public ClusterWordSetting para = new ClusterWordSetting();
-    public boolean withWeb = true;
-    public boolean withTweets = true;
-    public boolean allAuthors = false;
-    public int numOfWords = 0; // 0 means no limitation.
-    public WordFeature.Mode mode = WordFeature.Mode.SUM;
-
-    private List<Set<String>> allAuthorWTPageCache = null;
-    private List<Set<String>> allAuthorNTPageCache = null;
 
     @Override
     public List<FeatureGetter> getNewFeatures (List<Status> tweets) {
-        List<Set<String>> webPages;
-        if (allAuthors) {
-            webPages = getWebPagesForAllAuthors();
-        } else {
-            webPages = getPages(tweets);
-        }
-
-        List<String> wordList;
-        if (numOfWords <= 0) {
-            wordList = getTweetWordList(tweets, this.para.needStem);
-        } else {
-            EntityMethods methods = new WordMethods(this.para.needStem);
-            methods.analyseTweets(tweets);
-            List<String> topEntities =
-                    WordFeature.getTopEntities(methods.getEntitiesInTweets(),
-                            methods.getNumOfRts(), mode, numOfWords);
-            wordList = topEntities;
-        }
-
-        ClusterWord cw = new ClusterWord(webPages);
-        cw.setWordList(wordList);
+        ClusterWord cw = new ClusterWord();
         cw.para = this.para;
-        HashMap<String, Integer> word2cl = cw.clusterWords();
+        HashMap<String, Integer> word2cl = cw.clusterWords(tweets);
 
         SharedCache cache = new SharedCache();
         List<FeatureGetter> list = new ArrayList<FeatureGetter>();
-        for (int cid = 0; cid < this.para.numOfCl; cid++) {
-            list.add(new FWordCluster(cid, word2cl, this.para, cache));
+        for (int cid = 0; cid < cw.numOfCl; cid++) {
+            list.add(new FWordCluster(cid, cw.numOfCl, word2cl, this.para,
+                    cache));
         }
         return list;
     }
@@ -81,92 +52,18 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
         return result;
     }
 
-    public static List<Set<String>> getWebPages (List<Status> tweets,
-            boolean needStem) {
-        DomainGetter domainGetter = DomainGetter.getInstance();
-        List<Set<String>> webPages = new ArrayList<Set<String>>();
-        for (Status t : tweets) {
-            for (URLEntity url : t.getURLEntities()) {
-                Set<String> p =
-                        domainGetter.getWordsOfWebPage(url.getText(), needStem,
-                                DomainGetter.DOMAIN_STOP_WORDS_THRESHOLD);
-                if (!p.isEmpty()) {
-                    webPages.add(p);
-                }
-            }
-        }
-        return webPages;
-    }
-
-    private List<Set<String>> getWebPagesForAllAuthors () {
-        assert withWeb;
-        List<Set<String>> webPages;
-        if (withTweets && allAuthorWTPageCache != null) {
-            webPages = allAuthorWTPageCache;
-        } else if (!withTweets && allAuthorNTPageCache != null) {
-            webPages = allAuthorNTPageCache;
-        } else {
-            List<Status> allTweets = new ArrayList<Status>();
-            for (long authorId : UserInfo.KEY_AUTHORS) {
-                final List<Status> auTweets =
-                        Database.getInstance().getAuthorTweets(authorId,
-                                ExampleGetter.TRAIN_START_DATE,
-                                ExampleGetter.TEST_START_DATE);
-                allTweets.addAll(auTweets);
-            }
-            webPages = getPages(allTweets);
-            if (withTweets) {
-                allAuthorWTPageCache = webPages;
-            } else {
-                allAuthorNTPageCache = webPages;
-            }
-        }
-        return webPages;
-    }
-
-    private List<Set<String>> getPages (List<Status> tweets) {
-        List<Set<String>> webPages  = new ArrayList<Set<String>>();
-        if(withWeb){
-            webPages.addAll(getWebPages(tweets, this.para.needStem));
-        }
-        if (withTweets) {
-            webPages.addAll(ClusterWordFeatureFactory.getTweetPages(tweets,
-                    para.needStem));
-        }
-        return webPages;
-    }
-
-    private static List<String> getTweetWordList (List<Status> ts,
-            boolean needStem) {
-        Set<String> set = new HashSet<String>();
-        for (Status t : ts) {
-            List<String> doc = WordFeature.splitIntoWords(t, true, needStem);
-            for (String w : doc) {
-                set.add(w);
-            }
-        }
-        return new ArrayList<String>(set);
-    }
-
-    private static List<Set<String>> getTweetPages (List<Status> ts,
-            boolean needStem) {
-        List<Set<String>> pages = new ArrayList<Set<String>>();
-        for (Status t : ts) {
-            List<String> doc = WordFeature.splitIntoWords(t, true, needStem);
-            if (!doc.isEmpty()) {
-                Set<String> set = new HashSet<String>(doc);
-                pages.add(set);
-            }
-        }
-        return pages;
-    }
-
     private static void test () {
         ClusterWordFeatureFactory fac = new ClusterWordFeatureFactory();
-        //fac.numOfWords = 1000;
-        //fac.para.mEstimate = false;
-        //fac.withTweets = true;
-        fac.getNewFeatures(Database.getInstance().getAuthorTweets(3459051L,
+        fac.para.docPara.withOt = true;
+        fac.para.docPara.withRt = false;
+        fac.para.docPara.withWeb = false;
+        fac.para.docPara.entityType = EntityType.HASHTAG;
+        fac.para.docPara.numOfWords = -1;
+
+        fac.para.simMode = SimMode.AEMI;
+        fac.para.needPrescreen = false;
+        fac.para.clAlg = new SingleCutAlg(10, false);
+        fac.getNewFeatures(Database.getInstance().getAuthorTweets(16958346L,
                 ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_START_DATE));
     }
 

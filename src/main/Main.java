@@ -27,9 +27,11 @@ import features.EntityPairFactory;
 import features.FeatureEditor;
 import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor;
-import features.SimCalculator;
-import features.WordFeature;
+import features.SimCalculator.SimMode;
+import features.SingleCutAlg;
+import features.WordFeature.WordSelectingMode;
 import features.WordFeatureFactory;
+import features.WordStatisDoc.EntityType;
 
 /**
  * FileName: Main.java
@@ -60,49 +62,33 @@ public class Main {
 
     }
 
-    private static final WLearner[] W_LEARNERS = { // new WLr(),
-            // new WAnn(-1, 0.1, 0.1),
+    private static final WLearner[] W_LEARNERS = { new WLr(),
+            new WAnn(-1, 0.1, 0.1),
             new WLibSvm(LibSVM.SVMTYPE_EPSILON_SVR, LibSVM.KERNELTYPE_RBF),
-            // new WLibSvm(LibSVM.SVMTYPE_NU_SVR, LibSVM.KERNELTYPE_RBF)
-            };
-    private static final String[] W_L_NAMES = {// "LR", "AnnA1",
-            "EpSvrRbf",
-            // "NuSvrRbf",
-            };
+            new WLibSvm(LibSVM.SVMTYPE_NU_SVR, LibSVM.KERNELTYPE_RBF) };
+    private static final String[] W_L_NAMES = { "LR", "AnnA1", "EpSvrRbf",
+            "NuSvrRbf", };
 
     private static final List<FeatureEditor> TOP_SERIES_FEATURE_EDITORS;
     static {
         TOP_SERIES_FEATURE_EDITORS = new ArrayList<FeatureEditor>();
         List<FeatureFactory> featureList;
-        int[] nums = { 100 };
-        for (int numOfWords : nums) {
-            for (WordFeature.Type type : WordFeature.Type.values()) {
-                for (WordFeature.Mode mode : WordFeature.Mode.values()) {
-                    if (!(mode.equals(WordFeature.Mode.SUM)
-                            || mode.equals(WordFeature.Mode.AVG) || mode
-                                .equals(WordFeature.Mode.IDF))) {
-                        continue;
-                    }
+        int[] nums = { 10, 20, 30 };
+
+        for (EntityType type : EntityType.values()) {
+            for (WordSelectingMode mode : WordSelectingMode.values()) {
+                if (!(mode.equals(WordSelectingMode.SUM)
+                        || mode.equals(WordSelectingMode.AVG) || mode
+                            .equals(WordSelectingMode.IDF))) {
+                    continue;
+                }
+                for (int numOfWords : nums) {
                     featureList = new ArrayList<FeatureFactory>();
-                    featureList.add(new WordFeatureFactory(type, mode,
-                            numOfWords));
+                    featureList.add(new WordFeatureFactory(type, numOfWords,
+                            mode));
                     TOP_SERIES_FEATURE_EDITORS.add(new FeatureEditor(
                             featureList, "Top" + numOfWords + type + mode));
                 }
-            }
-            for (WordFeature.Mode mode : WordFeature.Mode.values()) {
-                if (!(mode.equals(WordFeature.Mode.SUM)
-                        || mode.equals(WordFeature.Mode.AVG) || mode
-                            .equals(WordFeature.Mode.IDF))) {
-                    continue;
-                }
-                featureList = new ArrayList<FeatureFactory>();
-                for (WordFeature.Type type : WordFeature.Type.values()) {
-                    featureList.add(new WordFeatureFactory(type, mode,
-                            numOfWords));
-                }
-                TOP_SERIES_FEATURE_EDITORS.add(new FeatureEditor(featureList,
-                        "Top" + numOfWords + "Com" + mode));
             }
         }
     }
@@ -111,27 +97,35 @@ public class Main {
     static {
         ENTITY_PAIR_FEATURE_EDITORS = new ArrayList<FeatureEditor>();
         int[] nums = { 10, 20, 30 };
-        boolean[] needs = { true };
-        for (SimCalculator.Mode mode : SimCalculator.Mode.values()) {
-            if (mode == SimCalculator.Mode.AEMI
-                    || mode == SimCalculator.Mode.JACCARD
-                    || mode == SimCalculator.Mode.LIFT) {
-                continue;
-            }
-            for (int num : nums) {
-                for (boolean need : needs) {
-                    List<FeatureFactory> featureList =
-                            new ArrayList<FeatureFactory>();
-                    EntityPairFactory fac = new EntityPairFactory();
-                    fac.para.mode = mode;
-                    fac.para.num = num;
-                    fac.para.needEntity = need;
-                    fac.para.withWeb = false;
-                    featureList.add(fac);
-                    ENTITY_PAIR_FEATURE_EDITORS.add(new FeatureEditor(
-                            featureList, EntityPairFactory.PREFIX
-                                    + fac.para.mode + fac.para.num
-                                    + fac.para.needEntity + "Prescreen"));
+        boolean[] rts = { true, false };
+        for (SimMode mode : SimMode.values()) {
+            for (boolean rt : rts) {
+                if (!rt
+                        && !(mode == SimMode.AEMI || mode == SimMode.JACCARD || mode == SimMode.LIFT)) {
+                    continue;
+                }
+                for (EntityType type : EntityType.values()) {
+                    if (!(type == EntityType.ALLTYPE || type == EntityType.WORD)) {
+                        continue;
+                    }
+                    for (int num : nums) {
+                        List<FeatureFactory> featureList =
+                                new ArrayList<FeatureFactory>();
+                        EntityPairFactory fac = new EntityPairFactory();
+                        fac.para.docPara.withOt = true;
+                        fac.para.docPara.withRt = rt;
+                        fac.para.docPara.withWeb = false;
+                        fac.para.docPara.entityType = type;
+                        fac.para.docPara.numOfWords = -1;
+                        fac.para.simMode = mode;
+                        fac.para.numOfPairs = num;
+                        fac.para.needPrescreen = false;
+
+                        featureList.add(fac);
+                        ENTITY_PAIR_FEATURE_EDITORS.add(new FeatureEditor(
+                                featureList, EntityPairFactory.PREFIX + mode
+                                        + num + type + "RT" + rt));
+                    }
                 }
             }
         }
@@ -141,24 +135,41 @@ public class Main {
     static {
         CLUSTER_FEATURE_EDITORS = new ArrayList<FeatureEditor>();
 
-        SimCalculator.Mode[] modes =
-                { SimCalculator.Mode.AEMI, SimCalculator.Mode.JACCARD };
+        SimMode[] modes = { SimMode.AEMI, SimMode.JACCARD };
         int[] nums = { 10, 20, 30 };
         boolean[] reattach = { true, false };
-        for (SimCalculator.Mode mode : modes) {
-            for (int num : nums) {
-                for (boolean reat : reattach) {
-                    List<FeatureFactory> featureList =
-                            new ArrayList<FeatureFactory>();
-                    ClusterWordFeatureFactory fac =
-                            new ClusterWordFeatureFactory();
-                    fac.para.mode = mode;
-                    fac.para.numOfCl = num;
-                    fac.para.reattach = reat;
-                    featureList.add(fac);
-                    CLUSTER_FEATURE_EDITORS.add(new FeatureEditor(featureList,
-                            fac.para.mode.toString() + fac.para.numOfCl
-                                    + fac.para.reattach));
+        boolean[] rts = { true, false };
+        boolean[] webs = { true, false };
+        for (SimMode simMode : modes) {
+            for (boolean rt : rts) {
+                for (boolean web : webs) {
+                    if (rt && web) {
+                        continue;
+                    }
+                    for (boolean reat : reattach) {
+                        for (int num : nums) {
+                            List<FeatureFactory> featureList =
+                                    new ArrayList<FeatureFactory>();
+                            ClusterWordFeatureFactory fac =
+                                    new ClusterWordFeatureFactory();
+
+                            fac.para.docPara.entityType = EntityType.ALLTYPE;
+                            fac.para.docPara.numOfWords = -1;
+                            fac.para.docPara.withOt = true;
+                            fac.para.docPara.withRt = rt;
+                            fac.para.docPara.withWeb = web;
+
+                            fac.para.simMode = simMode;
+                            fac.para.needPrescreen = false;
+                            fac.para.clAlg = new SingleCutAlg(num, reat);
+
+                            featureList.add(fac);
+                            CLUSTER_FEATURE_EDITORS.add(new FeatureEditor(
+                                    featureList, simMode.toString() + num
+                                            + "_Reattach" + reat + "_RT" + rt
+                                            + "_Web" + web));
+                        }
+                    }
                 }
             }
         }

@@ -11,6 +11,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import util.Dbg;
+import features.ClusterWord.ClAlg;
 import features.SimTable.Pair;
 
 /**
@@ -21,21 +22,23 @@ import features.SimTable.Pair;
  *         email: sunx2013@my.fit.edu
  * @date Jun 22, 2015 11:54:43 PM
  */
-public class SingleCutAlg {
+public class SingleCutAlg implements ClAlg {
     private static boolean DBG = false;
     private static final int maxNumOfSteps = 1000;
+
     int maxInitClusterSize = 20;
     int numOfCl = 10;
     boolean reattach = false;
 
     List<Set<String>> clusters = null;
-    Set<String> single = null;
 
-    static int wordCount = 0; // For debug.
+    public SingleCutAlg(int numOfCl, boolean reattach) {
+        this.numOfCl = numOfCl;
+        this.reattach = reattach;
+    }
 
-    public void cluster (SimTable simTable, List<String> wordList) {
-        wordCount = wordList.size(); // For debug.
-
+    @Override
+    public List<Set<String>> cluster (SimTable simTable, List<String> wordList) {
         clusters = new ArrayList<Set<String>>();
 
         simTable.findMaxMinValues();
@@ -43,7 +46,7 @@ public class SingleCutAlg {
         double threshold = simTable.min;
 
         // Get initial singletons.
-        single = getSingletons(simTable, wordList);
+        Set<String> single = getSingletons(simTable, wordList);
 
         if (Dbg.dbg) {
             System.out.println("*****");
@@ -107,7 +110,8 @@ public class SingleCutAlg {
             System.out.println("Clustering result:");
             for (int i = 0; i < clusters.size(); i++) {
                 System.out.println("Cluster " + i + ":");
-                System.out.println(clusters.get(i).toString());
+                System.out.println(clusters.get(i).size() + " "
+                        + clusters.get(i).toString());
             }
         }
 
@@ -128,9 +132,11 @@ public class SingleCutAlg {
             System.out.println("Final clustering result:");
             for (int i = 0; i < clusters.size(); i++) {
                 System.out.println("Cluster " + i + ":");
-                System.out.println(clusters.get(i).toString());
+                System.out.println(clusters.get(i).size() + " "
+                        + clusters.get(i).toString());
             }
         }
+        return clusters;
     }
 
     private void reattachStage (List<Set<String>> selectedClusters,
@@ -307,7 +313,7 @@ public class SingleCutAlg {
                     que.add(nei);
                 }
             }
-            assert que.size() <= wordCount;
+            // assert que.size() <= wordCount;
         }
         return outQue;
     }

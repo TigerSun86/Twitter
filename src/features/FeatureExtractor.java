@@ -35,10 +35,6 @@ import datacollection.Database;
 import features.AnewMap.Anew;
 import features.ClusterWord.ClusterWordSetting;
 import features.FeatureEditor.FeatureFactory;
-import features.WordFeature.DomainMethods;
-import features.WordFeature.HashMethods;
-import features.WordFeature.MentionMethods;
-import features.WordFeature.WordMethods;
 
 /**
  * FileName: FeatureExtractor.java
@@ -1237,142 +1233,6 @@ public class FeatureExtractor {
     }
 
     /**
-     * FTopWord.
-     */
-    public static class FTopWord extends FeatureGetter {
-        String word;
-        boolean needStem;
-
-        public FTopWord(String word, boolean needStem) {
-            this.word = word;
-            this.needStem = needStem;
-        }
-
-        private static HashMap<Long, List<String>> tidToWords =
-                new HashMap<Long, List<String>>();
-
-        @Override
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets) {
-            if (!tidToWords.containsKey(t.getId())) {
-                tidToWords.put(t.getId(),
-                        WordFeature.splitIntoWords(t, true, needStem));
-            }
-            List<String> words = tidToWords.get(t.getId());
-            int count = 0;
-            for (String w : words) {
-                if (word.equals(w)) {
-                    count++;
-                    break;
-                }
-            }
-            final String feature = (count == 0 ? F0 : F1);
-            return feature;
-        }
-
-        @Override
-        public RawAttr getAttr () {
-            return getDiscreteAttr(WordMethods.FEATURE_PRIFIX + word);
-        }
-    }
-
-    /**
-     * FTopHash.
-     */
-    public static class FTopHash extends FeatureGetter {
-        String word;
-
-        public FTopHash(String word) {
-            this.word = word;
-        }
-
-        @Override
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets) {
-            HashtagEntity[] hashes = t.getHashtagEntities();
-            int count = 0;
-            for (HashtagEntity h : hashes) {
-                if (word.equalsIgnoreCase(h.getText())) {
-                    count++;
-                    break;
-                }
-            }
-            final String feature = (count == 0 ? F0 : F1);
-            return feature;
-        }
-
-        @Override
-        public RawAttr getAttr () {
-            return getDiscreteAttr(HashMethods.FEATURE_PRIFIX + word);
-        }
-    }
-
-    /**
-     * FTopMention.
-     */
-    public static class FTopMention extends FeatureGetter {
-        String word;
-
-        public FTopMention(String word) {
-            this.word = word;
-        }
-
-        @Override
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets) {
-            UserMentionEntity[] mentions = t.getUserMentionEntities();
-            int count = 0;
-            for (UserMentionEntity m : mentions) {
-                if (word.equalsIgnoreCase(m.getScreenName())) {
-                    count++;
-                    break;
-                }
-            }
-            final String feature = (count == 0 ? F0 : F1);
-            return feature;
-        }
-
-        @Override
-        public RawAttr getAttr () {
-            return getDiscreteAttr(MentionMethods.FEATURE_PRIFIX + word);
-        }
-    }
-
-    /**
-     * FTopDomain.
-     */
-    public static class FTopDomain extends FeatureGetter {
-        String word;
-
-        public FTopDomain(String word) {
-            this.word = word;
-        }
-
-        @Override
-        public String getFeature (Status t, User userProfile,
-                List<Status> userTweets) {
-            URLEntity[] urls = t.getURLEntities();
-            int count = 0;
-            for (URLEntity url : urls) {
-                String domain =
-                        DomainGetter.getInstance().getDomain(url.getURL());
-                if (!domain.equals(DomainGetter.UNKNOWN_DOMAIN)
-                        && word.equalsIgnoreCase(domain)) {
-                    count++;
-                    break;
-                }
-            }
-            final String feature = (count == 0 ? F0 : F1);
-            return feature;
-        }
-
-        @Override
-        public RawAttr getAttr () {
-            return getDiscreteAttr(DomainMethods.FEATURE_PRIFIX + word);
-        }
-    }
-
-    /**
      * FTweetCluster.
      */
     public static class FTweetCluster extends FeatureGetter {
@@ -1448,13 +1308,16 @@ public class FeatureExtractor {
         }
 
         int clusterId;
+        int numOfCl;
         HashMap<String, Integer> word2Cl;
         ClusterWordSetting para;
         SharedCache cache;
 
-        public FWordCluster(int clusterId, HashMap<String, Integer> word2Cl,
-                ClusterWordSetting para, SharedCache cache) {
+        public FWordCluster(int clusterId, int numOfCl,
+                HashMap<String, Integer> word2Cl, ClusterWordSetting para,
+                SharedCache cache) {
             this.clusterId = clusterId;
+            this.numOfCl = numOfCl;
             this.word2Cl = word2Cl;
             this.para = para;
             this.cache = cache;
@@ -1470,9 +1333,9 @@ public class FeatureExtractor {
                 countForEachCl = cache.clCache.get(t.getId());
             } else { // Haven't cached.
                 total = 0;
-                countForEachCl = new int[para.numOfCl];
+                countForEachCl = new int[numOfCl];
                 List<String> words =
-                        WordFeature.splitIntoWords(t, true, para.needStem);
+                        WordFeature.splitIntoWords(t, true, NEED_STEM);
                 for (String w : words) {
                     Integer cl = word2Cl.get(w);
                     if (cl != null && cl >= 0 && cl < countForEachCl.length) {
@@ -1546,13 +1409,54 @@ public class FeatureExtractor {
         }
     }
 
+    private static final HashMap<Long, Set<String>> TWEET_2_ENTITIES_CACHE =
+            new HashMap<Long, Set<String>>();
+
+    private static Set<String> getEntities (Status t) {
+        Set<String> entities = TWEET_2_ENTITIES_CACHE.get(t.getId());
+        if (entities == null) {
+            // Always split tweet with all entities.
+            entities =
+                    WordStatisDoc.getEntitiesFromTweet(t,
+                            WordStatisDoc.EntityType.ALLTYPE);
+            TWEET_2_ENTITIES_CACHE.put(t.getId(), entities);
+        }
+        return entities;
+    }
+
+    /**
+     * FTopEntity.
+     */
+    public static class FTopEntity extends FeatureGetter {
+        String en;
+
+        public FTopEntity(String en) {
+            this.en = en;
+        }
+
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            Set<String> entities = getEntities(t);
+            final String feature;
+            if (entities.contains(en)) {
+                feature = F1;
+            } else {
+                feature = F0;
+            }
+            return feature;
+        }
+
+        @Override
+        public RawAttr getAttr () {
+            return getDiscreteAttr(WordFeatureFactory.FEATURE_PRIFIX + en);
+        }
+    }
+
     /**
      * FEntityPair.
      */
     public static class FEntityPair extends FeatureGetter {
-        private static final HashMap<Long, Set<String>> tidToEntities =
-                new HashMap<Long, Set<String>>();
-
         String en1;
         String en2;
 
@@ -1564,14 +1468,7 @@ public class FeatureExtractor {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
-            Set<String> entities = tidToEntities.get(t.getId());
-            if (entities == null) {
-                // Always split with entities. It won't hurt result, but benefit
-                // cache.
-                entities = EntityPair.getEntitiesFromTweet(t, true);
-                tidToEntities.put(t.getId(), entities);
-            }
-
+            Set<String> entities = getEntities(t);
             final String feature;
             if (entities.contains(en1) && entities.contains(en2)) {
                 feature = F1;
@@ -1583,8 +1480,8 @@ public class FeatureExtractor {
 
         @Override
         public RawAttr getAttr () {
-            return getDiscreteAttr(EntityPairFactory.PREFIX + en1
-                    + SimCalculator.WORD_SEPARATER + en2);
+            return getDiscreteAttr(EntityPairFactory.PREFIX
+                    + SimTable.getTwoWordsKey(en1, en2));
         }
     }
 

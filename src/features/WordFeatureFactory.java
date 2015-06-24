@@ -5,16 +5,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import main.ExampleGetter;
 import twitter4j.Status;
+import util.Dbg;
+import datacollection.Database;
 import features.FeatureEditor.FeatureFactory;
+import features.FeatureExtractor.FTopEntity;
 import features.FeatureExtractor.FeatureGetter;
-import features.WordFeature.DomainMethods;
-import features.WordFeature.EntityMethods;
-import features.WordFeature.HashMethods;
-import features.WordFeature.MentionMethods;
-import features.WordFeature.Mode;
-import features.WordFeature.Type;
-import features.WordFeature.WordMethods;
+import features.WordFeature.WordSelectingMode;
+import features.WordStatisDoc.EntityType;
 
 /**
  * FileName: WordFeatureFactory.java
@@ -25,37 +24,36 @@ import features.WordFeature.WordMethods;
  * @date Jun 3, 2015 9:11:35 PM
  */
 public class WordFeatureFactory implements FeatureFactory {
-    private Type type;
-    private Mode mode;
-    private int numOfWords;
+    public static final String FEATURE_PRIFIX = "TopEntity_";
 
-    public WordFeatureFactory(Type type, Mode mode, int numOfWords) {
+    private EntityType type;
+    private int numOfWords;
+    private WordSelectingMode selectingMode;
+
+    public WordFeatureFactory(EntityType type, int numOfWords,
+            WordSelectingMode selectingMode) {
         this.type = type;
-        this.mode = mode;
         this.numOfWords = numOfWords;
+        this.selectingMode = selectingMode;
     }
 
     @Override
     public List<FeatureGetter> getNewFeatures (List<Status> tweets) {
-        EntityMethods methods;
-        if (type.equals(Type.WORD)) {
-            methods = new WordMethods(FeatureExtractor.NEED_STEM);
-        } else if (type.equals(Type.HASH)) {
-            methods = new HashMethods();
-        } else if (type.equals(Type.MENTION)) {
-            methods = new MentionMethods();
-        } else { // if(type.equals(Type.DOMAIN))
-            methods = new DomainMethods();
-        }
-
-        // Convert tweets to entities.
-        methods.analyseTweets(tweets);
-        List<String> topEntities =
-                WordFeature.getTopEntities(methods.getEntitiesInTweets(),
-                        methods.getNumOfRts(), mode, numOfWords);
+        WordStatisDoc doc = new WordStatisDoc();
+        doc.para.withOt = true;
+        doc.para.withRt = true;
+        doc.para.withWeb = false;
+        doc.para.entityType = this.type;
+        doc.para.numOfWords = this.numOfWords;
+        doc.para.selectingMode = this.selectingMode;
+        doc.init(tweets);
+        List<String> topEntities = doc.wordList;
         List<FeatureGetter> list = new ArrayList<FeatureGetter>();
         for (String entity : topEntities) { // Add entities as new features.
-            list.add(methods.getFeatureInstance(entity));
+            list.add(new FTopEntity(entity));
+        }
+        if (Dbg.dbg) {
+            System.out.println("Selected " + topEntities.size() + " entities.");
         }
         return list;
     }
@@ -63,16 +61,28 @@ public class WordFeatureFactory implements FeatureFactory {
     @Override
     public Set<String> conflictedFeaturesOfBase () {
         Set<String> result = new HashSet<String>();
-        if (type.equals(Type.WORD)) {
+        if (type == EntityType.ALLTYPE || type == EntityType.WORD) {
             result.add("18RtWord");
-        } else if (type.equals(Type.HASH)) {
+        } else if (type == EntityType.ALLTYPE || type == EntityType.HASHTAG) {
             result.add("29Hashtag");
-        } else if (type.equals(Type.MENTION)) {
+        } else if (type == EntityType.ALLTYPE || type == EntityType.MENTION) {
             result.add("30Mention");
-        } else { // if(type.equals(Type.DOMAIN))
+        } else if (type == EntityType.ALLTYPE || type == EntityType.DOMAIN) {
             result.add("5Url");
         }
         return result;
+    }
+
+    private static void test () {
+        WordFeatureFactory fac =
+                new WordFeatureFactory(EntityType.ALLTYPE, 30,
+                        WordSelectingMode.DF);
+        fac.getNewFeatures(Database.getInstance().getAuthorTweets(16958346L,
+                ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_START_DATE));
+    }
+
+    public static void main (String[] args) {
+        test();
     }
 
 }

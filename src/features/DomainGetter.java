@@ -31,8 +31,6 @@ import weka.core.tokenizers.Tokenizer;
 
 import com.google.common.net.InternetDomainName;
 
-import features.ClusterWord.ClusterWordSetting;
-
 /**
  * FileName: DomainGetter.java
  * @Description:
@@ -562,7 +560,7 @@ public class DomainGetter {
                     }
                     String page = readWebPageFile(FILE_PATH + file);
                     List<String> words =
-                            page2Words(page, new ClusterWordSetting().needStem);
+                            page2Words(page, FeatureExtractor.NEED_STEM);
                     HashSet<String> wVisited = new HashSet<String>();
                     for (String w : words) {
                         if (wVisited.contains(w)) {

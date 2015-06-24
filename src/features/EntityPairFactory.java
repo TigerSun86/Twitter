@@ -12,8 +12,9 @@ import features.EntityPair.EntityPairSetting;
 import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor.FEntityPair;
 import features.FeatureExtractor.FeatureGetter;
-import features.SimCalculator.Mode;
+import features.SimCalculator.SimMode;
 import features.SimTable.Pair;
+import features.WordStatisDoc.EntityType;
 
 /**
  * FileName: EntityPairFactory.java
@@ -32,11 +33,10 @@ public class EntityPairFactory implements FeatureFactory {
     public List<FeatureGetter> getNewFeatures (List<Status> tweets) {
         EntityPair ep = new EntityPair();
         ep.para = this.para;
-        List<Pair> pairs = ep.getTopEntities(tweets);
+        List<Pair> pairs = ep.getTopEntityPairs(tweets);
         List<FeatureGetter> list = new ArrayList<FeatureGetter>();
         for (Pair p : pairs) {
-            String[] ens = p.e.split(SimCalculator.WORD_SEPARATER);
-            list.add(new FEntityPair(ens[0], ens[1]));
+            list.add(new FEntityPair(p.w1, p.w2));
         }
 
         return list;
@@ -49,11 +49,15 @@ public class EntityPairFactory implements FeatureFactory {
 
     private static void test () {
         EntityPairFactory fac = new EntityPairFactory();
-        fac.para.mode = Mode.AEMI;
-        fac.para.num = 10;
-        fac.para.withRt = false;
+        fac.para.docPara.withOt = true;
+        fac.para.docPara.withRt = true;
+        fac.para.docPara.withWeb = false;
+        fac.para.docPara.entityType = EntityType.ALLTYPE;
+        fac.para.docPara.numOfWords = -1;
+        fac.para.simMode = SimMode.IDF;
+        fac.para.numOfPairs = 10;
         fac.para.needPrescreen = false;
-        fac.getNewFeatures(Database.getInstance().getAuthorTweets(15461733L,
+        fac.getNewFeatures(Database.getInstance().getAuthorTweets(16958346L,
                 ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_START_DATE));
     }
 
