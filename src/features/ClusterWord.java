@@ -30,13 +30,21 @@ public class ClusterWord {
     public int numOfCl = -1; // output.
 
     public HashMap<String, Integer> clusterWords (List<Status> tweets) {
+        long time = SysUtil.getCpuTime();
+        if (Dbg.dbg) {
+            System.out.println("**** ClusterWord");
+            System.out.printf(
+                    "Author: %s, simMode: %s, needPrescreen: %b, clAlg: %s%n",
+                    tweets.get(0).getUser().getScreenName(), para.simMode
+                            .toString(), para.needPrescreen, para.clAlg
+                            .getClass().getSimpleName());
+            System.out.println(para.docPara.toString());
+        }
         WordStatisDoc doc = new WordStatisDoc(this.para.docPara);
         doc.init(tweets);
 
         SimCalculator simCal =
                 new SimCalculator(para.simMode, para.needPrescreen, doc);
-
-        long time = SysUtil.getCpuTime();
 
         SimTable simTable = simCal.getSimTable();
         List<Set<String>> clusters = para.clAlg.cluster(simTable, doc.wordList);

@@ -55,15 +55,15 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
     private static void test () {
         ClusterWordFeatureFactory fac = new ClusterWordFeatureFactory();
         fac.para.docPara.withOt = true;
-        fac.para.docPara.withRt = false;
+        fac.para.docPara.withRt = true;
         fac.para.docPara.withWeb = false;
-        fac.para.docPara.entityType = EntityType.HASHTAG;
+        fac.para.docPara.entityType = EntityType.ALLTYPE;
         fac.para.docPara.numOfWords = -1;
 
         fac.para.simMode = SimMode.AEMI;
         fac.para.needPrescreen = false;
-        fac.para.clAlg = new SingleCutAlg(10, false);
-        fac.getNewFeatures(Database.getInstance().getAuthorTweets(16958346L,
+        fac.para.clAlg = new SingleCutAlg(30, false);
+        fac.getNewFeatures(Database.getInstance().getAuthorTweets(15461733L,
                 ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_START_DATE));
     }
 
