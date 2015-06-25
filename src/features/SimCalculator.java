@@ -18,7 +18,7 @@ import features.SimTable.Pair;
  * @date Jun 18, 2015 8:41:39 PM
  */
 public class SimCalculator {
-    private static final int LEAST_FREQUENCY = 1;
+    private static final int LEAST_FREQUENCY = 2;
     private static final boolean M_ESTIMATE = true;
     private static final boolean ONLY_KEEP_VALID_PAIR = true;
 
@@ -176,6 +176,24 @@ public class SimCalculator {
         return dfaandb;
     }
 
+    private double getSumLogRtaAndb (String w1, String w2) {
+        BitSet seta = doc.word2DocIds.get(w1);
+        BitSet setb = doc.word2DocIds.get(w2);
+        BitSet intersection = BS_TEMP;
+        intersection.clear();
+        intersection.or(seta);
+        intersection.and(setb);
+
+        double dfaandb;
+        assert doc.logNumOfRtOfDocs != null;
+        dfaandb = 0; // Sum of log number of retweets.
+        for (int id = intersection.nextSetBit(0); id >= 0; id =
+                intersection.nextSetBit(id + 1)) {
+            dfaandb += doc.logNumOfRtOfDocs.get(id);
+        }
+        return dfaandb;
+    }
+
     public double getDfaOrb (String w1, String w2, boolean rt) {
         BitSet seta = doc.word2DocIds.get(w1);
         BitSet setb = doc.word2DocIds.get(w2);
@@ -323,12 +341,12 @@ public class SimCalculator {
     }
 
     private double simSum (String w1, String w2) {
-        double sumaandb = getDfaAndb(w1, w2, true);
+        double sumaandb = getSumLogRtaAndb(w1, w2);
         return sumaandb;
     }
 
     private double simIdf (String w1, String w2) {
-        double sumaandb = getDfaAndb(w1, w2, true);
+        double sumaandb = getSumLogRtaAndb(w1, w2);
         if (sumaandb == 0) {
             return 0;
         }
@@ -339,7 +357,7 @@ public class SimCalculator {
     }
 
     private double simAvg (String w1, String w2) {
-        double sumaandb = getDfaAndb(w1, w2, true);
+        double sumaandb = getSumLogRtaAndb(w1, w2);
         if (sumaandb == 0) {
             return 0;
         }

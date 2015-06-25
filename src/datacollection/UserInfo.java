@@ -3,6 +3,8 @@ package datacollection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 import twitter4j.User;
 
@@ -15,24 +17,23 @@ import twitter4j.User;
  * @date Jan 26, 2015 8:10:07 PM
  */
 public class UserInfo {
-    public static final HashSet<Long> KEY_AUTHORS;
+    public static final Set<Long> KEY_AUTHORS;
     static {
-        KEY_AUTHORS = new HashSet<Long>();
-        // screen name: Greenpeace, name: Greenpeace
-        KEY_AUTHORS.add(3459051L);
-        // screen name: UNFCCC, name: UNFCCC
-        KEY_AUTHORS.add(17463923L);
+        KEY_AUTHORS = new LinkedHashSet<Long>();
+        // screen name: ClimateDesk, name: Climate Desk
+        KEY_AUTHORS.add(120181944L);
         // screen name: climateprogress, name: Climate Progress
         KEY_AUTHORS.add(28657802L);
         // screen name: ClimateReality, name: Climate Reality
         KEY_AUTHORS.add(16958346L);
-        // screen name: ClimateDesk, name: Climate Desk
-        KEY_AUTHORS.add(120181944L);
         // screen name: EarthVitalSigns, name: NASA Climate
         KEY_AUTHORS.add(15461733L);
+        // screen name: Greenpeace, name: Greenpeace
+        KEY_AUTHORS.add(3459051L);
         // screen name: UNEP, name: UN Environment
         KEY_AUTHORS.add(38146999L);
-
+        // screen name: UNFCCC, name: UNFCCC
+        KEY_AUTHORS.add(17463923L);
     }
     public static final HashMap<Long, String> KA_ID2SCREENNAME;
     static {

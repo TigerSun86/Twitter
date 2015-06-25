@@ -77,11 +77,6 @@ public class Main {
 
         for (EntityType type : EntityType.values()) {
             for (WordSelectingMode mode : WordSelectingMode.values()) {
-                if (!(mode.equals(WordSelectingMode.SUM)
-                        || mode.equals(WordSelectingMode.AVG) || mode
-                            .equals(WordSelectingMode.IDF))) {
-                    continue;
-                }
                 for (int numOfWords : nums) {
                     featureList = new ArrayList<FeatureFactory>();
                     featureList.add(new WordFeatureFactory(type, numOfWords,
@@ -122,9 +117,11 @@ public class Main {
                         fac.para.needPrescreen = false;
 
                         featureList.add(fac);
-                        ENTITY_PAIR_FEATURE_EDITORS.add(new FeatureEditor(
-                                featureList, EntityPairFactory.PREFIX + mode
-                                        + num + type + "RT" + rt));
+                        ENTITY_PAIR_FEATURE_EDITORS
+                                .add(new FeatureEditor(featureList,
+                                        EntityPairFactory.PREFIX + mode + "_"
+                                                + +num + "_" + type + "_RT"
+                                                + rt));
                     }
                 }
             }
@@ -181,7 +178,7 @@ public class Main {
         featureList = new ArrayList<FeatureFactory>();
         featureList.add(new BaseFeatureFactory());
         FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
-        FEATURE_EDITORS.addAll(CLUSTER_FEATURE_EDITORS);
+        FEATURE_EDITORS.addAll(ENTITY_PAIR_FEATURE_EDITORS);
     }
 
     private void testClusterFeature () throws Exception {

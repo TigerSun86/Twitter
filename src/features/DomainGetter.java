@@ -138,7 +138,7 @@ public class DomainGetter {
 
     public String getDomain (String shortUrl) {
         if (!shortUrl2Domain.containsKey(shortUrl)) {
-            return UNKNOWN_DOMAIN;
+            crawlOneUrl(shortUrl);
         }
         return shortUrl2Domain.get(shortUrl);
     }

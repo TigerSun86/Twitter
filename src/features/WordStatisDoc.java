@@ -29,7 +29,6 @@ import features.WordFeature.WordSelectingMode;
  */
 public class WordStatisDoc {
     private static final int LEAST_FREQUENCY = 2;
-    private static final boolean LOG_FOR_NUM_OF_RT = true;
 
     public enum EntityType {
         ALLTYPE, WORD, HASHTAG, MENTION, DOMAIN
@@ -61,6 +60,7 @@ public class WordStatisDoc {
     public List<Set<String>> wordSetOfDocs = null;
     public HashMap<String, BitSet> word2DocIds = null;
     public List<Double> numOfRtOfDocs = null;
+    public List<Double> logNumOfRtOfDocs = null;
 
     public WordStatisDoc() {
         this.para = new WordStatisDocSetting();
@@ -177,18 +177,29 @@ public class WordStatisDoc {
         return totalNumOfRt;
     }
 
-    public double getRtDev () {
-        assert numOfRtOfDocs != null;
-        return MyMath.getStdDev(Doubles.toArray(numOfRtOfDocs));
+    public double getLogRtSum (String w) {
+        assert logNumOfRtOfDocs != null;
+        double totalNumOfRt = 0;
+        BitSet docIds = word2DocIds.get(w);
+        for (int id = docIds.nextSetBit(0); id >= 0; id =
+                docIds.nextSetBit(id + 1)) {
+            totalNumOfRt += logNumOfRtOfDocs.get(id);
+        }
+        return totalNumOfRt;
     }
 
-    public double getRtDev (String w) {
-        assert numOfRtOfDocs != null;
+    public double getLogRtDev () {
+        assert logNumOfRtOfDocs != null;
+        return MyMath.getStdDev(Doubles.toArray(logNumOfRtOfDocs));
+    }
+
+    public double getLogRtDev (String w) {
+        assert logNumOfRtOfDocs != null;
         List<Double> rts = new ArrayList<Double>();
         BitSet docIds = word2DocIds.get(w);
         for (int id = docIds.nextSetBit(0); id >= 0; id =
                 docIds.nextSetBit(id + 1)) {
-            rts.add(numOfRtOfDocs.get(id));
+            rts.add(logNumOfRtOfDocs.get(id));
         }
         return MyMath.getStdDev(Doubles.toArray(rts));
     }
@@ -203,6 +214,7 @@ public class WordStatisDoc {
         wordSetOfDocs = new ArrayList<Set<String>>();
         word2DocIds = new HashMap<String, BitSet>();
         numOfRtOfDocs = this.para.withRt ? new ArrayList<Double>() : null;
+        logNumOfRtOfDocs = this.para.withRt ? new ArrayList<Double>() : null;
 
         HashMap<String, Integer> wordCounter = new HashMap<String, Integer>();
         for (Status t : tweets) {
@@ -220,8 +232,8 @@ public class WordStatisDoc {
                 }
                 if (this.para.withRt) {
                     double count = t.getRetweetCount();
-                    if (LOG_FOR_NUM_OF_RT) count = Math.log(count + 1);
                     numOfRtOfDocs.add(count);
+                    logNumOfRtOfDocs.add(Math.log(count + 1));
                 }
             }
         }

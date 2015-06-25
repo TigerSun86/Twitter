@@ -41,15 +41,14 @@ public class WordFeature {
             for (String w : doc.wordList) {
                 // WordStatisDoc should guarantee word appearing at least twice.
                 assert doc.getDf(w) >= 2;
-                double negWordDev = -doc.getRtDev(w); // Prefer low dev.
+                double negWordDev = -doc.getLogRtDev(w); // Prefer low dev.
                 was.add(new WordAndScore(w, negWordDev));
-
             }
         } else if (mode == WordSelectingMode.DEVHIGH) {
             for (String w : doc.wordList) {
                 // WordStatisDoc should guarantee word appearing at least twice.
                 assert doc.getDf(w) >= 2;
-                double wordDev = doc.getRtDev(w);
+                double wordDev = doc.getLogRtDev(w);
                 was.add(new WordAndScore(w, wordDev));
 
             }
@@ -58,45 +57,45 @@ public class WordFeature {
                 was.add(new WordAndScore(w, doc.getDf(w)));
             }
         } else if (mode == WordSelectingMode.DFDEV) {
-            double dev = doc.getRtDev();
+            double dev = doc.getLogRtDev();
             for (String w : doc.wordList) {
                 int df = doc.getDf(w);
                 // WordStatisDoc should guarantee word appearing at least twice.
                 assert df >= 2;
                 // The dev lower than average.
-                if (doc.getRtDev(w) < dev) {
+                if (doc.getLogRtDev(w) < dev) {
                     was.add(new WordAndScore(w, df));
                 }
             }
         } else if (mode == WordSelectingMode.SUM) {
             for (String w : doc.wordList) {
-                was.add(new WordAndScore(w, doc.getRtSum(w)));
+                was.add(new WordAndScore(w, doc.getLogRtSum(w)));
             }
         } else if (mode == WordSelectingMode.SUMDEV) {
-            double dev = doc.getRtDev();
+            double dev = doc.getLogRtDev();
             for (String w : doc.wordList) {
                 // WordStatisDoc should guarantee word appearing at least twice.
                 assert doc.getDf(w) >= 2;
                 // The dev lower than average.
-                if (doc.getRtDev(w) < dev) {
-                    was.add(new WordAndScore(w, doc.getRtSum(w)));
+                if (doc.getLogRtDev(w) < dev) {
+                    was.add(new WordAndScore(w, doc.getLogRtSum(w)));
                 }
             }
         } else if (mode == WordSelectingMode.AVG) {
             for (String w : doc.wordList) {
-                was.add(new WordAndScore(w, doc.getRtSum(w) / doc.getDf(w)));
+                was.add(new WordAndScore(w, doc.getLogRtSum(w) / doc.getDf(w)));
             }
         } else if (mode == WordSelectingMode.IDF) {
             double logD = Math.log(doc.getDf());
             for (String w : doc.wordList) {
                 double idf = logD - Math.log(doc.getDf(w));
-                was.add(new WordAndScore(w, doc.getRtSum(w) * idf));
+                was.add(new WordAndScore(w, doc.getLogRtSum(w) * idf));
             }
         } else {// if (mode == WordSelectingMode.ENTROPY) {
             assert mode == WordSelectingMode.ENTROPY;
             for (String w : doc.wordList) {
                 double prob = ((double) doc.getDf(w)) / doc.getDf();
-                was.add(new WordAndScore(w, doc.getRtSum(w) * getEntropy(prob)
+                was.add(new WordAndScore(w, doc.getLogRtSum(w) * getEntropy(prob)
                         / doc.getDf(w)));
             }
         }
