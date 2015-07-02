@@ -109,9 +109,10 @@ public class SingleCutAlg implements ClAlg {
             System.out.println("*****");
             System.out.println("Clustering result:");
             for (int i = 0; i < clusters.size(); i++) {
+                List<String> sorted = new ArrayList<String>(clusters.get(i));
+                Collections.sort(sorted);
                 System.out.println("Cluster " + i + ":");
-                System.out.println(clusters.get(i).size() + " "
-                        + clusters.get(i).toString());
+                System.out.println(sorted.size() + " " + sorted.toString());
             }
         }
 
@@ -131,9 +132,10 @@ public class SingleCutAlg implements ClAlg {
             System.out.println("*****");
             System.out.println("Final clustering result:");
             for (int i = 0; i < clusters.size(); i++) {
+                List<String> sorted = new ArrayList<String>(clusters.get(i));
+                Collections.sort(sorted);
                 System.out.println("Cluster " + i + ":");
-                System.out.println(clusters.get(i).size() + " "
-                        + clusters.get(i).toString());
+                System.out.println(sorted.size() + " " + sorted.toString());
             }
         }
         return clusters;
@@ -175,8 +177,10 @@ public class SingleCutAlg implements ClAlg {
 
             System.out.println("Selected seed clusters:");
             for (int i = 0; i < clusters.size(); i++) {
+                List<String> sorted = new ArrayList<String>(clusters.get(i));
+                Collections.sort(sorted);
                 System.out.println("Cluster " + i + ":");
-                System.out.println(clusters.get(i).toString());
+                System.out.println(sorted.size() + " " + sorted.toString());
             }
         }
 

@@ -1334,9 +1334,8 @@ public class FeatureExtractor {
             } else { // Haven't cached.
                 total = 0;
                 countForEachCl = new int[numOfCl];
-                List<String> words =
-                        WordFeature.splitIntoWords(t, true, NEED_STEM);
-                for (String w : words) {
+                Set<String> entities = getEntities(t);
+                for (String w : entities) {
                     Integer cl = word2Cl.get(w);
                     if (cl != null && cl >= 0 && cl < countForEachCl.length) {
                         countForEachCl[cl]++; // It's a word can be clustered.

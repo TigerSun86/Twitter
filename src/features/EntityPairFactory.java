@@ -8,6 +8,7 @@ import java.util.Set;
 import main.ExampleGetter;
 import twitter4j.Status;
 import datacollection.Database;
+import datacollection.UserInfo;
 import features.EntityPair.EntityPairSetting;
 import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor.FEntityPair;
@@ -48,17 +49,23 @@ public class EntityPairFactory implements FeatureFactory {
     }
 
     private static void test () {
-        EntityPairFactory fac = new EntityPairFactory();
-        fac.para.docPara.withOt = true;
-        fac.para.docPara.withRt = true;
-        fac.para.docPara.withWeb = false;
-        fac.para.docPara.entityType = EntityType.ALLTYPE;
-        fac.para.docPara.numOfWords = -1;
-        fac.para.simMode = SimMode.IDF;
-        fac.para.numOfPairs = 10;
-        fac.para.needPrescreen = false;
-        fac.getNewFeatures(Database.getInstance().getAuthorTweets(16958346L,
-                ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_START_DATE));
+        for (long authorId : UserInfo.KEY_AUTHORS) {
+            if (authorId != 16958346L) {
+                // continue;
+            }
+            EntityPairFactory fac = new EntityPairFactory();
+            fac.para.docPara.withOt = true;
+            fac.para.docPara.withRt = false;
+            fac.para.docPara.withWeb = true;
+            fac.para.docPara.entityType = EntityType.ALLTYPE;
+            fac.para.docPara.numOfWords = -1;
+            fac.para.simMode = SimMode.AEMI;
+            fac.para.numOfPairs = 10;
+            fac.para.needPrescreen = false;
+            fac.getNewFeatures(Database.getInstance().getAuthorTweets(
+                    authorId, ExampleGetter.TRAIN_START_DATE,
+                    ExampleGetter.TEST_START_DATE));
+        }
     }
 
     public static void main (String[] args) {

@@ -9,6 +9,7 @@ import main.ExampleGetter;
 import twitter4j.Status;
 import util.Dbg;
 import datacollection.Database;
+import datacollection.UserInfo;
 import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor.FTopEntity;
 import features.FeatureExtractor.FeatureGetter;
@@ -74,11 +75,19 @@ public class WordFeatureFactory implements FeatureFactory {
     }
 
     private static void test () {
-        WordFeatureFactory fac =
-                new WordFeatureFactory(EntityType.ALLTYPE, 30,
-                        WordSelectingMode.DF);
-        fac.getNewFeatures(Database.getInstance().getAuthorTweets(16958346L,
-                ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_START_DATE));
+        for (long authorId : UserInfo.KEY_AUTHORS) {
+            if (authorId != 16958346L) {
+                // continue;
+            }
+            System.out.println("**** Author: "
+                    + UserInfo.KA_ID2SCREENNAME.get(authorId));
+            WordFeatureFactory fac =
+                    new WordFeatureFactory(EntityType.ALLTYPE, 30,
+                            WordSelectingMode.SUM2);
+            fac.getNewFeatures(Database.getInstance().getAuthorTweets(authorId,
+                    ExampleGetter.TRAIN_START_DATE,
+                    ExampleGetter.TEST_START_DATE));
+        }
     }
 
     public static void main (String[] args) {

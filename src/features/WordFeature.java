@@ -30,7 +30,7 @@ public class WordFeature {
     private static final Stemmer STEMMER = new IteratedLovinsStemmer();
 
     public enum WordSelectingMode {
-        SUM, AVG, IDF, ENTROPY, DF, SUMDEV, DEV, DFDEV, DEVHIGH
+        SUM, SUM2, AVG, IDF, IDF2, ENTROPY, DF, SUMDEV, DEV, DFDEV, DEVHIGH
     }
 
     public static List<String> getTopEntities (WordStatisDoc doc) {
@@ -71,6 +71,10 @@ public class WordFeature {
             for (String w : doc.wordList) {
                 was.add(new WordAndScore(w, doc.getLogRtSum(w)));
             }
+        } else if (mode == WordSelectingMode.SUM2) {
+            for (String w : doc.wordList) {
+                was.add(new WordAndScore(w, doc.getRtSum(w)));
+            }
         } else if (mode == WordSelectingMode.SUMDEV) {
             double dev = doc.getLogRtDev();
             for (String w : doc.wordList) {
@@ -91,12 +95,18 @@ public class WordFeature {
                 double idf = logD - Math.log(doc.getDf(w));
                 was.add(new WordAndScore(w, doc.getLogRtSum(w) * idf));
             }
+        } else if (mode == WordSelectingMode.IDF2) {
+            double logD = Math.log(doc.getDf());
+            for (String w : doc.wordList) {
+                double idf = logD - Math.log(doc.getDf(w));
+                was.add(new WordAndScore(w, doc.getRtSum(w) * idf));
+            }
         } else {// if (mode == WordSelectingMode.ENTROPY) {
             assert mode == WordSelectingMode.ENTROPY;
             for (String w : doc.wordList) {
                 double prob = ((double) doc.getDf(w)) / doc.getDf();
-                was.add(new WordAndScore(w, doc.getLogRtSum(w) * getEntropy(prob)
-                        / doc.getDf(w)));
+                was.add(new WordAndScore(w, doc.getLogRtSum(w)
+                        * getEntropy(prob) / doc.getDf(w)));
             }
         }
         // Sort from largest to smallest.
@@ -109,7 +119,8 @@ public class WordFeature {
         for (int i = 0; i < Math.min(doc.para.numOfWords, was.size()); i++) {
             topWords.add(was.get(i).w);
             if (Dbg.dbg) {
-                System.out.println(was.get(i).toString());
+                System.out.printf("%s df: %d%n", was.get(i).toString(),
+                        doc.getDf(was.get(i).w));
             }
         }
         return topWords;

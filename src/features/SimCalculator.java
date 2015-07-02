@@ -23,7 +23,7 @@ public class SimCalculator {
     private static final boolean ONLY_KEEP_VALID_PAIR = true;
 
     public enum SimMode {
-        JACCARD, AEMI, LIFT, DF, SUM, IDF, AVG
+        JACCARD, AEMI, LIFT, DF, SUM, SUM2, IDF, IDF2, AVG
     }
 
     // Intermediate information for output debug
@@ -118,6 +118,10 @@ public class SimCalculator {
                             sim = simSum(w1, w2);
                         } else if (simMode == SimMode.IDF) {
                             sim = simIdf(w1, w2);
+                        } else if (simMode == SimMode.SUM2) {
+                            sim = simSum2(w1, w2);
+                        } else if (simMode == SimMode.IDF2) {
+                            sim = simIdf2(w1, w2);
                         } else { // if (simMode == SimMode.AVG)
                             sim = simAvg(w1, w2);
                         }
@@ -190,6 +194,24 @@ public class SimCalculator {
         for (int id = intersection.nextSetBit(0); id >= 0; id =
                 intersection.nextSetBit(id + 1)) {
             dfaandb += doc.logNumOfRtOfDocs.get(id);
+        }
+        return dfaandb;
+    }
+
+    private double getSumRtaAndb (String w1, String w2) {
+        BitSet seta = doc.word2DocIds.get(w1);
+        BitSet setb = doc.word2DocIds.get(w2);
+        BitSet intersection = BS_TEMP;
+        intersection.clear();
+        intersection.or(seta);
+        intersection.and(setb);
+
+        double dfaandb;
+        assert doc.numOfRtOfDocs != null;
+        dfaandb = 0; // Sum of number of retweets.
+        for (int id = intersection.nextSetBit(0); id >= 0; id =
+                intersection.nextSetBit(id + 1)) {
+            dfaandb += doc.numOfRtOfDocs.get(id);
         }
         return dfaandb;
     }
@@ -347,6 +369,22 @@ public class SimCalculator {
 
     private double simIdf (String w1, String w2) {
         double sumaandb = getSumLogRtaAndb(w1, w2);
+        if (sumaandb == 0) {
+            return 0;
+        }
+        double dfaandb = getDfaAndb(w1, w2, false);
+        double logD = Math.log(doc.getDf());
+        double idf = logD - Math.log(dfaandb);
+        return sumaandb * idf;
+    }
+
+    private double simSum2 (String w1, String w2) {
+        double sumaandb = getSumRtaAndb(w1, w2);
+        return sumaandb;
+    }
+
+    private double simIdf2 (String w1, String w2) {
+        double sumaandb = getSumRtaAndb(w1, w2);
         if (sumaandb == 0) {
             return 0;
         }
