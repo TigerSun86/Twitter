@@ -82,7 +82,7 @@ public class SimTable {
         double[] values = Doubles.toArray(vs);
         double mean = MyMath.getMean(values);
         double dev = MyMath.getStdDev(values);
-        double thres = mean + dev;
+        double thres = 0;
         int oldSize = pairs.size();
         Iterator<Pair> iter = pairs.iterator();
         while (iter.hasNext()) {

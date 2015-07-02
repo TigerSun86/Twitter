@@ -77,6 +77,9 @@ public class Main {
 
         for (EntityType type : EntityType.values()) {
             for (WordSelectingMode mode : WordSelectingMode.values()) {
+                if (mode != WordSelectingMode.SUM2) {
+                    continue;
+                }
                 for (int numOfWords : nums) {
                     featureList = new ArrayList<FeatureFactory>();
                     featureList.add(new WordFeatureFactory(type, numOfWords,
@@ -94,6 +97,7 @@ public class Main {
         int[] nums = { 10, 20, 30 };
         boolean[] rts = { true, false };
         for (SimMode mode : SimMode.values()) {
+            if (!(mode == SimMode.SUM2 || mode == SimMode.IDF2)) continue;
             for (boolean rt : rts) {
                 if (!rt
                         && !(mode == SimMode.AEMI || mode == SimMode.JACCARD || mode == SimMode.LIFT)) {
@@ -134,36 +138,36 @@ public class Main {
 
         SimMode[] modes = { SimMode.AEMI, SimMode.JACCARD };
         int[] nums = { 10, 20, 30 };
-        boolean[] reattach = { true, false };
         boolean[] rts = { true, false };
         boolean[] webs = { true, false };
+        EntityType[] ens = { EntityType.ALLTYPE, EntityType.WORD };
         for (SimMode simMode : modes) {
             for (boolean rt : rts) {
                 for (boolean web : webs) {
                     if (rt && web) {
                         continue;
                     }
-                    for (boolean reat : reattach) {
+                    for (EntityType en : ens) {
                         for (int num : nums) {
                             List<FeatureFactory> featureList =
                                     new ArrayList<FeatureFactory>();
                             ClusterWordFeatureFactory fac =
                                     new ClusterWordFeatureFactory();
 
-                            fac.para.docPara.entityType = EntityType.ALLTYPE;
+                            fac.para.docPara.entityType = en;
                             fac.para.docPara.numOfWords = -1;
                             fac.para.docPara.withOt = true;
                             fac.para.docPara.withRt = rt;
                             fac.para.docPara.withWeb = web;
 
                             fac.para.simMode = simMode;
-                            fac.para.needPrescreen = false;
-                            fac.para.clAlg = new SingleCutAlg(num, reat);
+                            fac.para.needPrescreen = true;
+                            fac.para.clAlg = new SingleCutAlg(num, false);
 
                             featureList.add(fac);
                             CLUSTER_FEATURE_EDITORS.add(new FeatureEditor(
-                                    featureList, simMode.toString() + num
-                                            + "_Reattach" + reat + "_RT" + rt
+                                    featureList, simMode.toString() + num + "_"
+                                            + en.toString() + "_RT" + rt
                                             + "_Web" + web));
                         }
                     }
@@ -177,8 +181,8 @@ public class Main {
         List<FeatureFactory> featureList;
         featureList = new ArrayList<FeatureFactory>();
         featureList.add(new BaseFeatureFactory());
-        FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
-        FEATURE_EDITORS.addAll(ENTITY_PAIR_FEATURE_EDITORS);
+        // FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
+        FEATURE_EDITORS.addAll(CLUSTER_FEATURE_EDITORS);
     }
 
     private void testClusterFeature () throws Exception {
