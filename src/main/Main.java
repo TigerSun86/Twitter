@@ -175,14 +175,85 @@ public class Main {
             }
         }
     }
+
+    private static enum KickFeature {
+        NONE, E, P, C
+    }
+
+    private static final List<FeatureEditor> ALL_COMBINE_FEATURE_EDITORS;
+    static {
+        ALL_COMBINE_FEATURE_EDITORS = new ArrayList<FeatureEditor>();
+
+        EntityType eType = EntityType.ALLTYPE;
+        WordSelectingMode eMode = WordSelectingMode.IDF2;
+
+        boolean pRt = true;
+        boolean pWeb = false;
+        EntityType pType = EntityType.ALLTYPE;
+        SimMode pMode = SimMode.AEMI;
+
+        boolean cRt = false;
+        boolean cWeb = true;
+        EntityType cType = EntityType.WORD;
+        SimMode cMode = SimMode.AEMI;
+
+        int[] nums = { 10, 20, 30 };
+        for (KickFeature kick : KickFeature.values()) {
+            for (int num : nums) {
+                List<FeatureFactory> featureList =
+                        new ArrayList<FeatureFactory>();
+                StringBuilder info = new StringBuilder("Com");
+                if (kick != KickFeature.E) { // Entity
+                    featureList.add(new WordFeatureFactory(eType, num, eMode));
+                    info.append(String.format("_E_%d_%s_%s", num, eType, eMode));
+                }
+                if (kick != KickFeature.P) { // Pair
+                    EntityPairFactory fac = new EntityPairFactory();
+                    fac.para.docPara.withOt = true;
+                    fac.para.docPara.withRt = pRt;
+                    fac.para.docPara.withWeb = pWeb;
+                    fac.para.docPara.entityType = pType;
+                    fac.para.docPara.numOfWords = -1;
+                    fac.para.simMode = pMode;
+                    fac.para.numOfPairs = num;
+                    fac.para.needPrescreen = false;
+
+                    featureList.add(fac);
+                    info.append(String.format("_P_%d_RT%b_Web%b_%s_%s", num,
+                            pRt, pWeb, pType, pMode));
+                }
+                if (kick != KickFeature.C) { // Cluster
+                    ClusterWordFeatureFactory fac =
+                            new ClusterWordFeatureFactory();
+
+                    fac.para.docPara.withOt = true;
+                    fac.para.docPara.withRt = cRt;
+                    fac.para.docPara.withWeb = cWeb;
+                    fac.para.docPara.entityType = cType;
+                    fac.para.docPara.numOfWords = -1;
+
+                    fac.para.simMode = cMode;
+                    fac.para.needPrescreen = true;
+                    fac.para.clAlg = new SingleCutAlg(num, false);
+
+                    featureList.add(fac);
+                    info.append(String.format("_C_%d_RT%b_Web%b_%s_%s", num,
+                            cRt, cWeb, cType, cMode));
+                }
+                ALL_COMBINE_FEATURE_EDITORS.add(new FeatureEditor(featureList,
+                        info.toString()));
+            }
+        }
+
+    }
     private static final List<FeatureEditor> FEATURE_EDITORS;
     static {
         FEATURE_EDITORS = new ArrayList<FeatureEditor>();
         List<FeatureFactory> featureList;
         featureList = new ArrayList<FeatureFactory>();
         featureList.add(new BaseFeatureFactory());
-        // FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
-        FEATURE_EDITORS.addAll(CLUSTER_FEATURE_EDITORS);
+        FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
+        FEATURE_EDITORS.addAll(ALL_COMBINE_FEATURE_EDITORS);
     }
 
     private void testClusterFeature () throws Exception {
