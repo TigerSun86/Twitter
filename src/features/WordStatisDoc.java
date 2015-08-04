@@ -5,6 +5,7 @@ import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -29,6 +30,7 @@ import features.WordFeature.WordSelectingMode;
  */
 public class WordStatisDoc {
     private static final int LEAST_FREQUENCY = 2;
+    private static final boolean DISCARD_USELESS_WORDS_FROM_DOCUMENTS = true;
 
     public enum EntityType {
         ALLTYPE, WORD, HASHTAG, MENTION, DOMAIN
@@ -237,11 +239,24 @@ public class WordStatisDoc {
                 }
             }
         }
+
         Set<String> wordUsedMoreThanTwice = new HashSet<String>();
         for (Entry<String, Integer> entry : wordCounter.entrySet()) {
             if (entry.getValue() >= LEAST_FREQUENCY) {
                 // Only consider the word occurring twice or more.
                 wordUsedMoreThanTwice.add(entry.getKey());
+            }
+        }
+
+        if (DISCARD_USELESS_WORDS_FROM_DOCUMENTS && this.para.withOt) {
+            for (Set<String> doc : wordSetOfDocs) {
+                doc.retainAll(wordUsedMoreThanTwice);
+            }
+            Iterator<Set<String>> iter = wordSetOfDocs.iterator();
+            while (iter.hasNext()) {
+                if (iter.next().isEmpty()) {
+                    iter.remove();
+                }
             }
         }
 
@@ -265,10 +280,16 @@ public class WordStatisDoc {
     private void initWebPages (List<Status> tweets) {
         List<Set<String>> pages =
                 getWebPages(tweets, FeatureExtractor.NEED_STEM);
+        Set<String> wordSet = new HashSet<String>(this.wordList);
         // firstWebIdx could be 0 if withOt == false
         int firstWebIdx = wordSetOfDocs.size();
         for (Set<String> p : pages) {
-            wordSetOfDocs.add(p);
+            if (DISCARD_USELESS_WORDS_FROM_DOCUMENTS) {
+                p.retainAll(wordSet);
+            }
+            if (!p.isEmpty()) {
+                wordSetOfDocs.add(p);
+            }
         }
         for (int id = firstWebIdx; id < wordSetOfDocs.size(); id++) {
             Set<String> doc = wordSetOfDocs.get(id);

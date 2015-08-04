@@ -9,6 +9,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -27,10 +29,8 @@ import weka.core.Instance;
 import weka.core.Instances;
 import weka.filters.Filter;
 import weka.filters.unsupervised.attribute.StringToWordVector;
-
 import common.RawAttr;
 import common.RawAttrList;
-
 import datacollection.Database;
 import features.AnewMap.Anew;
 import features.ClusterWord.ClusterWordSetting;
@@ -1592,4 +1592,69 @@ public class FeatureExtractor {
             return result;
         }
     }
+
+    /**
+     * FLda.
+     */
+    public static class FLda extends FeatureGetter {
+        public static class LdaSharedCache {
+            private final HashMap<Long, double[]> clCache =
+                    new HashMap<Long, double[]>();
+        }
+
+        int clusterId;
+        HashMap<String, Integer> word2Cl;
+        LdaSharedCache cache;
+
+        List<Map<String, Double>> wordProbsInTopics = null;
+
+        public FLda(int clusterId, List<Map<String, Double>> wordProbsInTopics,
+                LdaSharedCache cache) {
+            this.clusterId = clusterId;
+            this.wordProbsInTopics = wordProbsInTopics;
+            this.cache = cache;
+        }
+
+        private double[] getClProbs (Status t) {
+            Set<String> entities = getEntities(t);
+            double[] clProbs = new double[wordProbsInTopics.size()];
+            double sum = 0;
+            for (int i = 0; i < wordProbsInTopics.size(); i++) {
+                Map<String, Double> cl = wordProbsInTopics.get(i);
+                for (Entry<String, Double> entry : cl.entrySet()) {
+                    // Tweet has word of this cluster.
+                    if (entities.contains(entry.getKey())) {
+                        clProbs[i] += entry.getValue();
+                        sum += entry.getValue();
+                    }
+                }
+            }
+            if (sum > 0.0000001) {
+                for (int i = 0; i < wordProbsInTopics.size(); i++) {
+                    clProbs[i] /= sum;
+                }
+            }
+            return clProbs;
+        }
+
+        @Override
+        public String getFeature (Status t, User userProfile,
+                List<Status> userTweets) {
+            double[] clProbs;
+            if (cache.clCache.containsKey(t.getId())) {
+                clProbs = cache.clCache.get(t.getId());
+            } else { // Haven't cached.
+                clProbs = getClProbs(t);
+                cache.clCache.put(t.getId(), clProbs);
+            }
+            final String feature = String.valueOf(clProbs[clusterId]);
+            return feature;
+        }
+
+        @Override
+        public RawAttr getAttr () {
+            return new RawAttr(LdaFeatureFactory.PREFIX + clusterId, true);
+        }
+    }
+
 }

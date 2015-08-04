@@ -15,10 +15,9 @@ import twitter4j.Status;
 import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
 import weka.classifiers.functions.LibSVM;
+import weka.core.Instance;
 import weka.core.Instances;
-
 import common.WLearner;
-
 import datacollection.Database;
 import datacollection.UserInfo;
 import features.BaseFeatureFactory;
@@ -27,6 +26,7 @@ import features.EntityPairFactory;
 import features.FeatureEditor;
 import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor;
+import features.LdaFeatureFactory;
 import features.SimCalculator.SimMode;
 import features.SingleCutAlg;
 import features.WordFeature.WordSelectingMode;
@@ -197,8 +197,11 @@ public class Main {
         EntityType cType = EntityType.WORD;
         SimMode cMode = SimMode.AEMI;
 
-        int[] nums = { 10, 20, 30 };
+        int[] nums = { 10 };
         for (KickFeature kick : KickFeature.values()) {
+            if (kick != KickFeature.E) {
+                continue;
+            }
             for (int num : nums) {
                 List<FeatureFactory> featureList =
                         new ArrayList<FeatureFactory>();
@@ -244,16 +247,53 @@ public class Main {
                         info.toString()));
             }
         }
-
     }
+
+    private static final List<FeatureEditor> LDA_FEATURE_EDITORS;
+    static {
+        LDA_FEATURE_EDITORS = new ArrayList<FeatureEditor>();
+        int[] nums = { 10, 20, 30 };
+        boolean[] ots = { true, false };
+        boolean[] webs = { true, false };
+        EntityType[] ens = { EntityType.ALLTYPE, EntityType.WORD };
+        for (boolean ot : ots) {
+            for (boolean web : webs) {
+                if (!ot && !web) {
+                    continue;
+                }
+                for (EntityType en : ens) {
+                    for (int num : nums) {
+                        List<FeatureFactory> featureList =
+                                new ArrayList<FeatureFactory>();
+                        LdaFeatureFactory fac = new LdaFeatureFactory();
+
+                        fac.para.docPara.entityType = en;
+                        fac.para.docPara.numOfWords = -1;
+                        fac.para.docPara.withOt = ot;
+                        fac.para.docPara.withRt = false;
+                        fac.para.docPara.withWeb = web;
+
+                        fac.para.numOfCl = num;
+                        fac.para.numOfIter = 2000;
+
+                        featureList.add(fac);
+                        LDA_FEATURE_EDITORS.add(new FeatureEditor(featureList,
+                                "LDA" + num + "_" + en.toString() + "_OT" + ot
+                                        + "_Web" + web));
+                    }
+                }
+            }
+        }
+    }
+
     private static final List<FeatureEditor> FEATURE_EDITORS;
     static {
         FEATURE_EDITORS = new ArrayList<FeatureEditor>();
         List<FeatureFactory> featureList;
         featureList = new ArrayList<FeatureFactory>();
         featureList.add(new BaseFeatureFactory());
-        FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
-        FEATURE_EDITORS.addAll(ALL_COMBINE_FEATURE_EDITORS);
+        // FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
+        FEATURE_EDITORS.addAll(LDA_FEATURE_EDITORS);
     }
 
     private void testClusterFeature () throws Exception {
@@ -302,6 +342,40 @@ public class Main {
         System.setOut(ps);
     }
 
+    @SuppressWarnings("unused")
+    private void showCorrelation () throws Exception {
+        File f = new File("debug.txt");
+        if (!f.exists()) {
+            f.createNewFile();
+        }
+        System.out.println("****\nIndex,Actual,Predicted");
+        final PrintStream ps = System.out;
+        System.setOut(new PrintStream(new FileOutputStream(f, true)));
+
+        for (FeatureEditor featureEditor : FEATURE_EDITORS) {
+            featureEditor.setFeature(this.featureGetters, exGetter.auTweets);
+            final ExsForWeka exs = exGetter.getExsInWekaForPredictNum();
+            Instances train = exs.train;
+            Instances test = exs.test;
+            int li = 2;
+            WLearner learner = W_LEARNERS[li];
+            Classifier cls = learner.buildClassifier(train);
+            System.out.close();
+            System.setOut(ps);
+
+            for (int i = 0; i < test.numInstances(); i++) {
+                Instance inst = test.instance(i);
+                double act = inst.classValue();
+                double pre = cls.classifyInstance(inst);
+                System.out.printf("%d,%.2f,%.2f%n", i, act, pre);
+            }
+
+            System.setOut(new PrintStream(new FileOutputStream(f, true)));
+        }
+        System.out.close();
+        System.setOut(ps);
+    }
+
     public static void main (String[] args) throws Exception {
         System.out.println("Begin at: " + new Date().toString());
         System.out.print("AuthorName, Learner, Mode, ");
@@ -312,7 +386,7 @@ public class Main {
 
         final Database db = Database.getInstance();
         for (long authorId : UserInfo.KEY_AUTHORS) {
-            if (authorId != 16958346L) {
+            if (authorId != 3459051L) {
                 // continue;
             }
             new Main(db, authorId).testClusterFeature();
