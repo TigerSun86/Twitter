@@ -1,0 +1,8 @@
+com.mongodb
+com.mongodb.gridfs
+com.mongodb.tools
+com.mongodb.util
+org.bson
+org.bson.io
+org.bson.types
+org.bson.util

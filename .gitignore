@@ -1,5 +1,4 @@
 *.class
-lib/*
 bin/*
 data/WebPages/*
 data/Domains/*
