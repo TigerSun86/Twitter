@@ -192,14 +192,15 @@ public class Main {
         EntityType pType = EntityType.ALLTYPE;
         SimMode pMode = SimMode.AEMI;
 
+        boolean cOt = true;
         boolean cRt = false;
         boolean cWeb = true;
         EntityType cType = EntityType.WORD;
-        SimMode cMode = SimMode.AEMI;
+        // SimMode cMode = SimMode.AEMI;
 
-        int[] nums = { 10 };
+        int[] nums = { 10, 20, 30 };
         for (KickFeature kick : KickFeature.values()) {
-            if (kick != KickFeature.E) {
+            if (kick == KickFeature.C) {
                 continue;
             }
             for (int num : nums) {
@@ -226,22 +227,20 @@ public class Main {
                             pRt, pWeb, pType, pMode));
                 }
                 if (kick != KickFeature.C) { // Cluster
-                    ClusterWordFeatureFactory fac =
-                            new ClusterWordFeatureFactory();
+                    LdaFeatureFactory fac = new LdaFeatureFactory();
 
-                    fac.para.docPara.withOt = true;
-                    fac.para.docPara.withRt = cRt;
-                    fac.para.docPara.withWeb = cWeb;
                     fac.para.docPara.entityType = cType;
                     fac.para.docPara.numOfWords = -1;
+                    fac.para.docPara.withOt = cOt;
+                    fac.para.docPara.withRt = cRt;
+                    fac.para.docPara.withWeb = cWeb;
 
-                    fac.para.simMode = cMode;
-                    fac.para.needPrescreen = true;
-                    fac.para.clAlg = new SingleCutAlg(num, false);
+                    fac.para.numOfCl = num;
+                    fac.para.numOfIter = 2000;
 
                     featureList.add(fac);
-                    info.append(String.format("_C_%d_RT%b_Web%b_%s_%s", num,
-                            cRt, cWeb, cType, cMode));
+                    info.append(String.format("_C_%d_OT%b_RT%b_Web%b_%s", num,
+                            cOt, cRt, cWeb, cType));
                 }
                 ALL_COMBINE_FEATURE_EDITORS.add(new FeatureEditor(featureList,
                         info.toString()));
@@ -262,6 +261,9 @@ public class Main {
                     continue;
                 }
                 for (EntityType en : ens) {
+                    if (!ot && !en.equals(EntityType.WORD)) {
+                        continue;
+                    }
                     for (int num : nums) {
                         List<FeatureFactory> featureList =
                                 new ArrayList<FeatureFactory>();
@@ -292,8 +294,8 @@ public class Main {
         List<FeatureFactory> featureList;
         featureList = new ArrayList<FeatureFactory>();
         featureList.add(new BaseFeatureFactory());
-        // FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
-        FEATURE_EDITORS.addAll(LDA_FEATURE_EDITORS);
+        FEATURE_EDITORS.add(new FeatureEditor(featureList, "Base"));
+        FEATURE_EDITORS.addAll(ALL_COMBINE_FEATURE_EDITORS);
     }
 
     private void testClusterFeature () throws Exception {

@@ -108,14 +108,12 @@ public class DomainGetter {
      * @param double domainStopWordsThres: threshold for stop words, which has
      *        df rate higher or equals threshold.
      */
-    public HashSet<String> getWordsOfWebPage (String shortUrl,
-            boolean needStem, double domainStopWordsThres) {
-        HashSet<String> words = new HashSet<String>();
-
+    public List<String> getWordsOfWebPage (String shortUrl, boolean needStem,
+            double domainStopWordsThres) {
         String page = getWebPage(shortUrl);
         List<String> wList = page2Words(page, needStem);
         if (wList.isEmpty()) {
-            return words;
+            return wList;
         }
         String domain = getDomain(shortUrl);
         HashSet<String> domainStopWords;
@@ -128,12 +126,8 @@ public class DomainGetter {
                     DOMAIN_STOP_WORDS_GETTER.getDomainStopWords(domain,
                             needStem, domainStopWordsThres);
         }
-        for (String w : wList) {
-            if (!domainStopWords.contains(w)) {
-                words.add(w);
-            }
-        }
-        return words;
+        wList.removeAll(domainStopWords);
+        return wList;
     }
 
     public String getDomain (String shortUrl) {

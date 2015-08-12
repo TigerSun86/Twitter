@@ -59,7 +59,7 @@ public class WordStatisDoc {
 
     // Results. This part will be initiated every time after call init(tweets).
     public List<String> wordList = null;
-    public List<Set<String>> wordSetOfDocs = null;
+    public List<List<String>> wordsOfDocs = null;
     public HashMap<String, BitSet> word2DocIds = null;
     public List<Double> numOfRtOfDocs = null;
     public List<Double> logNumOfRtOfDocs = null;
@@ -102,7 +102,7 @@ public class WordStatisDoc {
         if (this.para.withWeb) initWebPages(tweets);
     }
 
-    public static Set<String> getEntitiesFromTweet (Status t,
+    public static List<String> getEntitiesFromTweet (Status t,
             EntityType entityType) {
         List<String> entities = new ArrayList<String>();
         if (entityType == EntityType.ALLTYPE || entityType == EntityType.WORD) {
@@ -131,16 +131,16 @@ public class WordStatisDoc {
                 }
             }
         }
-        return new HashSet<String>(entities);
+        return entities;
     }
 
-    public static List<Set<String>> getWebPages (List<Status> tweets,
+    public static List<List<String>> getWebPages (List<Status> tweets,
             boolean needStem) {
         DomainGetter domainGetter = DomainGetter.getInstance();
-        List<Set<String>> webPages = new ArrayList<Set<String>>();
+        List<List<String>> webPages = new ArrayList<List<String>>();
         for (Status t : tweets) {
             for (URLEntity url : t.getURLEntities()) {
-                Set<String> p =
+                List<String> p =
                         domainGetter.getWordsOfWebPage(url.getText(), needStem,
                                 DomainGetter.DOMAIN_STOP_WORDS_THRESHOLD);
                 if (!p.isEmpty()) {
@@ -152,7 +152,7 @@ public class WordStatisDoc {
     }
 
     public int getDf () {
-        return wordSetOfDocs.size();
+        return wordsOfDocs.size();
     }
 
     public int getDf (String w) {
@@ -213,25 +213,26 @@ public class WordStatisDoc {
         Set<String> wordSpecified =
                 (wordList != null) ? new HashSet<String>(wordList) : null;
         wordList = new ArrayList<String>();
-        wordSetOfDocs = new ArrayList<Set<String>>();
+        wordsOfDocs = new ArrayList<List<String>>();
         word2DocIds = new HashMap<String, BitSet>();
         numOfRtOfDocs = this.para.withRt ? new ArrayList<Double>() : null;
         logNumOfRtOfDocs = this.para.withRt ? new ArrayList<Double>() : null;
 
         HashMap<String, Integer> wordCounter = new HashMap<String, Integer>();
         for (Status t : tweets) {
-            Set<String> entities =
+            List<String> entitieList =
                     getEntitiesFromTweet(t, this.para.entityType);
             // If specified words at the beginning, only use those words.
-            if (wordSpecified != null) entities.retainAll(wordSpecified);
+            if (wordSpecified != null) entitieList.retainAll(wordSpecified);
             // Tweet has some entities, so worth to check.
-            if (!entities.isEmpty()) {
-                if (this.para.withOt) wordSetOfDocs.add(entities);
-                for (String e : entities) { // Count frequency of word.
+            if (!entitieList.isEmpty()) {
+                Set<String> entitieSet = new HashSet<String>(entitieList);
+                for (String e : entitieSet) { // Count frequency of word.
                     Integer c = wordCounter.get(e);
                     if (c == null) c = 0;
                     wordCounter.put(e, c + 1);
                 }
+                if (this.para.withOt) wordsOfDocs.add(entitieList);
                 if (this.para.withRt) {
                     double count = t.getRetweetCount();
                     numOfRtOfDocs.add(count);
@@ -249,10 +250,10 @@ public class WordStatisDoc {
         }
 
         if (DISCARD_USELESS_WORDS_FROM_DOCUMENTS && this.para.withOt) {
-            for (Set<String> doc : wordSetOfDocs) {
+            for (List<String> doc : wordsOfDocs) {
                 doc.retainAll(wordUsedMoreThanTwice);
             }
-            Iterator<Set<String>> iter = wordSetOfDocs.iterator();
+            Iterator<List<String>> iter = wordsOfDocs.iterator();
             while (iter.hasNext()) {
                 if (iter.next().isEmpty()) {
                     iter.remove();
@@ -264,11 +265,11 @@ public class WordStatisDoc {
         Collections.sort(wordList); // Sort words more clear for debug.
 
         for (String word : wordList) {
-            word2DocIds.put(word, new BitSet(wordSetOfDocs.size()));
+            word2DocIds.put(word, new BitSet(wordsOfDocs.size()));
         }
         if (this.para.withOt) {
-            for (int id = 0; id < wordSetOfDocs.size(); id++) {
-                Set<String> doc = wordSetOfDocs.get(id);
+            for (int id = 0; id < wordsOfDocs.size(); id++) {
+                Set<String> doc = new HashSet<String>(wordsOfDocs.get(id));
                 for (String word : doc) {
                     if (word2DocIds.containsKey(word))
                         word2DocIds.get(word).set(id);
@@ -278,21 +279,21 @@ public class WordStatisDoc {
     }
 
     private void initWebPages (List<Status> tweets) {
-        List<Set<String>> pages =
+        List<List<String>> pages =
                 getWebPages(tweets, FeatureExtractor.NEED_STEM);
         Set<String> wordSet = new HashSet<String>(this.wordList);
         // firstWebIdx could be 0 if withOt == false
-        int firstWebIdx = wordSetOfDocs.size();
-        for (Set<String> p : pages) {
+        int firstWebIdx = wordsOfDocs.size();
+        for (List<String> p : pages) {
             if (DISCARD_USELESS_WORDS_FROM_DOCUMENTS) {
                 p.retainAll(wordSet);
             }
             if (!p.isEmpty()) {
-                wordSetOfDocs.add(p);
+                wordsOfDocs.add(p);
             }
         }
-        for (int id = firstWebIdx; id < wordSetOfDocs.size(); id++) {
-            Set<String> doc = wordSetOfDocs.get(id);
+        for (int id = firstWebIdx; id < wordsOfDocs.size(); id++) {
+            Set<String> doc = new HashSet<String>(wordsOfDocs.get(id));
             for (String word : doc) {
                 if (word2DocIds.containsKey(word)) {
                     word2DocIds.get(word).set(id);

@@ -3,7 +3,6 @@ package features;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import main.ExampleGetter;
@@ -13,6 +12,7 @@ import features.FeatureEditor.FeatureFactory;
 import features.FeatureExtractor.FLda;
 import features.FeatureExtractor.FLda.LdaSharedCache;
 import features.FeatureExtractor.FeatureGetter;
+import features.Lda.InferencerAndPipe;
 import features.Lda.LdaSetting;
 import features.WordStatisDoc.EntityType;
 
@@ -33,12 +33,12 @@ public class LdaFeatureFactory implements FeatureFactory {
     public List<FeatureGetter> getNewFeatures (List<Status> tweets) {
         Lda cw = new Lda();
         cw.para = this.para;
-        List<Map<String, Double>> word2cl = cw.cluster(tweets);
+        InferencerAndPipe model = cw.cluster(tweets);
 
         LdaSharedCache cache = new LdaSharedCache();
         List<FeatureGetter> list = new ArrayList<FeatureGetter>();
-        for (int cid = 0; cid < word2cl.size(); cid++) {
-            list.add(new FLda(cid, word2cl, cache));
+        for (int cid = 0; cid < para.numOfCl; cid++) {
+            list.add(new FLda(cid, model.inferencer, model.pipe, cache));
         }
         return list;
     }
@@ -53,14 +53,14 @@ public class LdaFeatureFactory implements FeatureFactory {
     private static void test () {
         LdaFeatureFactory fac = new LdaFeatureFactory();
         fac.para.docPara.withOt = true;
-        fac.para.docPara.withRt = true;
+        fac.para.docPara.withRt = false;
         fac.para.docPara.withWeb = false;
-        fac.para.docPara.entityType = EntityType.ALLTYPE;
+        fac.para.docPara.entityType = EntityType.WORD;
         fac.para.docPara.numOfWords = -1;
 
         fac.para.numOfCl = 10;
         fac.para.numOfIter = 2000;
-        fac.getNewFeatures(Database.getInstance().getAuthorTweets(3459051L,
+        fac.getNewFeatures(Database.getInstance().getAuthorTweets(16958346L,
                 ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_START_DATE));
     }
 

@@ -63,7 +63,7 @@ public class ClusterWordFeatureFactory implements FeatureFactory {
         fac.para.simMode = SimMode.AEMI;
         fac.para.needPrescreen = false;
         fac.para.clAlg = new SingleCutAlg(30, false);
-        fac.getNewFeatures(Database.getInstance().getAuthorTweets(15461733L,
+        fac.getNewFeatures(Database.getInstance().getAuthorTweets(3459051L,
                 ExampleGetter.TRAIN_START_DATE, ExampleGetter.TEST_START_DATE));
     }
 

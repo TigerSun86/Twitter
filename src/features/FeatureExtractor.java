@@ -9,8 +9,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -29,8 +27,13 @@ import weka.core.Instance;
 import weka.core.Instances;
 import weka.filters.Filter;
 import weka.filters.unsupervised.attribute.StringToWordVector;
+import cc.mallet.pipe.Pipe;
+import cc.mallet.topics.TopicInferencer;
+import cc.mallet.types.InstanceList;
+
 import common.RawAttr;
 import common.RawAttrList;
+
 import datacollection.Database;
 import features.AnewMap.Anew;
 import features.ClusterWord.ClusterWordSetting;
@@ -1334,7 +1337,7 @@ public class FeatureExtractor {
             } else { // Haven't cached.
                 total = 0;
                 countForEachCl = new int[numOfCl];
-                Set<String> entities = getEntities(t);
+                Set<String> entities = getEntitySet(t);
                 for (String w : entities) {
                     Integer cl = word2Cl.get(w);
                     if (cl != null && cl >= 0 && cl < countForEachCl.length) {
@@ -1408,17 +1411,30 @@ public class FeatureExtractor {
         }
     }
 
-    private static final HashMap<Long, Set<String>> TWEET_2_ENTITIES_CACHE =
+    private static final HashMap<Long, Set<String>> TWEET_2_ENTITY_SET_CACHE =
             new HashMap<Long, Set<String>>();
 
-    private static Set<String> getEntities (Status t) {
-        Set<String> entities = TWEET_2_ENTITIES_CACHE.get(t.getId());
+    private static Set<String> getEntitySet (Status t) {
+        Set<String> entities = TWEET_2_ENTITY_SET_CACHE.get(t.getId());
+        if (entities == null) {
+            // Always split tweet with all entities.
+            entities = new HashSet<String>(getEntityList(t));
+            TWEET_2_ENTITY_SET_CACHE.put(t.getId(), entities);
+        }
+        return entities;
+    }
+
+    private static final HashMap<Long, List<String>> TWEET_2_ENTITY_LIST_CACHE =
+            new HashMap<Long, List<String>>();
+
+    private static List<String> getEntityList (Status t) {
+        List<String> entities = TWEET_2_ENTITY_LIST_CACHE.get(t.getId());
         if (entities == null) {
             // Always split tweet with all entities.
             entities =
                     WordStatisDoc.getEntitiesFromTweet(t,
                             WordStatisDoc.EntityType.ALLTYPE);
-            TWEET_2_ENTITIES_CACHE.put(t.getId(), entities);
+            TWEET_2_ENTITY_LIST_CACHE.put(t.getId(), entities);
         }
         return entities;
     }
@@ -1436,7 +1452,7 @@ public class FeatureExtractor {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
-            Set<String> entities = getEntities(t);
+            Set<String> entities = getEntitySet(t);
             final String feature;
             if (entities.contains(en)) {
                 feature = F1;
@@ -1467,7 +1483,7 @@ public class FeatureExtractor {
         @Override
         public String getFeature (Status t, User userProfile,
                 List<Status> userTweets) {
-            Set<String> entities = getEntities(t);
+            Set<String> entities = getEntitySet(t);
             final String feature;
             if (entities.contains(en1) && entities.contains(en2)) {
                 feature = F1;
@@ -1603,37 +1619,39 @@ public class FeatureExtractor {
         }
 
         int clusterId;
-        HashMap<String, Integer> word2Cl;
+        TopicInferencer inferencer;
+        Pipe pipe;
         LdaSharedCache cache;
 
-        List<Map<String, Double>> wordProbsInTopics = null;
-
-        public FLda(int clusterId, List<Map<String, Double>> wordProbsInTopics,
+        public FLda(int clusterId, TopicInferencer inferencer, Pipe pipe,
                 LdaSharedCache cache) {
             this.clusterId = clusterId;
-            this.wordProbsInTopics = wordProbsInTopics;
+            this.inferencer = inferencer;
+            this.pipe = pipe;
             this.cache = cache;
         }
 
         private double[] getClProbs (Status t) {
-            Set<String> entities = getEntities(t);
-            double[] clProbs = new double[wordProbsInTopics.size()];
-            double sum = 0;
-            for (int i = 0; i < wordProbsInTopics.size(); i++) {
-                Map<String, Double> cl = wordProbsInTopics.get(i);
-                for (Entry<String, Double> entry : cl.entrySet()) {
-                    // Tweet has word of this cluster.
-                    if (entities.contains(entry.getKey())) {
-                        clProbs[i] += entry.getValue();
-                        sum += entry.getValue();
-                    }
+            StringBuilder sb = new StringBuilder();
+            List<String> entities = getEntityList(t);
+            if (!entities.isEmpty()) {
+                for (String s : entities) {
+                    sb.append(s + " ");
                 }
+                sb.deleteCharAt(sb.length() - 1); // Remove the last space.
             }
-            if (sum > 0.0000001) {
-                for (int i = 0; i < wordProbsInTopics.size(); i++) {
-                    clProbs[i] /= sum;
-                }
-            }
+            InstanceList testing = new InstanceList(pipe);
+            testing.addThruPipe(new cc.mallet.types.Instance(sb.toString(),
+                    null, "test instance", null));
+
+            // Don't need to care about the words appearing only in test set but
+            // not in training set, because Mallet ignores the words like that,
+            // see TopicInferencer.java line 101.
+            // Parameters 100,10,10 are in the tutorial slide:
+            // http://mallet.cs.umass.edu/mallet-tutorial.pdf page 105.
+            double[] clProbs =
+                    inferencer.getSampledDistribution(testing.get(0), 100, 10,
+                            10);
             return clProbs;
         }
 
