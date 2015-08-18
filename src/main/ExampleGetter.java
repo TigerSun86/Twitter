@@ -125,7 +125,7 @@ public class ExampleGetter {
 
     private static final boolean NEED_NORMALIZE = true;
 
-    public ExsForWeka getExsInWekaForPredictNum () {
+    public ExsForWeka getExsInWekaForPredictNum (boolean useWeights) {
         double avgRt = 0;
         int minRt = Integer.MAX_VALUE;
         int maxRt = Integer.MIN_VALUE;
@@ -136,6 +136,8 @@ public class ExampleGetter {
         train.setClassIndex(train.numAttributes() - 1);
         Instances test = new Instances("Test", w.attributes, auTweetsM2.size());
         test.setClassIndex(test.numAttributes() - 1);
+        double step = 1.0 / auTweets.size();
+        double weight = (useWeights ? 0.0 : 1.0);
         for (Status t : auTweets) {
             int rtCount = t.getRetweetCount();
             ArrayList<String> features =
@@ -143,7 +145,8 @@ public class ExampleGetter {
             RawExample e = new RawExample();
             e.xList = features;
             e.t = Double.toString(Math.log(rtCount + 1));
-            train.add(w.convertInstance(e));
+            if (useWeights) weight += step;
+            train.add(w.convertInstance(weight, e));
             avgRt += rtCount;
             if (minRt > rtCount) {
                 minRt = rtCount;
@@ -158,7 +161,7 @@ public class ExampleGetter {
             RawExample e = new RawExample();
             e.xList = features;
             e.t = Double.toString(Math.log(rtCount + 1));
-            test.add(w.convertInstance(e));
+            test.add(w.convertInstance(1.0, e));
             avgRt += rtCount;
             if (minRt > rtCount) {
                 minRt = rtCount;

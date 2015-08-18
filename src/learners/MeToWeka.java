@@ -61,13 +61,13 @@ public class MeToWeka {
                 new Instances("Test-dataset", attributes, exs.size());
         dataset.setClassIndex(dataset.numAttributes() - 1);
         for (RawExample e : exs) {
-            Instance inst = convertInstance(e);
+            Instance inst = convertInstance(1.0, e);
             dataset.add(inst);
         }
         return dataset;
     }
 
-    public Instance convertInstance (RawExample e) {
+    public Instance convertInstance (double weight, RawExample e) {
         double[] values = new double[dataForConvert.numAttributes()];
         for (int i = 0; i < e.xList.size(); i++) {
             double value = convertValue(e.xList.get(i), dataForConvert, i);
@@ -77,7 +77,7 @@ public class MeToWeka {
                 convertValue(e.t, dataForConvert,
                         dataForConvert.numAttributes() - 1);
         values[dataForConvert.numAttributes() - 1] = value;
-        Instance inst = new Instance(1.0, values);
+        Instance inst = new Instance(weight, values);
         return inst;
     }
 

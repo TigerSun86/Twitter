@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
@@ -15,7 +16,6 @@ import twitter4j.Status;
 import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
 import weka.classifiers.functions.LibSVM;
-import weka.core.Instance;
 import weka.core.Instances;
 import common.WLearner;
 import datacollection.Database;
@@ -34,32 +34,71 @@ import features.WordFeatureFactory;
 import features.WordStatisDoc.EntityType;
 
 /**
- * FileName: Main.java
+ * FileName: RollingTest.java
  * @Description:
- * 
+ *
  * @author Xunhu(Tiger) Sun
  *         email: sunx2013@my.fit.edu
- * @date Jan 9, 2015 2:33:10 PM
+ * @date Aug 11, 2015 10:16:09 PM
  */
-public class Main {
-    private final UserInfo author;
-    private final FeatureExtractor featureGetters;
-    private final ExampleGetter exGetter;
+public class RollingTest {
+    private static final int TRAIN_SET_WEEK_NUM = 4;
+    private static final int TEST_SET_WEEK_NUM = 1;
+    private static final int FIRST_AVAILABLE_WEEK_INDEX = 6;
+    private static final int END_AVAILABLE_WEEK_INDEX = 24;
 
-    public Main(final Database db, final long authorId) {
-        this.author = db.getUser(authorId);
-        final List<Status> auTweets =
-                db.getAuthorTweets(authorId, ExampleGetter.TRAIN_START_DATE,
-                        ExampleGetter.TEST_START_DATE);
+    private static final Date START_DATE;
+    static {
+        // Date should start at "Sun Feb 01 00:00:00 EST 2015".
+        // Last available second is "Sat Jun 13 23:59:59 EST 2015".
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.YEAR, 2015);
+        cal.set(Calendar.WEEK_OF_YEAR, FIRST_AVAILABLE_WEEK_INDEX);
+        cal.set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY);
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        START_DATE = cal.getTime();
+    }
 
-        List<Status> auTweetsM2 =
-                db.getAuthorTweets(authorId, ExampleGetter.TEST_START_DATE,
-                        ExampleGetter.TEST_END_DATE);
-
-        this.featureGetters = new FeatureExtractor();
-        this.exGetter =
-                new ExampleGetter(db, auTweets, auTweetsM2, featureGetters);
-
+    private static final ArrayList<Date[]> DATA_SET_TIME_RANGES;
+    static {
+        DATA_SET_TIME_RANGES = new ArrayList<Date[]>();
+        int weekIdx = FIRST_AVAILABLE_WEEK_INDEX;
+        boolean isEnd = false;
+        while (!isEnd) {
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(START_DATE);
+            cal.set(Calendar.WEEK_OF_YEAR, weekIdx);
+            Date trainStartDate = cal.getTime();
+            cal.set(Calendar.WEEK_OF_YEAR, cal.get(Calendar.WEEK_OF_YEAR)
+                    + TRAIN_SET_WEEK_NUM);
+            cal.set(Calendar.SECOND, cal.get(Calendar.SECOND) - 1);
+            Date trainEndDate = cal.getTime();
+            cal.set(Calendar.SECOND, cal.get(Calendar.SECOND) + 1);
+            Date testStartDate = cal.getTime();
+            cal.set(Calendar.WEEK_OF_YEAR, cal.get(Calendar.WEEK_OF_YEAR)
+                    + TEST_SET_WEEK_NUM);
+            cal.set(Calendar.SECOND, cal.get(Calendar.SECOND) - 1);
+            Date testEndDate = cal.getTime();
+            if (cal.get(Calendar.WEEK_OF_YEAR) <= END_AVAILABLE_WEEK_INDEX) {
+                DATA_SET_TIME_RANGES.add(new Date[] { trainStartDate,
+                        trainEndDate, testStartDate, testEndDate });
+                // System.out.println("Round "
+                // + (weekIdx - FIRST_AVAILABLE_WEEK_INDEX));
+                // System.out.println("trainStartDate "
+                // + trainStartDate.toString());
+                // System.out.println("trainEndDate " +
+                // trainEndDate.toString());
+                // System.out.println("testStartDate " +
+                // testStartDate.toString());
+                // System.out.println("testEndDate " + testEndDate.toString());
+            } else {
+                isEnd = true;
+            }
+            weekIdx++;
+        }
     }
 
     private static final WLearner[] W_LEARNERS = { new WLr(),
@@ -195,7 +234,7 @@ public class Main {
         boolean cOt = true;
         boolean cRt = false;
         boolean cWeb = true;
-        EntityType cType = EntityType.WORD;
+        EntityType cType = EntityType.ALLTYPE;
         // SimMode cMode = SimMode.AEMI;
 
         int[] nums = { 10, 20, 30 };
@@ -298,7 +337,10 @@ public class Main {
         FEATURE_EDITORS.addAll(ALL_COMBINE_FEATURE_EDITORS);
     }
 
-    private void testClusterFeature () throws Exception {
+    final Database db = Database.getInstance();
+
+    private void testOneDataSet (long authorId, int round, boolean useWeights,
+            List<Status> trainSet, List<Status> testSet) throws Exception {
         File f = new File("debug.txt");
         if (!f.exists()) {
             f.createNewFile();
@@ -306,9 +348,16 @@ public class Main {
         final PrintStream ps = System.out;
         System.setOut(new PrintStream(new FileOutputStream(f, true)));
 
+        FeatureExtractor featureGetters = new FeatureExtractor();
+        ExampleGetter exGetter =
+                new ExampleGetter(db, trainSet, testSet, featureGetters);
+
+        String weightMode = (useWeights ? "W_" : "");
+        System.out.println("**** Use weights: " + useWeights);
         for (FeatureEditor featureEditor : FEATURE_EDITORS) {
-            featureEditor.setFeature(this.featureGetters, exGetter.auTweets);
-            final ExsForWeka exs = exGetter.getExsInWekaForPredictNum(false);
+            featureEditor.setFeature(featureGetters, exGetter.auTweets);
+            final ExsForWeka exs =
+                    exGetter.getExsInWekaForPredictNum(useWeights);
             Instances train = exs.train;
             Instances test = exs.test;
             for (int li = 0; li < W_LEARNERS.length; li++) {
@@ -321,15 +370,13 @@ public class Main {
 
                 System.out.close();
                 System.setOut(ps);
-                System.out
-                        .printf("%s, %s, %s, %.4f, %.4f, %.4f, %.4f%%, %.4f%%, ",
-                                author.userProfile.getScreenName(),
-                                W_L_NAMES[li], featureEditor.name,
-                                e.correlationCoefficient(),
-                                e.meanAbsoluteError(),
-                                e.rootMeanSquaredError(),
-                                e.relativeAbsoluteError(),
-                                e.rootRelativeSquaredError());
+                System.out.printf(
+                        "%s, %d, %s, %s, %.4f, %.4f, %.4f, %.4f%%, %.4f%%, ",
+                        UserInfo.KA_ID2SCREENNAME.get(authorId), round,
+                        W_L_NAMES[li], weightMode + featureEditor.name,
+                        e.correlationCoefficient(), e.meanAbsoluteError(),
+                        e.rootMeanSquaredError(), e.relativeAbsoluteError(),
+                        e.rootRelativeSquaredError());
                 e = new Evaluation(train);
                 e.evaluateModel(cls, test);
                 System.out.printf("%.4f, %.4f, %.4f, %.4f%%, %.4f%%%n",
@@ -344,55 +391,31 @@ public class Main {
         System.setOut(ps);
     }
 
-    @SuppressWarnings("unused")
-    private void showCorrelation () throws Exception {
-        File f = new File("debug.txt");
-        if (!f.exists()) {
-            f.createNewFile();
+    private void run (long authorId) throws Exception {
+        for (int round = 0; round < DATA_SET_TIME_RANGES.size(); round++) {
+            Date[] ds = DATA_SET_TIME_RANGES.get(round);
+            final List<Status> train =
+                    db.getAuthorTweets(authorId, ds[0], ds[1]);
+            final List<Status> test =
+                    db.getAuthorTweets(authorId, ds[2], ds[3]);
+            testOneDataSet(authorId, round + 1, false, train, test);
+            //testOneDataSet(authorId, round + 1, true, train, test);
         }
-        System.out.println("****\nIndex,Actual,Predicted");
-        final PrintStream ps = System.out;
-        System.setOut(new PrintStream(new FileOutputStream(f, true)));
-
-        for (FeatureEditor featureEditor : FEATURE_EDITORS) {
-            featureEditor.setFeature(this.featureGetters, exGetter.auTweets);
-            final ExsForWeka exs = exGetter.getExsInWekaForPredictNum(false);
-            Instances train = exs.train;
-            Instances test = exs.test;
-            int li = 2;
-            WLearner learner = W_LEARNERS[li];
-            Classifier cls = learner.buildClassifier(train);
-            System.out.close();
-            System.setOut(ps);
-
-            for (int i = 0; i < test.numInstances(); i++) {
-                Instance inst = test.instance(i);
-                double act = inst.classValue();
-                double pre = cls.classifyInstance(inst);
-                System.out.printf("%d,%.2f,%.2f%n", i, act, pre);
-            }
-
-            System.setOut(new PrintStream(new FileOutputStream(f, true)));
-        }
-        System.out.close();
-        System.setOut(ps);
     }
 
     public static void main (String[] args) throws Exception {
         System.out.println("Begin at: " + new Date().toString());
-        System.out.print("AuthorName, Learner, Mode, ");
+        System.out.print("AuthorName, Round, Learner, Mode, ");
         System.out
                 .print("Train Correlation coefficient, Train Mean absolute error, Train Root mean squared error, Train Relative absolute error, Train Root relative squared error, ");
         System.out
                 .println("Test Correlation coefficient, Test Mean absolute error, Test Root mean squared error, Test Relative absolute error, Test Root relative squared error");
 
-        final Database db = Database.getInstance();
         for (long authorId : UserInfo.KEY_AUTHORS) {
-            if (authorId != 3459051L) {
+            if (authorId != 16958346L) {
                 // continue;
             }
-            new Main(db, authorId).testClusterFeature();
-
+            new RollingTest().run(authorId);
         }
         System.out.println("End at: " + new Date().toString());
     }
